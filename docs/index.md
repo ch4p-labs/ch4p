@@ -64,7 +64,7 @@ The reasoning behind ch4p's design. Read when you want to understand "why."
 |---|---|
 | Language | TypeScript (Node.js) |
 | Channels | 14+ (Telegram, Discord, Slack, Matrix, IRC, and more) |
-| LLM Engines | Multi-engine (Anthropic, OpenAI, Ollama, and more) |
+| LLM Providers | 6 built-in (Anthropic, OpenAI, Google/Gemini, OpenRouter, Ollama, Bedrock) |
 | Memory | SQLite with FTS5 + vector hybrid search |
 | Concurrency | BEAM-inspired supervision trees with worker threads |
 | Security | On by default. Filesystem scoping, command allowlists, audit |

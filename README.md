@@ -14,21 +14,30 @@ Built on four pillars:
 ## Quick Start
 
 ```bash
-# Clone and install
-git clone <repo-url> ch4p && cd ch4p
-pnpm install
+# Clone and install (pnpm is managed via corepack)
+git clone https://github.com/vxcozy/ch4p.git && cd ch4p
+corepack pnpm install
+corepack pnpm -r build
 
 # Run the onboarding wizard
-pnpm --filter @ch4p/cli start -- onboard
+node apps/cli/dist/index.js onboard
 
-# Start the agent
-pnpm --filter @ch4p/cli start -- agent
+# Start the agent (shows Chappie splash, then interactive REPL)
+node apps/cli/dist/index.js agent
 ```
 
-Set your API key:
+Or set your API key directly:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
+node apps/cli/dist/index.js agent
+```
+
+A standalone binary is also available:
+
+```bash
+corepack pnpm bundle    # ~58 MB binary via bun compile
+./dist/ch4p agent
 ```
 
 ## Architecture
@@ -42,7 +51,7 @@ Agent Runtime (session, context, steering queue)
     |
 Engine (native LLM, echo, CLI subprocess)
     |
-Provider (Anthropic, OpenAI, Ollama)
+Provider (Anthropic, OpenAI, Google/Gemini, OpenRouter, Ollama, Bedrock)
 ```
 
 Every subsystem is defined by a trait interface — swap any component via config, zero code changes.
@@ -129,25 +138,24 @@ Three backends: `sqlite` (primary), `markdown` (portable), `noop` (disabled).
 ## Development
 
 ```bash
-# Build all packages
-pnpm build
+# Build all 15 packages
+corepack pnpm -r build
 
-# Run tests
-pnpm test
-
-# Type check
-pnpm typecheck
+# Run all 1303 tests
+corepack pnpm vitest run
 
 # Build a single package
-pnpm --filter @ch4p/core build
+corepack pnpm --filter @ch4p/core build
 ```
 
 ### Project Structure
 
+- 15 packages in a pnpm monorepo (use `corepack pnpm` — pnpm is not on PATH)
 - TypeScript strict mode, ES2023 target, NodeNext module resolution
 - ESM-only (all imports use `.js` extension)
 - Zero external runtime dependencies for core, security, and CLI packages
 - `tsup` for bundling, `vitest` for testing
+- 47 test files, 1303 tests
 
 ## Configuration
 
@@ -156,13 +164,11 @@ Configuration lives in `~/.ch4p/config.json`. The onboarding wizard creates it, 
 ```json
 {
   "agent": {
-    "name": "ch4p",
-    "defaultProvider": "anthropic",
-    "defaultModel": "claude-sonnet-4-20250514"
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-20250514"
   },
   "providers": {
     "anthropic": {
-      "type": "anthropic",
       "apiKey": "${ANTHROPIC_API_KEY}"
     }
   },

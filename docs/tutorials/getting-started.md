@@ -4,22 +4,26 @@ This tutorial takes you from zero to a working ch4p agent. By the end you will h
 
 **Time required:** About 10 minutes.
 
-**Prerequisites:** Node.js 20 or later. A terminal. An API key for at least one LLM provider (Anthropic, OpenAI, or a local Ollama instance).
+**Prerequisites:** Node.js 20 or later. A terminal. An API key for at least one LLM provider (Anthropic, OpenAI, Google, or a local Ollama instance).
 
 ---
 
 ## Step 1: Install ch4p
 
-Install globally from npm:
+Clone the repository and install dependencies:
 
 ```bash
-npm install -g ch4p
+git clone https://github.com/vxcozy/ch4p.git && cd ch4p
+corepack pnpm install
+corepack pnpm -r build
 ```
+
+> **Note:** pnpm is managed via corepack — always use `corepack pnpm` instead of bare `pnpm`.
 
 Verify the installation:
 
 ```bash
-ch4p --version
+node apps/cli/dist/index.js --version
 ```
 
 You should see output like:
@@ -35,25 +39,36 @@ ch4p v0.1.0
 The onboard wizard creates your configuration file and sets up defaults.
 
 ```bash
-ch4p agent --onboard
+node apps/cli/dist/index.js onboard
 ```
 
-The wizard asks a series of questions. For this tutorial, use these answers:
+You'll see the ch4p ASCII banner, then the wizard walks you through five steps:
 
 ```
-? Agent name: ch4p
-? Primary LLM provider: anthropic
-? API key: sk-ant-xxxxx (paste your real key)
-? Autonomy level: supervised
-? Enable memory: yes
-? Memory location: (press Enter for default)
+Step 1/5  Anthropic API Key
+> API key: ********
+
+Step 2/5  OpenAI API Key (optional)
+> API key: (press Enter to skip)
+
+Step 3/5  Preferred Model
+1. Claude Sonnet 4 (recommended)
+2. Claude Opus 4
+3. GPT-4o
+4. GPT-4o Mini
+> Choice [1]:
+
+Step 4/5  Autonomy Level
+1. Read-only
+2. Supervised (recommended)
+3. Full
+> Choice [2]:
+
+Step 5/5  Saving configuration
+Config written to ~/.ch4p/config.json
 ```
 
-When the wizard finishes, it writes `~/.ch4p/config.json` and prints:
-
-```
-Onboarding complete. Run `ch4p agent` to start.
-```
+When the wizard finishes, it runs a security audit and then plays a Chappie boot-up animation — your robot assistant waking up for the first time.
 
 ---
 
@@ -62,22 +77,22 @@ Onboarding complete. Run `ch4p agent` to start.
 Launch the agent in interactive mode:
 
 ```bash
-ch4p agent
+node apps/cli/dist/index.js agent
 ```
 
-You will see the agent boot sequence:
+You'll see the Chappie splash followed by the REPL status:
 
 ```
-[ch4p] Loading config from ~/.ch4p/config.json
-[ch4p] Engine: anthropic (claude-sonnet-4-20250514)
-[ch4p] Memory: sqlite @ ~/.ch4p/memory.db
-[ch4p] Security: filesystem scoping ON, command allowlist ON
-[ch4p] Agent "ch4p" ready.
+  ch4p v0.1.0 ready.
 
-ch4p>
+  Interactive mode. Type /help for commands, /exit to quit.
+  Engine: Native Engine | Model: claude-sonnet-4-20250514 | Autonomy: supervised
+  Tools: bash, file_read, file_write, file_edit, grep, glob, web_fetch, delegate, memory_store, memory_recall, mcp_client
+
+>
 ```
 
-The `ch4p>` prompt means the agent is running and waiting for input.
+The `>` prompt means the agent is running and waiting for input.
 
 ---
 
@@ -86,16 +101,10 @@ The `ch4p>` prompt means the agent is running and waiting for input.
 Type a simple message and press Enter:
 
 ```
-ch4p> Hello, what can you do?
+> Hello, what can you do?
 ```
 
-The agent responds through the configured LLM engine:
-
-```
-ch4p: I'm your personal AI assistant. I can read and write files,
-         run commands, search the web, manage your schedule, and more.
-         What would you like help with?
-```
+The agent responds through the configured LLM engine, streaming the response in real time.
 
 You have just completed a round-trip through the ch4p message pipeline: your input went through the agent, to the engine, and the response came back through the agent to your terminal.
 
@@ -103,58 +112,42 @@ You have just completed a round-trip through the ch4p message pipeline: your inp
 
 ## Step 5: Execute a Tool
 
-Now ask the agent to do something that requires a tool. We will use the file read tool, which is available by default.
+Now ask the agent to do something that requires a tool:
 
 ```
-ch4p> Read the file ~/.ch4p/config.json and tell me what provider I'm using.
+> Read the file ~/.ch4p/config.json and tell me what provider I'm using.
 ```
 
-Because you set the autonomy level to `supervised`, the agent asks for confirmation before executing:
+You'll see tool execution logged in the terminal:
 
 ```
-ch4p: I'd like to read the file ~/.ch4p/config.json. Approve? [y/n]
+  [tool] file_read({"path":"~/.ch4p/config.json"})
+  [done] {"content": "..."}
 ```
 
-Type `y` and press Enter:
-
-```
-y
-```
-
-The agent reads the file and responds:
-
-```
-ch4p: Your config shows you're using the "anthropic" provider with
-         the model "claude-sonnet-4-20250514".
-```
-
-In the terminal, you can see the tool execution logged:
-
-```
-[tool] file.read ~/.ch4p/config.json (approved)
-[tool] result: 847 bytes read
-```
+The agent reads the file and tells you which provider you're configured to use.
 
 ---
 
 ## Step 6: Stop the Agent
 
-Press `Ctrl+C` or type `.exit`:
+Type `/exit` or press `Ctrl+C`:
 
 ```
-ch4p> .exit
-[ch4p] Agent stopped.
+> /exit
+
+  Goodbye!
 ```
 
 ---
 
 ## What You Learned
 
-1. **Install** — ch4p installs as a single global npm package.
-2. **Onboard** — The wizard creates your configuration with sensible defaults.
-3. **Agent** — `ch4p agent` starts an interactive agent session.
-4. **Messaging** — You send messages at the prompt and get LLM-powered responses.
-5. **Tools** — The agent can use tools (like file read) with your approval.
+1. **Install** — ch4p is a pnpm monorepo built with `corepack pnpm -r build`.
+2. **Onboard** — The wizard creates `~/.ch4p/config.json` with sensible defaults.
+3. **Agent** — `ch4p agent` starts an interactive agent session with the Chappie splash.
+4. **Messaging** — You send messages at the `>` prompt and get LLM-powered responses.
+5. **Tools** — The agent can use tools (like file read) to interact with your system.
 
 ---
 
