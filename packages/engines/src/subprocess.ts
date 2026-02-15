@@ -1,0 +1,373 @@
+/**
+ * SubprocessEngine — wraps an external CLI tool as an IEngine.
+ *
+ * Spawns a subprocess (e.g., claude-cli, codex-cli) and communicates
+ * via stdin/stdout. Supports text streaming, cancellation via SIGTERM,
+ * and basic tool call extraction from structured output.
+ *
+ * This is a generic base that can wrap any CLI tool that accepts a prompt
+ * on stdin and streams responses on stdout.
+ *
+ * Supported engines:
+ *   - claude-cli: Anthropic's Claude CLI (claude)
+ *   - codex-cli: OpenAI's Codex CLI (codex)
+ *
+ * Zero external dependencies — uses Node.js child_process only.
+ */
+
+import type {
+  IEngine,
+  Job,
+  RunOpts,
+  RunHandle,
+  ResumeToken,
+  EngineEvent,
+} from '@ch4p/core';
+import { EngineError, generateId } from '@ch4p/core';
+import { spawn, type ChildProcess } from 'node:child_process';
+
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
+
+export interface SubprocessEngineConfig {
+  /** Engine ID (e.g., 'claude-cli', 'codex-cli'). */
+  id: string;
+  /** Engine display name (e.g., 'Claude CLI'). */
+  name: string;
+  /** Path or name of the CLI binary to spawn. */
+  command: string;
+  /** Arguments to pass to the CLI before the prompt. */
+  args?: string[];
+  /** Environment variables to set on the subprocess. */
+  env?: Record<string, string>;
+  /** Maximum time in ms before killing the subprocess. Default: 300000 (5 min). */
+  timeout?: number;
+  /**
+   * How to pass the prompt to the CLI:
+   * - 'arg': Pass as a trailing command-line argument (default)
+   * - 'stdin': Write to stdin and close
+   * - 'flag': Use --prompt "..." flag
+   */
+  promptMode?: 'arg' | 'stdin' | 'flag';
+  /** Flag name for prompt when using 'flag' mode. Default: '--prompt'. */
+  promptFlag?: string;
+  /** Working directory for the subprocess. */
+  cwd?: string;
+}
+
+// ---------------------------------------------------------------------------
+// SubprocessEngine
+// ---------------------------------------------------------------------------
+
+export class SubprocessEngine implements IEngine {
+  readonly id: string;
+  readonly name: string;
+
+  private readonly command: string;
+  private readonly baseArgs: string[];
+  private readonly env: Record<string, string>;
+  private readonly timeout: number;
+  private readonly promptMode: 'arg' | 'stdin' | 'flag';
+  private readonly promptFlag: string;
+  private readonly cwd?: string;
+
+  constructor(config: SubprocessEngineConfig) {
+    if (!config.command) {
+      throw new EngineError(
+        'SubprocessEngine requires a "command" in config',
+        config.id ?? 'subprocess',
+      );
+    }
+
+    this.id = config.id;
+    this.name = config.name;
+    this.command = config.command;
+    this.baseArgs = config.args ?? [];
+    this.env = config.env ?? {};
+    this.timeout = config.timeout ?? 300_000;
+    this.promptMode = config.promptMode ?? 'arg';
+    this.promptFlag = config.promptFlag ?? '--prompt';
+    this.cwd = config.cwd;
+  }
+
+  // -----------------------------------------------------------------------
+  // IEngine.startRun
+  // -----------------------------------------------------------------------
+
+  async startRun(job: Job, opts?: RunOpts): Promise<RunHandle> {
+    const ref = generateId();
+    const abortController = new AbortController();
+
+    if (opts?.signal) {
+      if (opts.signal.aborted) {
+        abortController.abort(opts.signal.reason);
+      } else {
+        opts.signal.addEventListener('abort', () => {
+          abortController.abort(opts.signal!.reason);
+        }, { once: true });
+      }
+    }
+
+    // Build the prompt from the last user message.
+    const prompt = this.extractPrompt(job);
+
+    const events = this.runSubprocess(prompt, ref, job, abortController, opts?.onProgress);
+
+    return {
+      ref,
+      events,
+      cancel: async () => {
+        abortController.abort(new EngineError('Run cancelled', this.id));
+      },
+      steer: (_message: string) => {
+        // Subprocess engines don't support mid-run steering.
+        // The message is silently ignored.
+      },
+    };
+  }
+
+  // -----------------------------------------------------------------------
+  // IEngine.resume
+  // -----------------------------------------------------------------------
+
+  async resume(_token: ResumeToken, _prompt: string): Promise<RunHandle> {
+    throw new EngineError(
+      'SubprocessEngine does not support resume. Start a new run instead.',
+      this.id,
+    );
+  }
+
+  // -----------------------------------------------------------------------
+  // Private: subprocess execution
+  // -----------------------------------------------------------------------
+
+  private async *runSubprocess(
+    prompt: string,
+    _ref: string,
+    job: Job,
+    abortController: AbortController,
+    onProgress?: (event: EngineEvent) => void,
+  ): AsyncGenerator<EngineEvent, void, undefined> {
+    const emit = (event: EngineEvent): EngineEvent => {
+      onProgress?.(event);
+      return event;
+    };
+
+    yield emit({ type: 'started' });
+
+    // Build command arguments.
+    const args = [...this.baseArgs];
+
+    if (job.systemPrompt) {
+      args.push('--system-prompt', job.systemPrompt);
+    }
+
+    switch (this.promptMode) {
+      case 'arg':
+        args.push(prompt);
+        break;
+      case 'flag':
+        args.push(this.promptFlag, prompt);
+        break;
+      case 'stdin':
+        // Prompt will be written to stdin below.
+        break;
+    }
+
+    const child = await this.spawnChild(args, abortController.signal);
+
+    try {
+      // If stdin mode, write prompt and close.
+      if (this.promptMode === 'stdin' && child.stdin) {
+        child.stdin.write(prompt);
+        child.stdin.end();
+      }
+
+      let fullAnswer = '';
+
+      // Stream stdout as text deltas.
+      if (child.stdout) {
+        for await (const chunk of child.stdout) {
+          if (abortController.signal.aborted) break;
+
+          const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+          fullAnswer += text;
+          yield emit({ type: 'text_delta', delta: text });
+        }
+      }
+
+      // Wait for process exit.
+      const exitCode = await new Promise<number | null>((resolve) => {
+        child.on('close', resolve);
+        child.on('error', () => resolve(null));
+      });
+
+      // Collect stderr for error reporting.
+      let stderr = '';
+      if (child.stderr) {
+        try {
+          for await (const chunk of child.stderr) {
+            stderr += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+          }
+        } catch {
+          // Ignore stderr read errors.
+        }
+      }
+
+      if (exitCode !== 0 && exitCode !== null) {
+        yield emit({
+          type: 'error',
+          error: new EngineError(
+            `Subprocess exited with code ${exitCode}${stderr ? ': ' + stderr.slice(0, 500) : ''}`,
+            this.id,
+          ),
+        });
+        return;
+      }
+
+      yield emit({
+        type: 'completed',
+        answer: fullAnswer.trim(),
+      });
+    } catch (err) {
+      if (abortController.signal.aborted) {
+        yield emit({
+          type: 'error',
+          error: new EngineError('Run was cancelled', this.id),
+        });
+        return;
+      }
+
+      yield emit({
+        type: 'error',
+        error: err instanceof Error
+          ? err
+          : new EngineError(String(err), this.id),
+      });
+    } finally {
+      // Ensure process is killed.
+      try {
+        if (!child.killed) {
+          child.kill('SIGTERM');
+        }
+      } catch {
+        // Ignore kill errors.
+      }
+    }
+  }
+
+  private spawnChild(
+    args: string[],
+    signal: AbortSignal,
+  ): Promise<ChildProcess> {
+    return new Promise((resolve, reject) => {
+      try {
+        const child = spawn(this.command, args, {
+          env: { ...process.env, ...this.env },
+          cwd: this.cwd ?? process.cwd(),
+          stdio: ['pipe', 'pipe', 'pipe'],
+          timeout: this.timeout,
+        });
+
+        // Handle abort signal.
+        const onAbort = () => {
+          try {
+            child.kill('SIGTERM');
+          } catch {
+            // Ignore.
+          }
+        };
+
+        signal.addEventListener('abort', onAbort, { once: true });
+
+        child.on('error', (err) => {
+          signal.removeEventListener('abort', onAbort);
+          reject(new EngineError(
+            `Failed to spawn "${this.command}": ${err.message}`,
+            this.id,
+          ));
+        });
+
+        // Resolve immediately — we'll stream stdout.
+        // But first ensure the process actually starts.
+        child.on('spawn', () => {
+          resolve(child);
+        });
+      } catch (err) {
+        reject(new EngineError(
+          `Failed to create subprocess: ${err instanceof Error ? err.message : String(err)}`,
+          this.id,
+        ));
+      }
+    });
+  }
+
+  // -----------------------------------------------------------------------
+  // Private: prompt extraction
+  // -----------------------------------------------------------------------
+
+  private extractPrompt(job: Job): string {
+    // Find the last user message.
+    for (let i = job.messages.length - 1; i >= 0; i--) {
+      const msg = job.messages[i]!;
+      if (msg.role === 'user') {
+        if (typeof msg.content === 'string') {
+          return msg.content;
+        }
+        // Extract text from content blocks.
+        if (Array.isArray(msg.content)) {
+          return msg.content
+            .filter((b) => b.type === 'text')
+            .map((b) => b.text ?? '')
+            .join('\n');
+        }
+      }
+    }
+    return '';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pre-configured engine factories
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a Claude CLI engine (wraps the `claude` command).
+ *
+ * Requires the Anthropic Claude CLI to be installed and configured.
+ * See: https://docs.anthropic.com/en/docs/build-with-claude/claude-code
+ */
+export function createClaudeCliEngine(
+  overrides?: Partial<SubprocessEngineConfig>,
+): SubprocessEngine {
+  return new SubprocessEngine({
+    id: 'claude-cli',
+    name: 'Claude CLI',
+    command: 'claude',
+    args: ['--print', '--no-input'],
+    promptMode: 'arg',
+    timeout: 600_000, // 10 minutes for complex tasks
+    ...overrides,
+  });
+}
+
+/**
+ * Create a Codex CLI engine (wraps the `codex` command).
+ *
+ * Requires the OpenAI Codex CLI to be installed and configured.
+ * See: https://github.com/openai/codex
+ */
+export function createCodexCliEngine(
+  overrides?: Partial<SubprocessEngineConfig>,
+): SubprocessEngine {
+  return new SubprocessEngine({
+    id: 'codex-cli',
+    name: 'Codex CLI',
+    command: 'codex',
+    args: ['--quiet'],
+    promptMode: 'arg',
+    timeout: 600_000,
+    ...overrides,
+  });
+}

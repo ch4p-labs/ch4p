@@ -12,8 +12,14 @@ import { AnthropicProvider } from './anthropic.js';
 import type { AnthropicProviderConfig } from './anthropic.js';
 import { OpenAIProvider } from './openai.js';
 import type { OpenAIProviderConfig } from './openai.js';
+import { OpenRouterProvider } from './openrouter.js';
+import type { OpenRouterProviderConfig } from './openrouter.js';
+import { GoogleProvider } from './google.js';
+import type { GoogleProviderConfig } from './google.js';
 import { OllamaProvider } from './ollama.js';
 import type { OllamaProviderConfig } from './ollama.js';
+import { BedrockProvider } from './bedrock.js';
+import type { BedrockProviderConfig } from './bedrock.js';
 
 // ---------------------------------------------------------------------------
 // Configuration types
@@ -21,7 +27,7 @@ import type { OllamaProviderConfig } from './ollama.js';
 
 export interface ProviderConfig {
   id: string;
-  type: 'anthropic' | 'openai' | 'ollama' | string;
+  type: 'anthropic' | 'openai' | 'openrouter' | 'google' | 'ollama' | 'bedrock' | string;
   apiKey?: string;
   baseUrl?: string;
   organization?: string;
@@ -148,15 +154,44 @@ export class ProviderRegistry {
           maxRetries: config.maxRetries,
         } satisfies OpenAIProviderConfig);
 
+      case 'openrouter':
+        return new OpenRouterProvider({
+          apiKey: config.apiKey ?? '',
+          baseUrl: config.baseUrl,
+          siteUrl: config.siteUrl as string | undefined,
+          siteName: config.siteName as string | undefined,
+          defaultModel: config.defaultModel,
+          maxRetries: config.maxRetries,
+        } satisfies OpenRouterProviderConfig);
+
+      case 'google':
+        return new GoogleProvider({
+          apiKey: config.apiKey ?? '',
+          baseUrl: config.baseUrl,
+          defaultModel: config.defaultModel,
+          maxRetries: config.maxRetries,
+        } satisfies GoogleProviderConfig);
+
       case 'ollama':
         return new OllamaProvider({
           baseUrl: config.baseUrl,
           defaultModel: config.defaultModel,
         } satisfies OllamaProviderConfig);
 
+      case 'bedrock':
+        return new BedrockProvider({
+          region: (config.region as string) ?? '',
+          accessKeyId: (config.accessKeyId as string) ?? config.apiKey ?? '',
+          secretAccessKey: (config.secretAccessKey as string) ?? '',
+          sessionToken: config.sessionToken as string | undefined,
+          baseUrl: config.baseUrl,
+          defaultModel: config.defaultModel,
+          maxRetries: config.maxRetries,
+        } satisfies BedrockProviderConfig);
+
       default:
         throw new ProviderError(
-          `Unknown provider type: "${config.type}". Supported types: anthropic, openai, ollama`,
+          `Unknown provider type: "${config.type}". Supported types: anthropic, openai, openrouter, google, ollama, bedrock`,
           config.id,
         );
     }
