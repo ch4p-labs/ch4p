@@ -183,12 +183,22 @@ Configuration lives in `~/.ch4p/config.json`. The onboarding wizard creates it, 
 
 Environment variables referenced as `${VAR_NAME}` are resolved at load time.
 
+### Alternative LLM Setups
+
+ch4p works with any LLM, not just direct API keys. Three paths for using existing subscriptions or local models:
+
+- **Ollama** — run open-source models locally with zero API keys. Free, private, offline-capable.
+- **LiteLLM proxy** — unified OpenAI-compatible endpoint for 100+ providers with fallbacks and load balancing.
+- **CLI passthrough** — route through Claude Code, Codex CLI, or any LLM CLI via the SubprocessEngine.
+
+See [Alternative LLM Setups](docs/how-to/alternative-llm-setups.md) for configuration details.
+
 ## Documentation
 
 Full Diataxis-style documentation in `docs/`:
 
 - **Tutorials** — getting-started, first-channel
-- **How-to Guides** — add-tool, add-channel, add-provider, configure-security, deploy-gateway, use-memory
+- **How-to Guides** — add-tool, add-channel, add-provider, configure-security, deploy-gateway, use-memory, alternative-llm-setups
 - **Reference** — interfaces, configuration, CLI, security
 - **Explanation** — architecture, concurrency, security-model, memory
 

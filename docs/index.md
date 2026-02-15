@@ -37,6 +37,7 @@ Practical recipes for specific tasks. Assumes you already understand the basics.
 - [Configure Security](how-to/configure-security.md) — Filesystem scoping, command allowlists, autonomy levels
 - [Deploy the Gateway](how-to/deploy-gateway.md) — Run the gateway with a tunnel for external access
 - [Use Memory](how-to/use-memory.md) — Store, recall, and forget with hybrid search
+- [Alternative LLM Setups](how-to/alternative-llm-setups.md) — Ollama, LiteLLM proxy, CLI passthrough
 
 ### Reference — Information-Oriented
 
