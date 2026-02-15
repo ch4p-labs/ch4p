@@ -1,0 +1,35 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.log
+tmp/
+.turbo/
+
+# ch4p data
+~/.ch4p/
+
+# Database files (memory backend)
+*.sqlite
+*.sqlite3
+*.db
+
+# Local-only / session docs
+handover.md
+tasks/
+
+# IDE / Agent
+.idea/
+.vscode/
+.cursor/
+.claude/
+.agents/
+*.swp
+*.swo
+
+# OS
+Thumbs.db

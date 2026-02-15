@@ -1,0 +1,296 @@
+/**
+ * Configuration loading, validation, and directory management.
+ *
+ * Loads user config from ~/.ch4p/config.json, merges over bundled defaults,
+ * resolves ${VAR_NAME} environment variable references, and validates
+ * required fields. Zero external dependencies.
+ */
+
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+import { homedir } from 'node:os';
+import type { Ch4pConfig } from '@ch4p/core';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const CH4P_DIR_NAME = '.ch4p';
+const CONFIG_FILE_NAME = 'config.json';
+const LOGS_DIR_NAME = 'logs';
+
+// ---------------------------------------------------------------------------
+// Paths
+// ---------------------------------------------------------------------------
+
+/** Resolve the ch4p home directory (~/.ch4p). */
+export function getCh4pDir(): string {
+  return resolve(homedir(), CH4P_DIR_NAME);
+}
+
+/** Resolve the path to the user config file. */
+export function getConfigPath(): string {
+  return join(getCh4pDir(), CONFIG_FILE_NAME);
+}
+
+/** Resolve the path to the logs directory. */
+export function getLogsDir(): string {
+  return join(getCh4pDir(), LOGS_DIR_NAME);
+}
+
+// ---------------------------------------------------------------------------
+// Default config
+// ---------------------------------------------------------------------------
+
+export function getDefaultConfig(): Ch4pConfig {
+  return {
+    agent: {
+      model: 'claude-sonnet-4-20250514',
+      provider: 'anthropic',
+      thinkingLevel: 'medium',
+    },
+    providers: {
+      anthropic: {
+        apiKey: '${ANTHROPIC_API_KEY}',
+      },
+      openai: {
+        apiKey: '${OPENAI_API_KEY}',
+      },
+    },
+    channels: {},
+    memory: {
+      backend: 'sqlite',
+      autoSave: true,
+      vectorWeight: 0.7,
+      keywordWeight: 0.3,
+    },
+    gateway: {
+      port: 18789,
+      requirePairing: true,
+      allowPublicBind: false,
+    },
+    security: {
+      workspaceOnly: true,
+      blockedPaths: [],
+    },
+    autonomy: {
+      level: 'supervised',
+      allowedCommands: [
+        'git', 'npm', 'pnpm', 'node', 'npx', 'cargo',
+        'ls', 'cat', 'grep', 'find', 'wc', 'sort', 'head', 'tail',
+        'mkdir', 'cp', 'mv', 'echo', 'touch',
+      ],
+    },
+    engines: {
+      default: 'native',
+      available: {
+        native: {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-20250514',
+        },
+      },
+    },
+    tunnel: {
+      provider: 'none',
+    },
+    secrets: {
+      encrypt: true,
+    },
+    observability: {
+      observers: ['console'],
+      logLevel: 'info',
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Environment variable resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Recursively resolve ${VAR_NAME} references in config values.
+ * Only string values are processed. Missing env vars resolve to empty string.
+ */
+function resolveEnvVars(obj: unknown): unknown {
+  if (typeof obj === 'string') {
+    return obj.replace(/\$\{([^}]+)\}/g, (_match, varName: string) => {
+      return process.env[varName] ?? '';
+    });
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(resolveEnvVars);
+  }
+
+  if (obj !== null && typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      result[key] = resolveEnvVars(value);
+    }
+    return result;
+  }
+
+  return obj;
+}
+
+// ---------------------------------------------------------------------------
+// Deep merge
+// ---------------------------------------------------------------------------
+
+/**
+ * Deep merge `source` into `target`. Arrays are replaced, not merged.
+ * Returns a new object; neither input is mutated.
+ */
+function deepMerge<T extends Record<string, unknown>>(target: T, source: Record<string, unknown>): T {
+  const result = { ...target } as Record<string, unknown>;
+
+  for (const key of Object.keys(source)) {
+    const sourceVal = source[key];
+    const targetVal = result[key];
+
+    if (
+      sourceVal !== null &&
+      typeof sourceVal === 'object' &&
+      !Array.isArray(sourceVal) &&
+      targetVal !== null &&
+      typeof targetVal === 'object' &&
+      !Array.isArray(targetVal)
+    ) {
+      result[key] = deepMerge(
+        targetVal as Record<string, unknown>,
+        sourceVal as Record<string, unknown>,
+      );
+    } else {
+      result[key] = sourceVal;
+    }
+  }
+
+  return result as T;
+}
+
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
+
+interface ValidationError {
+  field: string;
+  message: string;
+}
+
+function validateConfig(config: Ch4pConfig): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  if (!config.agent?.model) {
+    errors.push({ field: 'agent.model', message: 'Model is required' });
+  }
+
+  if (!config.agent?.provider) {
+    errors.push({ field: 'agent.provider', message: 'Provider is required' });
+  }
+
+  if (typeof config.gateway?.port !== 'number' || config.gateway.port < 1 || config.gateway.port > 65535) {
+    errors.push({ field: 'gateway.port', message: 'Port must be a number between 1 and 65535' });
+  }
+
+  if (config.autonomy?.level && !['readonly', 'supervised', 'full'].includes(config.autonomy.level)) {
+    errors.push({ field: 'autonomy.level', message: 'Must be one of: readonly, supervised, full' });
+  }
+
+  if (config.observability?.logLevel && !['debug', 'info', 'warn', 'error'].includes(config.observability.logLevel)) {
+    errors.push({ field: 'observability.logLevel', message: 'Must be one of: debug, info, warn, error' });
+  }
+
+  return errors;
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Ensure the ~/.ch4p directory structure exists.
+ * Creates ~/.ch4p/ and ~/.ch4p/logs/ with restrictive permissions.
+ */
+export function ensureConfigDir(): void {
+  const ch4pDir = getCh4pDir();
+  const logsDir = getLogsDir();
+
+  if (!existsSync(ch4pDir)) {
+    mkdirSync(ch4pDir, { recursive: true, mode: 0o700 });
+  }
+
+  if (!existsSync(logsDir)) {
+    mkdirSync(logsDir, { recursive: true, mode: 0o700 });
+  }
+}
+
+/**
+ * Load and return a fully resolved, validated Ch4pConfig.
+ *
+ * 1. Loads bundled defaults.
+ * 2. If ~/.ch4p/config.json exists, deep-merges user config over defaults.
+ * 3. Resolves ${VAR_NAME} environment variable references.
+ * 4. Validates required fields.
+ * 5. Returns the final config.
+ *
+ * Throws ConfigLoadError if validation fails.
+ */
+export function loadConfig(): Ch4pConfig {
+  const defaults = getDefaultConfig();
+  let merged: Ch4pConfig = defaults;
+
+  const configPath = getConfigPath();
+  if (existsSync(configPath)) {
+    try {
+      const raw = readFileSync(configPath, 'utf8');
+      const userConfig = JSON.parse(raw) as Record<string, unknown>;
+      merged = deepMerge(defaults as unknown as Record<string, unknown>, userConfig) as unknown as Ch4pConfig;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new ConfigLoadError(`Failed to parse ${configPath}: ${message}`);
+    }
+  }
+
+  // Resolve env vars in the merged config.
+  const resolved = resolveEnvVars(merged) as Ch4pConfig;
+
+  // Validate.
+  const errors = validateConfig(resolved);
+  if (errors.length > 0) {
+    const details = errors.map((e) => `  - ${e.field}: ${e.message}`).join('\n');
+    throw new ConfigLoadError(`Configuration validation failed:\n${details}`);
+  }
+
+  return resolved;
+}
+
+/**
+ * Write a config object to ~/.ch4p/config.json.
+ * Ensures the directory exists first.
+ */
+export function saveConfig(config: Ch4pConfig): void {
+  ensureConfigDir();
+  const configPath = getConfigPath();
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
+}
+
+/**
+ * Check whether a user config file exists.
+ */
+export function configExists(): boolean {
+  return existsSync(getConfigPath());
+}
+
+// ---------------------------------------------------------------------------
+// Error type
+// ---------------------------------------------------------------------------
+
+export class ConfigLoadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConfigLoadError';
+  }
+}

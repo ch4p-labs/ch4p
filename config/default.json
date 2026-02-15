@@ -1,0 +1,81 @@
+{
+  "agent": {
+    "model": "anthropic/claude-sonnet-4-20250514",
+    "provider": "anthropic",
+    "thinkingLevel": "medium",
+    "systemPrompt": "You are ch4p, a personal AI assistant. You are helpful, direct, and security-conscious. You have access to tools for file operations, shell commands, web access, and persistent memory. Always validate actions against the security policy before executing."
+  },
+  "providers": {
+    "anthropic": {
+      "apiKey": "${ANTHROPIC_API_KEY}",
+      "baseUrl": "https://api.anthropic.com"
+    },
+    "openai": {
+      "apiKey": "${OPENAI_API_KEY}",
+      "baseUrl": "https://api.openai.com"
+    },
+    "openrouter": {
+      "apiKey": "${OPENROUTER_API_KEY}",
+      "baseUrl": "https://openrouter.ai/api"
+    },
+    "ollama": {
+      "baseUrl": "http://localhost:11434"
+    }
+  },
+  "channels": {},
+  "memory": {
+    "backend": "sqlite",
+    "autoSave": true,
+    "embeddingProvider": "openai",
+    "vectorWeight": 0.7,
+    "keywordWeight": 0.3,
+    "dbPath": "~/.ch4p/memory.db"
+  },
+  "gateway": {
+    "port": 18789,
+    "requirePairing": true,
+    "allowPublicBind": false,
+    "host": "127.0.0.1"
+  },
+  "security": {
+    "workspaceOnly": true,
+    "blockedPaths": [
+      "/etc", "/root", "/proc", "/sys", "/dev", "/boot",
+      "/sbin", "/usr/sbin", "/var/log", "/var/run",
+      "/private/var", "/Library/Keychains", "/System",
+      "~/.ssh", "~/.gnupg", "~/.aws", "~/.config/gcloud"
+    ],
+    "detectSymlinks": true,
+    "sanitizeOutput": true,
+    "validateInput": true
+  },
+  "autonomy": {
+    "level": "supervised",
+    "allowedCommands": [
+      "git", "npm", "pnpm", "npx", "node", "cargo",
+      "ls", "cat", "grep", "find", "wc", "sort",
+      "head", "tail", "mkdir", "cp", "mv", "echo", "touch"
+    ]
+  },
+  "engines": {
+    "default": "native",
+    "available": {
+      "native": {},
+      "claude-cli": { "path": "claude" },
+      "codex-cli": { "path": "codex" },
+      "echo": {}
+    }
+  },
+  "tunnel": {
+    "provider": "none"
+  },
+  "secrets": {
+    "encrypt": true
+  },
+  "observability": {
+    "observers": ["console"],
+    "logLevel": "info",
+    "logPath": "~/.ch4p/logs/ch4p.jsonl",
+    "maxLogSize": 10485760
+  }
+}

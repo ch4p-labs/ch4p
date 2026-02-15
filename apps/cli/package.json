@@ -1,0 +1,32 @@
+{
+  "name": "@ch4p/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "ch4p": "dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@ch4p/core": "workspace:*",
+    "@ch4p/agent": "workspace:*",
+    "@ch4p/security": "workspace:*",
+    "@ch4p/providers": "workspace:*",
+    "@ch4p/memory": "workspace:*",
+    "@ch4p/tools": "workspace:*",
+    "@ch4p/observability": "workspace:*",
+    "@ch4p/engines": "workspace:*",
+    "@ch4p/supervisor": "workspace:*"
+  }
+}

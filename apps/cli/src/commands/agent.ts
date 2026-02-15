@@ -1,0 +1,383 @@
+/**
+ * Agent command -- interactive REPL and single-message mode.
+ *
+ * Two modes:
+ *   1. `ch4p agent -m "message"` -- Single message, stream response, exit.
+ *   2. `ch4p agent` or `ch4p` -- Interactive REPL with special commands.
+ *
+ * Uses Node.js readline for the REPL loop. Streams output with ANSI colors.
+ * Integrates with the @ch4p/agent Session, @ch4p/core engine/provider
+ * interfaces, and @ch4p/security policy.
+ */
+
+import * as readline from 'node:readline';
+import type { Ch4pConfig, IEngine, EngineEvent, SessionConfig } from '@ch4p/core';
+import { generateId } from '@ch4p/core';
+import { loadConfig } from '../config.js';
+
+// ---------------------------------------------------------------------------
+// ANSI color helpers
+// ---------------------------------------------------------------------------
+
+const RESET = '\x1b[0m';
+const BOLD = '\x1b[1m';
+const DIM = '\x1b[2m';
+const CYAN = '\x1b[36m';
+const GREEN = '\x1b[32m';
+const YELLOW = '\x1b[33m';
+const RED = '\x1b[31m';
+const MAGENTA = '\x1b[35m';
+
+// ---------------------------------------------------------------------------
+// Streaming output handler
+// ---------------------------------------------------------------------------
+
+function handleEngineEvent(event: EngineEvent): void {
+  switch (event.type) {
+    case 'started':
+      break;
+
+    case 'text_delta':
+      process.stdout.write(event.delta);
+      break;
+
+    case 'tool_start':
+      console.log(`\n  ${MAGENTA}[tool]${RESET} ${BOLD}${event.tool}${RESET}${DIM}(${truncateArgs(event.args)})${RESET}`);
+      break;
+
+    case 'tool_progress':
+      process.stdout.write(`  ${DIM}${event.update}${RESET}\n`);
+      break;
+
+    case 'tool_end':
+      if (event.result.success) {
+        console.log(`  ${GREEN}[done]${RESET} ${DIM}${truncate(event.result.output, 120)}${RESET}`);
+      } else {
+        console.log(`  ${RED}[fail]${RESET} ${event.result.error ?? 'Unknown error'}`);
+      }
+      break;
+
+    case 'completed':
+      if (event.usage) {
+        console.log(
+          `\n${DIM}  tokens: ${event.usage.inputTokens} in / ${event.usage.outputTokens} out${RESET}`,
+        );
+      }
+      break;
+
+    case 'error':
+      console.error(`\n  ${RED}Error:${RESET} ${event.error.message}`);
+      break;
+  }
+}
+
+function truncateArgs(args: unknown): string {
+  const str = typeof args === 'string' ? args : JSON.stringify(args);
+  return truncate(str, 80);
+}
+
+function truncate(str: string, max: number): string {
+  if (str.length <= max) return str;
+  return str.slice(0, max - 3) + '...';
+}
+
+// ---------------------------------------------------------------------------
+// Engine stub
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a stub engine that streams a placeholder response.
+ *
+ * In production, this will be replaced by the actual engine from @ch4p/engines
+ * once that package is implemented. For now, it validates that the CLI
+ * plumbing works end-to-end.
+ */
+function createStubEngine(config: Ch4pConfig): IEngine {
+  return {
+    id: config.engines?.default ?? 'native',
+    name: 'Native Engine (stub)',
+
+    async startRun(job, opts) {
+      const ref = generateId(12);
+
+      async function* events(): AsyncIterable<EngineEvent> {
+        yield { type: 'started' };
+
+        const lastMessage = job.messages[job.messages.length - 1];
+        const userText = typeof lastMessage?.content === 'string'
+          ? lastMessage.content
+          : '(no message)';
+
+        // Simulate a thinking response.
+        const response =
+          `I received your message: "${truncate(userText, 100)}"\n\n` +
+          `This is a placeholder response from the ch4p stub engine. ` +
+          `The full engine implementation (${config.agent.provider}/${config.agent.model}) ` +
+          `will be available when @ch4p/engines is complete.\n\n` +
+          `Current configuration:\n` +
+          `  Provider: ${config.agent.provider}\n` +
+          `  Model: ${config.agent.model}\n` +
+          `  Autonomy: ${config.autonomy.level}\n`;
+
+        // Stream character by character (simulating real streaming).
+        for (const char of response) {
+          if (opts?.signal?.aborted) {
+            yield { type: 'error', error: new Error('Aborted') };
+            return;
+          }
+          yield { type: 'text_delta', delta: char };
+        }
+
+        yield {
+          type: 'completed',
+          answer: response,
+          usage: { inputTokens: Math.ceil(userText.length / 4), outputTokens: Math.ceil(response.length / 4) },
+        };
+      }
+
+      return {
+        ref,
+        events: events(),
+        async cancel() { /* noop for stub */ },
+        steer(_message: string) { /* noop for stub */ },
+      };
+    },
+
+    async resume(_token, _prompt) {
+      throw new Error('Resume not supported in stub engine');
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Session creation helper
+// ---------------------------------------------------------------------------
+
+function createSessionConfig(config: Ch4pConfig): SessionConfig {
+  return {
+    sessionId: generateId(16),
+    engineId: config.engines?.default ?? 'native',
+    model: config.agent.model,
+    provider: config.agent.provider,
+    autonomyLevel: config.autonomy.level,
+    cwd: process.cwd(),
+    systemPrompt:
+      'You are ch4p, a personal AI assistant. ' +
+      'You are helpful, concise, and security-conscious. ' +
+      'When asked to perform actions, respect the configured autonomy level.',
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Run a single message through the engine
+// ---------------------------------------------------------------------------
+
+async function runMessage(engine: IEngine, sessionConfig: SessionConfig, message: string): Promise<void> {
+  const handle = await engine.startRun({
+    sessionId: sessionConfig.sessionId,
+    messages: [{ role: 'user', content: message }],
+    systemPrompt: sessionConfig.systemPrompt,
+    model: sessionConfig.model,
+  });
+
+  for await (const event of handle.events) {
+    handleEngineEvent(event);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// REPL help
+// ---------------------------------------------------------------------------
+
+const REPL_HELP = `
+  ${BOLD}Special Commands${RESET}
+  ${DIM}${'='.repeat(40)}${RESET}
+  ${CYAN}/exit${RESET}     Exit the session
+  ${CYAN}/clear${RESET}    Clear conversation history
+  ${CYAN}/audit${RESET}    Run security audit
+  ${CYAN}/memory${RESET}   Show memory status
+  ${CYAN}/tools${RESET}    List available tools
+  ${CYAN}/help${RESET}     Show this help
+`;
+
+// ---------------------------------------------------------------------------
+// Interactive REPL mode
+// ---------------------------------------------------------------------------
+
+async function runRepl(config: Ch4pConfig): Promise<void> {
+  const engine = createStubEngine(config);
+  const sessionConfig = createSessionConfig(config);
+
+  console.log(`\n  ${CYAN}${BOLD}ch4p${RESET} ${DIM}v0.1.0${RESET}`);
+  console.log(`  ${DIM}Interactive mode. Type ${CYAN}/help${DIM} for commands, ${CYAN}/exit${DIM} to quit.${RESET}`);
+  console.log(`  ${DIM}Engine: ${engine.name} | Model: ${config.agent.model} | Autonomy: ${config.autonomy.level}${RESET}\n`);
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: `${GREEN}${BOLD}> ${RESET}`,
+    historySize: 200,
+  });
+
+  let running = true;
+
+  // Handle Ctrl+C gracefully.
+  rl.on('SIGINT', () => {
+    console.log(`\n${DIM}  Use /exit to quit.${RESET}`);
+    rl.prompt();
+  });
+
+  rl.on('close', () => {
+    if (running) {
+      running = false;
+      console.log(`\n${DIM}  Goodbye!${RESET}\n`);
+    }
+  });
+
+  rl.prompt();
+
+  for await (const line of rl) {
+    const input = line.trim();
+
+    if (!input) {
+      rl.prompt();
+      continue;
+    }
+
+    // Handle special commands.
+    if (input.startsWith('/')) {
+      const cmd = input.toLowerCase().split(/\s+/)[0]!;
+
+      switch (cmd) {
+        case '/exit':
+        case '/quit':
+        case '/q':
+          running = false;
+          console.log(`\n${DIM}  Goodbye!${RESET}\n`);
+          rl.close();
+          return;
+
+        case '/clear':
+          console.log(`  ${GREEN}Conversation cleared.${RESET}\n`);
+          rl.prompt();
+          continue;
+
+        case '/audit': {
+          const { runAudit } = await import('./audit.js');
+          console.log('');
+          runAudit(config);
+          console.log('');
+          rl.prompt();
+          continue;
+        }
+
+        case '/memory':
+          console.log(`\n  ${BOLD}Memory Status${RESET}`);
+          console.log(`  ${DIM}Backend: ${config.memory.backend}${RESET}`);
+          console.log(`  ${DIM}Auto-save: ${config.memory.autoSave}${RESET}`);
+          console.log(`  ${DIM}Vector weight: ${config.memory.vectorWeight ?? 0.7}${RESET}`);
+          console.log(`  ${DIM}Keyword weight: ${config.memory.keywordWeight ?? 0.3}${RESET}`);
+          console.log(`  ${DIM}(Full memory backend not yet connected)${RESET}\n`);
+          rl.prompt();
+          continue;
+
+        case '/tools':
+          console.log(`\n  ${BOLD}Available Tools${RESET}`);
+          console.log(`  ${DIM}(Tool registry not yet connected. Run 'ch4p tools' for details.)${RESET}\n`);
+          rl.prompt();
+          continue;
+
+        case '/help':
+          console.log(REPL_HELP);
+          rl.prompt();
+          continue;
+
+        default:
+          console.log(`  ${YELLOW}Unknown command: ${cmd}${RESET}`);
+          console.log(`  ${DIM}Type /help for available commands.${RESET}\n`);
+          rl.prompt();
+          continue;
+      }
+    }
+
+    // Run the message through the engine.
+    console.log('');
+    try {
+      await runMessage(engine, sessionConfig, input);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`\n  ${RED}Error:${RESET} ${message}`);
+    }
+    console.log('\n');
+    rl.prompt();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Single message mode
+// ---------------------------------------------------------------------------
+
+async function runSingleMessage(config: Ch4pConfig, message: string): Promise<void> {
+  const engine = createStubEngine(config);
+  const sessionConfig = createSessionConfig(config);
+
+  try {
+    await runMessage(engine, sessionConfig, message);
+    console.log('');
+  } catch (err) {
+    const errMessage = err instanceof Error ? err.message : String(err);
+    console.error(`\n${RED}Error:${RESET} ${errMessage}`);
+    process.exitCode = 1;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CLI entry point
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse agent-specific flags and run the appropriate mode.
+ *
+ * Usage:
+ *   ch4p agent                -- Interactive REPL
+ *   ch4p agent -m "message"   -- Single message
+ *   ch4p agent --message "m"  -- Single message (long form)
+ */
+export async function agent(args: string[]): Promise<void> {
+  let config: Ch4pConfig;
+  try {
+    config = loadConfig();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`\n  ${RED}Failed to load config:${RESET} ${message}`);
+    console.error(`  ${DIM}Run ${CYAN}ch4p onboard${DIM} to set up ch4p.${RESET}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Parse -m / --message flag.
+  let singleMessage: string | null = null;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === '-m' || arg === '--message') {
+      singleMessage = args[i + 1] ?? '';
+      break;
+    }
+    // Handle -m"message" (no space).
+    if (arg.startsWith('-m') && arg.length > 2) {
+      singleMessage = arg.slice(2);
+      break;
+    }
+  }
+
+  if (singleMessage !== null) {
+    if (!singleMessage) {
+      console.error(`  ${RED}Error:${RESET} -m flag requires a message argument.`);
+      process.exitCode = 1;
+      return;
+    }
+    await runSingleMessage(config, singleMessage);
+  } else {
+    await runRepl(config);
+  }
+}
