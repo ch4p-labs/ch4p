@@ -16,6 +16,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@ch4p/core": "workspace:*"
+    "@ch4p/core": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.0"
   }
 }

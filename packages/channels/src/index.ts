@@ -3,6 +3,12 @@
  */
 
 export { CliChannel } from './cli.js';
+export { TelegramChannel } from './telegram.js';
+export type { TelegramConfig } from './telegram.js';
+export { DiscordChannel, DiscordIntents } from './discord.js';
+export type { DiscordConfig } from './discord.js';
+export { SlackChannel } from './slack.js';
+export type { SlackConfig } from './slack.js';
 
 // Re-export channel-related types from core for convenience
 export type {
