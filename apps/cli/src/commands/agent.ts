@@ -16,7 +16,8 @@
 import * as readline from 'node:readline';
 import type { Ch4pConfig, IEngine, SessionConfig } from '@ch4p/core';
 import { generateId } from '@ch4p/core';
-import { NativeEngine } from '@ch4p/engines';
+import { NativeEngine, createClaudeCliEngine, createCodexCliEngine, SubprocessEngine } from '@ch4p/engines';
+import type { SubprocessEngineConfig } from '@ch4p/engines';
 import { ProviderRegistry } from '@ch4p/providers';
 import { Session, AgentLoop } from '@ch4p/agent';
 import type { AgentEvent } from '@ch4p/agent';
@@ -124,11 +125,73 @@ function truncate(str: string, max: number): string {
 /**
  * Create the engine for the CLI session.
  *
- * Attempts to create a real NativeEngine backed by the configured provider.
- * If the provider's API key is missing or empty, falls back to a stub engine
- * so the CLI still boots (useful for offline/demo mode).
+ * Engine selection is driven by `config.engines.default`:
+ *   - 'claude-cli'  → SubprocessEngine wrapping the `claude` CLI (uses Max plan auth)
+ *   - 'codex-cli'   → SubprocessEngine wrapping the `codex` CLI
+ *   - 'native' / *  → NativeEngine backed by the configured LLM provider
+ *
+ * For NativeEngine, if the provider's API key is missing, falls back to a stub
+ * engine so the CLI still boots (useful for offline/demo mode).
+ *
+ * For SubprocessEngines, the CLI binary must be installed and on PATH.
  */
 function createEngine(config: Ch4pConfig): IEngine {
+  const engineId = config.engines?.default ?? 'native';
+  const engineConfig = config.engines?.available?.[engineId] as Record<string, unknown> | undefined;
+
+  // ----- Subprocess engines (claude-cli, codex-cli, custom) -----
+  if (engineId === 'claude-cli') {
+    try {
+      return createClaudeCliEngine({
+        command: (engineConfig?.command as string) ?? undefined,
+        cwd: (engineConfig?.cwd as string) ?? undefined,
+        timeout: (engineConfig?.timeout as number) ?? undefined,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.log(`  ${YELLOW}⚠ Failed to create Claude CLI engine: ${message}${RESET}`);
+      console.log(`  ${DIM}Falling back to stub engine.${RESET}\n`);
+      return createStubEngine(config);
+    }
+  }
+
+  if (engineId === 'codex-cli') {
+    try {
+      return createCodexCliEngine({
+        command: (engineConfig?.command as string) ?? undefined,
+        cwd: (engineConfig?.cwd as string) ?? undefined,
+        timeout: (engineConfig?.timeout as number) ?? undefined,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.log(`  ${YELLOW}⚠ Failed to create Codex CLI engine: ${message}${RESET}`);
+      console.log(`  ${DIM}Falling back to stub engine.${RESET}\n`);
+      return createStubEngine(config);
+    }
+  }
+
+  // Generic subprocess engine — user-defined CLI wrapper.
+  if (engineConfig?.type === 'subprocess') {
+    try {
+      return new SubprocessEngine({
+        id: engineId,
+        name: (engineConfig.name as string) ?? `Subprocess (${engineId})`,
+        command: engineConfig.command as string,
+        args: (engineConfig.args as string[]) ?? undefined,
+        promptMode: (engineConfig.promptMode as 'arg' | 'stdin' | 'flag') ?? undefined,
+        promptFlag: (engineConfig.promptFlag as string) ?? undefined,
+        cwd: (engineConfig.cwd as string) ?? undefined,
+        timeout: (engineConfig.timeout as number) ?? undefined,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.log(`  ${YELLOW}⚠ Failed to create subprocess engine "${engineId}": ${message}${RESET}`);
+      console.log(`  ${DIM}Falling back to stub engine.${RESET}\n`);
+      return createStubEngine(config);
+    }
+  }
+
+  // ----- NativeEngine (LLM provider-backed) -----
   const providerName = config.agent.provider;
   const providerConfig = config.providers?.[providerName] as Record<string, unknown> | undefined;
 

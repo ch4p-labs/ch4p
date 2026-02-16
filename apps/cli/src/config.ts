@@ -88,6 +88,14 @@ export function getDefaultConfig(): Ch4pConfig {
           provider: 'anthropic',
           model: 'claude-sonnet-4-20250514',
         },
+        'claude-cli': {
+          command: 'claude',
+          timeout: 600000,
+        },
+        'codex-cli': {
+          command: 'codex',
+          timeout: 600000,
+        },
       },
     },
     tunnel: {

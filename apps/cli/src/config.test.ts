@@ -156,6 +156,24 @@ describe('getDefaultConfig', () => {
     expect(config.engines.available['native']).toBeDefined();
   });
 
+  it('includes claude-cli engine in available engines', () => {
+    const config = getDefaultConfig();
+    const claudeCli = config.engines.available['claude-cli'] as Record<string, unknown>;
+
+    expect(claudeCli).toBeDefined();
+    expect(claudeCli.command).toBe('claude');
+    expect(claudeCli.timeout).toBe(600000);
+  });
+
+  it('includes codex-cli engine in available engines', () => {
+    const config = getDefaultConfig();
+    const codexCli = config.engines.available['codex-cli'] as Record<string, unknown>;
+
+    expect(codexCli).toBeDefined();
+    expect(codexCli.command).toBe('codex');
+    expect(codexCli.timeout).toBe(600000);
+  });
+
   it('includes env var references for API keys', () => {
     const config = getDefaultConfig();
 
@@ -384,6 +402,54 @@ describe('loadConfig', () => {
       const config = loadConfig();
       expect(config.observability.logLevel).toBe(logLevel);
     }
+  });
+
+  it('allows switching default engine to claude-cli', () => {
+    writeTestConfig({
+      engines: {
+        default: 'claude-cli',
+      },
+    });
+
+    const config = loadConfig();
+    expect(config.engines.default).toBe('claude-cli');
+    // Should still have all available engines from defaults.
+    expect(config.engines.available['native']).toBeDefined();
+    expect(config.engines.available['claude-cli']).toBeDefined();
+    expect(config.engines.available['codex-cli']).toBeDefined();
+  });
+
+  it('allows switching default engine to codex-cli', () => {
+    writeTestConfig({
+      engines: {
+        default: 'codex-cli',
+      },
+    });
+
+    const config = loadConfig();
+    expect(config.engines.default).toBe('codex-cli');
+  });
+
+  it('allows custom subprocess engine in available engines', () => {
+    writeTestConfig({
+      engines: {
+        default: 'my-llm',
+        available: {
+          'my-llm': {
+            type: 'subprocess',
+            command: '/usr/local/bin/my-llm',
+            args: ['--json'],
+            promptMode: 'stdin',
+          },
+        },
+      },
+    });
+
+    const config = loadConfig();
+    expect(config.engines.default).toBe('my-llm');
+    const myLlm = config.engines.available['my-llm'] as Record<string, unknown>;
+    expect(myLlm?.type).toBe('subprocess');
+    expect(myLlm?.command).toBe('/usr/local/bin/my-llm');
   });
 });
 
