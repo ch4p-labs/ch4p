@@ -178,9 +178,27 @@ export class SubprocessEngine implements IEngine {
     const child = await this.spawnChild(args, abortController.signal);
 
     try {
-      // If stdin mode, write prompt and close.
-      if (this.promptMode === 'stdin' && child.stdin) {
-        child.stdin.write(prompt);
+      // Capture the exit code promise immediately to avoid missing the
+      // 'close' event while we are reading stdout.
+      const exitPromise = new Promise<number | null>((resolve) => {
+        child.on('close', resolve);
+        child.on('error', () => resolve(null));
+      });
+
+      // Collect stderr concurrently to prevent pipe-buffer deadlock.
+      let stderr = '';
+      if (child.stderr) {
+        child.stderr.on('data', (chunk: Buffer | string) => {
+          stderr += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+        });
+      }
+
+      // If stdin mode, write prompt and close. Otherwise close stdin
+      // immediately so the subprocess doesn't block waiting for input.
+      if (child.stdin) {
+        if (this.promptMode === 'stdin') {
+          child.stdin.write(prompt);
+        }
         child.stdin.end();
       }
 
@@ -197,23 +215,9 @@ export class SubprocessEngine implements IEngine {
         }
       }
 
-      // Wait for process exit.
-      const exitCode = await new Promise<number | null>((resolve) => {
-        child.on('close', resolve);
-        child.on('error', () => resolve(null));
-      });
-
-      // Collect stderr for error reporting.
-      let stderr = '';
-      if (child.stderr) {
-        try {
-          for await (const chunk of child.stderr) {
-            stderr += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-          }
-        } catch {
-          // Ignore stderr read errors.
-        }
-      }
+      // Wait for process exit (promise was set up before reading stdout,
+      // so we never miss the 'close' event).
+      const exitCode = await exitPromise;
 
       if (exitCode !== 0 && exitCode !== null) {
         yield emit({
@@ -263,8 +267,18 @@ export class SubprocessEngine implements IEngine {
   ): Promise<ChildProcess> {
     return new Promise((resolve, reject) => {
       try {
+        // Build environment: inherit process.env, apply user overrides,
+        // and remove vars that prevent nested CLI sessions (e.g., Claude Code
+        // refuses to launch inside another Claude Code session).
+        const spawnEnv: Record<string, string | undefined> = {
+          ...process.env,
+          ...this.env,
+        };
+        delete spawnEnv['CLAUDECODE'];
+        delete spawnEnv['CLAUDE_CODE_SESSION'];
+
         const child = spawn(this.command, args, {
-          env: { ...process.env, ...this.env },
+          env: spawnEnv,
           cwd: this.cwd ?? process.cwd(),
           stdio: ['pipe', 'pipe', 'pipe'],
           timeout: this.timeout,
@@ -345,7 +359,7 @@ export function createClaudeCliEngine(
     id: 'claude-cli',
     name: 'Claude CLI',
     command: 'claude',
-    args: ['--print', '--no-input'],
+    args: ['--print'],
     promptMode: 'arg',
     timeout: 600_000, // 10 minutes for complex tasks
     ...overrides,

@@ -48,6 +48,7 @@ import type {
 } from '@ch4p/core';
 import { EngineError, ToolError } from '@ch4p/core';
 import { sleep, backoffDelay } from '@ch4p/core';
+import { setMaxListeners } from 'node:events';
 
 import { Session } from './session.js';
 import type { SteeringMessage } from './steering.js';
@@ -183,6 +184,11 @@ export class AgentLoop {
   async *run(initialMessage: string): AsyncIterable<AgentEvent> {
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
+
+    // The same signal is passed to every startRun() call in the loop.
+    // Each call adds a listener; with maxIterations up to 50 this exceeds
+    // the default EventTarget limit of 10. Raise it to avoid the warning.
+    try { setMaxListeners(this.opts.maxIterations + 5, signal); } catch { /* ignore */ }
 
     // Reset AWM tracking state.
     this.stateRecords = [];
