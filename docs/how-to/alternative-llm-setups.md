@@ -133,40 +133,40 @@ Route through any CLI tool that accepts prompts. If you have Claude Code, Codex 
 
 ### Built-in CLI Wrappers
 
-ch4p ships with pre-configured wrappers for popular CLI tools:
+ch4p ships with pre-configured engine IDs for popular CLI tools. Just set `engines.default` — the factory functions handle flags and prompt modes automatically.
 
 **Claude CLI** (requires Claude Code / Max subscription):
 
 ```json
 {
-  "agent": {
-    "provider": "anthropic",
-    "model": "claude-sonnet-4-20250514"
-  },
   "engines": {
-    "default": "subprocess",
-    "available": {
-      "subprocess": {
-        "command": "claude",
-        "args": ["--print", "--no-input"],
-        "promptMode": "arg"
-      }
-    }
+    "default": "claude-cli"
   }
 }
 ```
+
+This spawns `claude --print "<prompt>"` under the hood. No API key needed — it uses your existing Claude Code / Max authentication.
 
 **Codex CLI** (requires OpenAI subscription):
 
 ```json
 {
   "engines": {
-    "default": "subprocess",
+    "default": "codex-cli"
+  }
+}
+```
+
+You can override the command path or timeout in the `available` section:
+
+```json
+{
+  "engines": {
+    "default": "claude-cli",
     "available": {
-      "subprocess": {
-        "command": "codex",
-        "args": ["--quiet"],
-        "promptMode": "stdin"
+      "claude-cli": {
+        "command": "/usr/local/bin/claude",
+        "timeout": 120000
       }
     }
   }
@@ -175,14 +175,15 @@ ch4p ships with pre-configured wrappers for popular CLI tools:
 
 ### Custom CLI Tool
 
-Wrap any CLI that reads a prompt and writes a response:
+Wrap any CLI that reads a prompt and writes a response using a generic subprocess engine:
 
 ```json
 {
   "engines": {
-    "default": "subprocess",
+    "default": "my-tool",
     "available": {
-      "subprocess": {
+      "my-tool": {
+        "type": "subprocess",
         "command": "my-llm-tool",
         "args": [],
         "promptMode": "stdin"
@@ -193,7 +194,7 @@ Wrap any CLI that reads a prompt and writes a response:
 ```
 
 Prompt modes:
-- `"arg"` — prompt passed as the last command-line argument
+- `"arg"` — prompt passed as the last command-line argument (default)
 - `"stdin"` — prompt piped to stdin
 - `"flag"` — prompt passed via a flag (e.g., `--prompt "..."`)
 
