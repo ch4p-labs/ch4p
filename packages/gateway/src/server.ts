@@ -1,9 +1,9 @@
 /**
- * GatewayServer — lightweight HTTP control plane.
+ * GatewayServer — lightweight HTTP control plane with WebSocket support.
  *
  * Exposes a REST API for health checks, pairing, session management,
- * and session steering. Uses the Node.js built-in `http` module with
- * zero external dependencies.
+ * and session steering. Optionally upgrades connections to WebSocket
+ * for real-time canvas communication.
  *
  * Routes:
  *   GET    /health                - liveness probe (no auth required)
@@ -13,16 +13,23 @@
  *   GET    /sessions/:id          - get a single session
  *   POST   /sessions/:id/steer    - steer (inject message into) a session
  *   DELETE /sessions/:id          - end a session
+ *   WS     /ws/:sessionId         - WebSocket upgrade for canvas sessions
+ *   GET    /*                     - static file serving (when staticDir configured)
  *
  * When pairing is enabled, all routes except /health and /pair require
  * a valid bearer token in the Authorization header.
  */
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http';
+import type { Duplex } from 'node:stream';
+import { WebSocketServer } from 'ws';
 import type { SessionConfig } from '@ch4p/core';
 import { generateId } from '@ch4p/core';
 import type { SessionManager } from './session-manager.js';
 import type { PairingManager } from './pairing.js';
+import type { CanvasSessionManager } from './canvas-session.js';
+import { WebSocketBridge } from './ws-bridge.js';
+import { serveStatic } from './static.js';
 
 export interface GatewayServerOptions {
   port: number;
@@ -32,15 +39,25 @@ export interface GatewayServerOptions {
   pairingManager?: PairingManager;
   /** Default session config merged into newly created sessions. */
   defaultSessionConfig?: Omit<SessionConfig, 'sessionId' | 'channelId' | 'userId'>;
+  /** When provided, enables WebSocket canvas sessions. */
+  canvasSessionManager?: CanvasSessionManager;
+  /** Directory to serve static files from (built web UI). */
+  staticDir?: string;
+  /** Called when a new WebSocket bridge is established. */
+  onCanvasConnection?: (sessionId: string, bridge: WebSocketBridge) => void;
 }
 
 export class GatewayServer {
   private server: Server | null = null;
+  private wss: InstanceType<typeof WebSocketServer> | null = null;
   private readonly port: number;
   private readonly host: string;
   private readonly sessionManager: SessionManager;
   private readonly pairingManager: PairingManager | null;
   private readonly defaultSessionConfig: Omit<SessionConfig, 'sessionId' | 'channelId' | 'userId'>;
+  private readonly canvasSessionManager: CanvasSessionManager | null;
+  private readonly staticDir: string | null;
+  private readonly onCanvasConnection: ((sessionId: string, bridge: WebSocketBridge) => void) | null;
 
   constructor(options: GatewayServerOptions) {
     this.port = options.port;
@@ -52,6 +69,9 @@ export class GatewayServer {
       model: 'claude-sonnet-4-20250514',
       provider: 'anthropic',
     };
+    this.canvasSessionManager = options.canvasSessionManager ?? null;
+    this.staticDir = options.staticDir ?? null;
+    this.onCanvasConnection = options.onCanvasConnection ?? null;
   }
 
   /** Start listening on the configured port. */
@@ -63,6 +83,15 @@ export class GatewayServer {
         });
       });
 
+      // Set up WebSocket server for canvas connections (noServer mode)
+      if (this.canvasSessionManager) {
+        this.wss = new WebSocketServer({ noServer: true });
+
+        this.server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+          this.handleUpgrade(req, socket, head);
+        });
+      }
+
       this.server.on('error', reject);
 
       this.server.listen(this.port, this.host, () => {
@@ -73,6 +102,12 @@ export class GatewayServer {
 
   /** Gracefully close the server. */
   async stop(): Promise<void> {
+    // Close all WebSocket connections
+    if (this.wss) {
+      this.wss.close();
+      this.wss = null;
+    }
+
     return new Promise<void>((resolve, reject) => {
       if (!this.server) {
         resolve();
@@ -92,6 +127,68 @@ export class GatewayServer {
     const addr = this.server.address();
     if (typeof addr === 'string' || addr === null) return null;
     return { host: addr.address, port: addr.port };
+  }
+
+  // ---------------------------------------------------------------------------
+  // WebSocket upgrade handling
+  // ---------------------------------------------------------------------------
+
+  private handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+    if (!this.wss || !this.canvasSessionManager) {
+      socket.destroy();
+      return;
+    }
+
+    const url = req.url ?? '';
+    const wsMatch = url.match(/^\/ws\/([^?]+)/);
+    if (!wsMatch) {
+      socket.destroy();
+      return;
+    }
+
+    const sessionId = wsMatch[1]!;
+
+    // Auth check: if pairing is enabled, validate token from query param
+    if (this.pairingManager) {
+      const urlObj = new URL(url, `http://${req.headers.host ?? 'localhost'}`);
+      const token = urlObj.searchParams.get('token');
+      if (!token || !this.pairingManager.validateToken(token)) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+    }
+
+    // Ensure the canvas session exists (create if needed)
+    if (!this.canvasSessionManager.hasSession(sessionId)) {
+      this.canvasSessionManager.createCanvasSession(sessionId);
+    }
+
+    const entry = this.canvasSessionManager.getSession(sessionId);
+    if (!entry) {
+      socket.destroy();
+      return;
+    }
+
+    // Upgrade the HTTP connection to WebSocket
+    this.wss.handleUpgrade(req, socket, head, (ws) => {
+      const bridge = new WebSocketBridge(ws, entry.canvasState, entry.canvasChannel, sessionId);
+
+      // Wire the channel's sendToClient function
+      entry.canvasChannel.setSendFunction((msg) => {
+        if (ws.readyState === 1 /* OPEN */) {
+          ws.send(JSON.stringify(msg));
+        }
+      });
+
+      this.canvasSessionManager!.setBridge(sessionId, bridge);
+      bridge.start();
+
+      // Notify the gateway command so it can wire agent events
+      this.onCanvasConnection?.(sessionId, bridge);
+
+      this.wss!.emit('connection', ws, req);
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -122,6 +219,7 @@ export class GatewayServer {
         status: 'ok',
         timestamp: new Date().toISOString(),
         sessions: this.sessionManager.listSessions().length,
+        canvas: this.canvasSessionManager?.listSessionIds().length ?? 0,
         ...(stats ? { pairing: stats } : {}),
       });
       return;
@@ -273,9 +371,16 @@ export class GatewayServer {
           return;
         }
         this.sessionManager.endSession(sessionId);
+        // Also clean up canvas session if it exists
+        this.canvasSessionManager?.endCanvasSession(sessionId);
         this.sendJson(res, 200, { sessionId, ended: true });
         return;
       }
+    }
+
+    // ----- Static file serving (when configured) -----
+    if (this.staticDir && serveStatic(req, res, this.staticDir)) {
+      return;
     }
 
     // Fallback: 404

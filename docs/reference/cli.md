@@ -276,3 +276,78 @@ ch4p message --tool file.read --input '{"path": "./README.md"}' --json
 ```
 
 **Output:** JSON object with the tool result.
+
+---
+
+## ch4p canvas
+
+Start the interactive canvas workspace. Opens a browser-based spatial canvas where the agent renders A2UI components (cards, charts, forms, tables, code blocks, etc.) and communicates via WebSocket.
+
+```
+ch4p canvas [flags]
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--port` | `number` | from config | Override the canvas server port. |
+| `--no-open` | `boolean` | `false` | Don't auto-open the browser. |
+
+**Example:**
+
+```bash
+ch4p canvas                 # start canvas + open browser
+ch4p canvas --port 4800     # custom port
+ch4p canvas --no-open       # don't auto-open browser
+```
+
+**Output:**
+
+```
+ch4p Canvas
+==================================================
+
+Server listening on 127.0.0.1:4800
+Session       a1b2c3d4e5f6g7h8
+Engine        native
+Static dir    /path/to/apps/web/dist
+
+Routes:
+  WS     /ws/:sessionId       - WebSocket canvas connection
+  GET    /health               - liveness probe
+  GET    /*                    - static files (web UI)
+
+Canvas URL: http://127.0.0.1:4800/?session=a1b2c3d4e5f6g7h8
+
+Browser opened.
+Press Ctrl+C to stop.
+```
+
+The canvas provides:
+- **11 A2UI component types** — card, chart, form, button, text field, data table, code block, markdown, image, progress, status
+- **Bidirectional interaction** — click buttons, submit forms, drag components
+- **Real-time streaming** — agent text responses stream into the chat panel as they generate
+- **Spatial layout** — components are placed at (x, y) positions and can be connected with directional edges
+
+---
+
+## ch4p skills
+
+Manage agent skills (curated instruction sets loaded on-demand).
+
+```
+ch4p skills [subcommand]
+```
+
+| Subcommand | Description |
+|------------|-------------|
+| (none) | List installed skills. |
+| `show <name>` | Display full skill content. |
+| `verify` | Validate all skill manifests. |
+
+**Example:**
+
+```bash
+ch4p skills              # List installed skills
+ch4p skills show <name>  # Display full skill content
+ch4p skills verify       # Validate all manifests
+```

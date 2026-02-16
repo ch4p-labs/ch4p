@@ -9,11 +9,17 @@ This document explains why ch4p is structured the way it is. It covers the Gatew
 ch4p separates concerns into three distinct layers:
 
 ```
-Channels --> Gateway --> Agent --> Engine (LLM)
-                           |
-                         Tools
-                         Memory
-                         Security
+Channels (CLI, Telegram, Discord, ...)     Canvas (tldraw, WebSocket, A2UI)
+    |                                           |
+Gateway (HTTP server, session routing)   Gateway (WS upgrade, static files)
+    |                                           |
+Agent Runtime (session, context, steering, canvas_render tool)
+    |
+Engine (native LLM, echo, CLI subprocess)
+    |
+Provider (Anthropic, OpenAI, Google/Gemini, OpenRouter, Ollama, Bedrock)
+    |
+Tools / Memory / Security
 ```
 
 **Gateway** handles the outside world. It manages connections to messaging platforms, normalizes incoming messages into a common format, and routes outgoing responses back to the right channel. The gateway knows nothing about LLMs, tools, or memory. Its only job is I/O with the external world.
@@ -88,6 +94,22 @@ Additionally, the context window manager supports named truncation strategies wi
 
 ---
 
+## The Canvas: A2UI as a Second Output Surface
+
+The canvas workspace (`ch4p canvas`) introduces a second output surface alongside text-based channels. Where channels produce linear text responses, the canvas produces spatial, interactive UI components on an infinite tldraw canvas.
+
+The canvas reuses the existing architecture rather than creating a parallel stack. It plugs into the same gateway, agent runtime, and engine layers through two new components:
+
+**CanvasTool** — An ITool implementation named `canvas_render`. When the agent decides to show something visually, it calls this tool with a component type (card, chart, form, etc.), data, and position. The tool writes to a server-side CanvasState object, which emits change events. This is the agent's only way to affect the canvas — it goes through the same tool validation and security pipeline as every other tool.
+
+**CanvasChannel** — An IChannel implementation that translates user interactions (button clicks, form submissions, drag events) into the same InboundMessage format that Telegram or Discord would produce. The agent does not know or care whether a message came from a chat panel or a button click on a card — it is all normalized text.
+
+The transport layer is WebSocket rather than HTTP webhooks. The gateway upgrades `/ws/:sessionId` connections and creates a WebSocketBridge that wires the CanvasState change events to the browser and routes browser interactions back to the CanvasChannel. Agent events (text streaming, tool execution status) are also pushed to the browser in real-time.
+
+This design means the canvas adds zero special cases to the agent runtime. The agent loop, context management, security boundaries, and verification pipeline all work identically whether the session is text-only or canvas-enabled.
+
+---
+
 ## The I/O Boundary Principle
 
 A concept that runs through ch4p's architecture is the I/O boundary principle, which came from a project called Bagman. The principle states: every point where data crosses a trust boundary must be explicitly guarded.
@@ -95,9 +117,10 @@ A concept that runs through ch4p's architecture is the I/O boundary principle, w
 In ch4p, the trust boundaries are:
 
 1. **Channel to Gateway** — Untrusted external input enters the system. Input validation happens here.
-2. **Agent to Engine** — Conversation context leaves the system for a third-party API. Nothing sensitive should leak.
-3. **Agent to Tools** — The agent executes actions in the real world. Security controls gate this boundary.
-4. **Tools to Agent** — Tool output returns. Output sanitization catches leaked secrets before they reach channels.
-5. **Agent to Channel** — Responses leave the system. Final sanitization pass.
+2. **Canvas WebSocket to Gateway** — Browser interactions enter via WebSocket. The CanvasChannel normalizes them into the same message format as any other channel.
+3. **Agent to Engine** — Conversation context leaves the system for a third-party API. Nothing sensitive should leak.
+4. **Agent to Tools** — The agent executes actions in the real world. Security controls gate this boundary. This includes `canvas_render`, which modifies the visual canvas state.
+5. **Tools to Agent** — Tool output returns. Output sanitization catches leaked secrets before they reach channels.
+6. **Agent to Channel** — Responses leave the system. Final sanitization pass.
 
 Every boundary has an explicit guard. No data crosses a boundary without passing through a validation or sanitization layer. This is not paranoia -- it is the minimum viable security model for a system that simultaneously reads your files, executes commands, talks to external APIs, and broadcasts to messaging platforms.

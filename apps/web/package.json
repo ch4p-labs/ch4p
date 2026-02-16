@@ -1,21 +1,25 @@
 {
   "name": "@ch4p/web",
   "version": "0.1.0",
+  "private": true,
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
-  },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts",
-    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@ch4p/core": "workspace:*"
+    "@ch4p/canvas": "workspace:*",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tldraw": "^3.8.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.9.3",
+    "vite": "^6.2.0"
   }
 }

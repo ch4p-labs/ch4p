@@ -1,5 +1,5 @@
 {
-  "name": "@ch4p/gateway",
+  "name": "@ch4p/canvas",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
@@ -16,11 +16,6 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@ch4p/canvas": "workspace:*",
-    "@ch4p/core": "workspace:*",
-    "ws": "^8.0.0"
-  },
-  "devDependencies": {
-    "@types/ws": "^8.18.1"
+    "@ch4p/core": "workspace:*"
   }
 }

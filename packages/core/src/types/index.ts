@@ -125,4 +125,11 @@ export interface Ch4pConfig {
       voiceId?: string;
     };
   };
+  canvas?: {
+    enabled: boolean;
+    /** Defaults to gateway.port when not specified. */
+    port?: number;
+    /** Per-session component limit (default 500). */
+    maxComponents?: number;
+  };
 }

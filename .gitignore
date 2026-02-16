@@ -11,16 +11,24 @@ coverage/
 tmp/
 .turbo/
 
-# ch4p data
-~/.ch4p/
+# ch4p data (runtime directories)
+.ch4p/
+memories/
+sessions/
+logs/
 
 # Database files (memory backend)
 *.sqlite
 *.sqlite3
 *.db
 
+# Log files (observer uses .jsonl)
+*.jsonl
+
 # Local-only / session docs
 handover.md
+todo.md
+lessons.md
 tasks/
 
 # IDE / Agent

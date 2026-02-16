@@ -24,6 +24,9 @@ node apps/cli/dist/index.js onboard
 
 # Start the agent (shows Chappie splash, then interactive REPL)
 node apps/cli/dist/index.js agent
+
+# Start the interactive canvas workspace (opens browser)
+node apps/cli/dist/index.js canvas
 ```
 
 Or set your API key directly:
@@ -43,16 +46,21 @@ corepack pnpm bundle    # ~58 MB binary via bun compile
 ## Architecture
 
 ```
-Channels (CLI, Telegram, Discord, Slack, ...)
-    |
-Gateway (HTTP server, session routing)
-    |
-Agent Runtime (session, context, steering queue)
+Channels (CLI, Telegram, Discord, Slack, ...)     Canvas (tldraw, WebSocket, A2UI)
+    |                                                  |
+Gateway (HTTP server, session routing)      Gateway (WS upgrade, static files)
+    |                                                  |
+Agent Runtime (session, context, steering queue, canvas_render tool)
     |
 Engine (native LLM, echo, CLI subprocess)
     |
 Provider (Anthropic, OpenAI, Google/Gemini, OpenRouter, Ollama, Bedrock)
 ```
+
+Three modes of interaction:
+- **`ch4p agent`** — text-based terminal REPL
+- **`ch4p gateway`** — multi-channel server with voice (Telegram, Discord, Slack, etc.)
+- **`ch4p canvas`** — interactive browser workspace with an infinite spatial canvas
 
 Every subsystem is defined by a trait interface — swap any component via config, zero code changes.
 
@@ -80,16 +88,19 @@ packages/
   providers/      # LLM providers: Anthropic, OpenAI, Google, OpenRouter, Ollama, Bedrock
   engines/        # Execution engines: native (LLM), echo (testing), subprocess (CLI wrappers)
   channels/       # Messaging: CLI, Telegram, Discord, Slack
-  gateway/        # HTTP server, session routing, pairing authentication
+  canvas/         # A2UI components, canvas state, WS protocol, CanvasTool, CanvasChannel
+  gateway/        # HTTP server, session routing, WebSocket bridge, pairing authentication
   tools/          # Built-in tools: bash, file ops, grep, glob, web fetch, memory, delegate, MCP client
   memory/         # Hybrid search: SQLite FTS5 + vector embeddings
   security/       # Filesystem scope, command allowlist, secrets, I/O sanitization
   supervisor/     # OTP-style supervision trees, health monitoring
   observability/  # Console, file, multi-observer logging
   skills/         # Skill discovery, YAML frontmatter parsing, registry (OpenClaw compatible)
+  voice/          # Voice pipeline: STT (Whisper, Deepgram), TTS (ElevenLabs)
   tunnels/        # Tunnel providers: Cloudflare, Tailscale, ngrok
 apps/
   cli/            # Command-line interface (standalone binary via bun compile)
+  web/            # Canvas workspace: React + tldraw SPA with 11 custom A2UI shape types
 ```
 
 ## Skills
@@ -103,6 +114,20 @@ ch4p skills verify       # Validate all manifests
 ```
 
 Skills are SKILL.md files with YAML frontmatter, stored in `~/.ch4p/skills/`, `.ch4p/skills/`, or `.agents/skills/`. Compatible with the Agent Skills specification and the OpenClaw skill format.
+
+## Canvas
+
+The interactive canvas workspace (`ch4p canvas`) gives the agent a spatial, visual interface powered by [tldraw](https://tldraw.dev). The agent renders rich UI components on an infinite canvas via the `canvas_render` tool, and user interactions flow back in real-time over WebSocket.
+
+**11 A2UI component types:** card, chart, form, button, text field, data table, code block, markdown, image, progress, status. Components can be connected with directional edges to show relationships.
+
+```bash
+ch4p canvas                # start canvas + open browser
+ch4p canvas --port 4800    # custom port
+ch4p canvas --no-open      # don't auto-open browser
+```
+
+The canvas is fully bidirectional — click a button on a card, submit a form, or drag components to rearrange the workspace. Every interaction reaches the agent as a structured event.
 
 ## Security
 
@@ -138,11 +163,11 @@ Three backends: `sqlite` (primary), `markdown` (portable), `noop` (disabled).
 ## Development
 
 ```bash
-# Build all 15 packages
+# Build all 18 packages
 corepack pnpm -r build
 
-# Run all 1303 tests
-corepack pnpm vitest run
+# Run all 1578 tests
+corepack pnpm test
 
 # Build a single package
 corepack pnpm --filter @ch4p/core build
@@ -150,12 +175,12 @@ corepack pnpm --filter @ch4p/core build
 
 ### Project Structure
 
-- 15 packages in a pnpm monorepo (use `corepack pnpm` — pnpm is not on PATH)
+- 18 packages in a pnpm monorepo (use `corepack pnpm` — pnpm is not on PATH)
 - TypeScript strict mode, ES2023 target, NodeNext module resolution
 - ESM-only (all imports use `.js` extension)
 - Zero external runtime dependencies for core, security, and CLI packages
-- `tsup` for bundling, `vitest` for testing
-- 47 test files, 1303 tests
+- `tsup` for bundling, `vitest` for testing, `vite` for web frontend
+- 53 test files, 1578 tests
 
 ## Configuration
 
@@ -195,12 +220,12 @@ See [Alternative LLM Setups](docs/how-to/alternative-llm-setups.md) for configur
 
 ## Documentation
 
-Full Diataxis-style documentation in `docs/`:
+Full Diataxis-style documentation in [`docs/`](docs/index.md):
 
-- **Tutorials** — getting-started, first-channel
-- **How-to Guides** — add-tool, add-channel, add-provider, configure-security, deploy-gateway, use-memory, alternative-llm-setups
-- **Reference** — interfaces, configuration, CLI, security
-- **Explanation** — architecture, concurrency, security-model, memory
+- **[Tutorials](docs/tutorials/)** — [getting-started](docs/tutorials/getting-started.md), [first-channel](docs/tutorials/first-channel.md)
+- **[How-to Guides](docs/how-to/)** — [add-tool](docs/how-to/add-tool.md), [add-channel](docs/how-to/add-channel.md), [add-provider](docs/how-to/add-provider.md), [configure-security](docs/how-to/configure-security.md), [deploy-gateway](docs/how-to/deploy-gateway.md), [use-memory](docs/how-to/use-memory.md), [use-canvas](docs/how-to/use-canvas.md), [alternative-llm-setups](docs/how-to/alternative-llm-setups.md)
+- **[Reference](docs/reference/)** — [interfaces](docs/reference/interfaces.md), [configuration](docs/reference/configuration.md), [CLI](docs/reference/cli.md), [security](docs/reference/security.md)
+- **[Explanation](docs/explanation/)** — [architecture](docs/explanation/architecture.md), [concurrency](docs/explanation/concurrency.md), [security-model](docs/explanation/security-model.md), [memory](docs/explanation/memory.md)
 
 ## License
 

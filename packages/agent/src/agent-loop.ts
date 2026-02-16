@@ -94,6 +94,9 @@ export interface AgentLoopOpts {
   /** Optional security policy. When provided, tools use it for path/command
    *  validation. When absent, a permissive no-op policy is used. */
   securityPolicy?: ISecurityPolicy;
+  /** Extra properties to spread onto the ToolContext. Used to inject
+   *  domain-specific state (e.g. canvasState for the canvas tool). */
+  toolContextExtensions?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,11 +150,12 @@ export class AgentLoop {
   private readonly tools: Map<string, ITool>;
   private readonly toolDefs: ToolDefinition[];
   private readonly observer: IObserver;
-  private readonly opts: Required<Omit<AgentLoopOpts, 'verifier' | 'enableStateSnapshots' | 'memoryBackend' | 'securityPolicy'>> & {
+  private readonly opts: Required<Omit<AgentLoopOpts, 'verifier' | 'enableStateSnapshots' | 'memoryBackend' | 'securityPolicy' | 'toolContextExtensions'>> & {
     verifier?: IVerifier;
     enableStateSnapshots: boolean;
     memoryBackend?: IMemoryBackend;
     securityPolicy?: ISecurityPolicy;
+    toolContextExtensions?: Record<string, unknown>;
   };
 
   private abortController: AbortController | null = null;
@@ -185,6 +189,7 @@ export class AgentLoop {
       enableStateSnapshots: opts.enableStateSnapshots ?? true,
       memoryBackend: opts.memoryBackend,
       securityPolicy: opts.securityPolicy,
+      toolContextExtensions: opts.toolContextExtensions,
     };
 
     if (opts.workerPool) {
@@ -696,6 +701,8 @@ export class AgentLoop {
       },
       // Inject memory backend so memory_store / memory_recall tools can access it.
       ...(this.opts.memoryBackend ? { memoryBackend: this.opts.memoryBackend } : {}),
+      // Spread any domain-specific extensions (e.g. canvasState for canvas tool).
+      ...(this.opts.toolContextExtensions ?? {}),
     };
 
     // ----- AWM: Capture pre-execution state snapshot -----

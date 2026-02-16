@@ -10,6 +10,8 @@ Built in TypeScript on Node.js, ch4p combines BEAM-inspired concurrency, a zero-
 
 **New to ch4p?** Begin with the [Getting Started tutorial](tutorials/getting-started.md). You will install ch4p, run the onboard wizard, send your first message, and watch a tool execute — all in about ten minutes.
 
+**Want a visual workspace?** Run `ch4p canvas` to launch the interactive canvas — a browser-based spatial workspace where the agent renders cards, charts, forms, and more on an infinite tldraw canvas. See the [Use Canvas](how-to/use-canvas.md) guide.
+
 **Want to connect a channel?** The [First Channel tutorial](tutorials/first-channel.md) walks you through wiring up Telegram.
 
 **Already comfortable?** Jump to whichever section matches your need.
@@ -37,6 +39,7 @@ Practical recipes for specific tasks. Assumes you already understand the basics.
 - [Configure Security](how-to/configure-security.md) — Filesystem scoping, command allowlists, autonomy levels
 - [Deploy the Gateway](how-to/deploy-gateway.md) — Run the gateway with a tunnel for external access
 - [Use Memory](how-to/use-memory.md) — Store, recall, and forget with hybrid search
+- [Use Canvas](how-to/use-canvas.md) — Launch the interactive canvas workspace and render A2UI components
 - [Alternative LLM Setups](how-to/alternative-llm-setups.md) — Ollama, LiteLLM proxy, CLI passthrough
 
 ### Reference — Information-Oriented
@@ -64,7 +67,7 @@ The reasoning behind ch4p's design. Read when you want to understand "why."
 | Aspect | Detail |
 |---|---|
 | Language | TypeScript (Node.js) |
-| Channels | 14+ (Telegram, Discord, Slack, Matrix, IRC, and more) |
+| Channels | 14+ (Telegram, Discord, Slack, Matrix, IRC, and more) + interactive canvas |
 | LLM Providers | 6 built-in (Anthropic, OpenAI, Google/Gemini, OpenRouter, Ollama, Bedrock) |
 | Memory | SQLite with FTS5 + vector hybrid search |
 | Concurrency | BEAM-inspired supervision trees with worker threads |

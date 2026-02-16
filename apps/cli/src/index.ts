@@ -105,6 +105,7 @@ function printHelp(): void {
     ${GREEN}pairing${RESET}      Manage gateway pairing
     ${GREEN}message${RESET}      Send a message via a channel
     ${GREEN}skills${RESET}       Manage agent skills
+    ${GREEN}canvas${RESET}       Start the interactive canvas workspace
 
   ${BOLD}Agent Options${RESET}
     ${GREEN}-m, --message${RESET} "text"      Run a single message and exit
@@ -125,6 +126,7 @@ function printHelp(): void {
     ${DIM}$${RESET} ch4p doctor                           ${DIM}# Health checks${RESET}
     ${DIM}$${RESET} ch4p status                           ${DIM}# System status${RESET}
     ${DIM}$${RESET} ch4p tools                            ${DIM}# List tools${RESET}
+    ${DIM}$${RESET} ch4p canvas                           ${DIM}# Start canvas workspace${RESET}
     ${DIM}$${RESET} ch4p message -c telegram "Hello!"     ${DIM}# Send via channel${RESET}
 
   ${DIM}Run ${CYAN}ch4p onboard${DIM} to get started.${RESET}
@@ -223,6 +225,12 @@ async function main(): Promise<void> {
     case 'skills': {
       const { skills } = await import('./commands/skills.js');
       await skills(rest);
+      break;
+    }
+
+    case 'canvas': {
+      const { canvas } = await import('./commands/canvas.js');
+      await canvas(rest);
       break;
     }
 

@@ -33,6 +33,7 @@
     "@ch4p/supervisor": "workspace:*",
     "@ch4p/skills": "workspace:*",
     "@ch4p/tunnels": "workspace:*",
-    "@ch4p/voice": "workspace:*"
+    "@ch4p/voice": "workspace:*",
+    "@ch4p/canvas": "workspace:*"
   }
 }
