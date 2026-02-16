@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import type { IEngine, EngineEvent, SessionConfig, ToolResult, ToolCall } from '@ch4p/core';
+import type { IEngine, EngineEvent, SessionConfig, ToolResult, ToolCall, IMemoryBackend, MemoryResult, MemoryEntry, RecallOpts } from '@ch4p/core';
 import { generateId } from '@ch4p/core';
 import { Session, AgentLoop } from '@ch4p/agent';
 import type { AgentEvent } from '@ch4p/agent';
@@ -458,6 +458,359 @@ describe('Agent E2E Pipeline', () => {
       expect(meta.llmCalls).toBe(2);
       expect(meta.toolInvocations).toBe(1);
       expect(meta.errors).toHaveLength(0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Memory integration — agent loop with memory_store and memory_recall tools
+  // -------------------------------------------------------------------------
+
+  describe('memory integration (store → recall → answer)', () => {
+    /**
+     * In-memory IMemoryBackend for deterministic tests.
+     * Stores entries in a Map and returns keyword-matched results.
+     */
+    function createMockMemoryBackend(): IMemoryBackend {
+      const entries = new Map<string, { content: string; metadata?: Record<string, unknown>; createdAt: Date; updatedAt: Date }>();
+
+      return {
+        id: 'mock-memory',
+
+        async store(key: string, content: string, metadata?: Record<string, unknown>): Promise<void> {
+          const now = new Date();
+          entries.set(key, {
+            content,
+            metadata,
+            createdAt: entries.get(key)?.createdAt ?? now,
+            updatedAt: now,
+          });
+        },
+
+        async recall(query: string, opts?: RecallOpts): Promise<MemoryResult[]> {
+          const limit = opts?.limit ?? 10;
+          const results: MemoryResult[] = [];
+          const queryLower = query.toLowerCase();
+
+          for (const [key, entry] of entries) {
+            const keyMatch = key.toLowerCase().includes(queryLower);
+            const contentMatch = entry.content.toLowerCase().includes(queryLower);
+            if (keyMatch || contentMatch) {
+              results.push({
+                key,
+                content: entry.content,
+                score: keyMatch && contentMatch ? 1.0 : 0.75,
+                metadata: entry.metadata,
+                matchType: 'keyword',
+              });
+            }
+          }
+
+          // Sort by score descending, limit results.
+          return results
+            .sort((a, b) => b.score - a.score)
+            .slice(0, limit);
+        },
+
+        async forget(key: string): Promise<boolean> {
+          return entries.delete(key);
+        },
+
+        async list(prefix?: string): Promise<MemoryEntry[]> {
+          const result: MemoryEntry[] = [];
+          for (const [key, entry] of entries) {
+            if (!prefix || key.startsWith(prefix)) {
+              result.push({ key, content: entry.content, metadata: entry.metadata, createdAt: entry.createdAt, updatedAt: entry.updatedAt });
+            }
+          }
+          return result;
+        },
+
+        async reindex(): Promise<void> { /* no-op */ },
+        async close(): Promise<void> { entries.clear(); },
+      };
+    }
+
+    /**
+     * Multi-turn mock engine that drives a store → recall → answer flow.
+     *
+     * Turn 1: emit memory_store tool call
+     * Turn 2: emit memory_recall tool call
+     * Turn 3: emit final answer that references the recalled data
+     */
+    function createMemoryTestEngine(): IEngine {
+      let callCount = 0;
+
+      return {
+        id: 'memory-test',
+        name: 'Memory Test Engine',
+
+        async startRun(job) {
+          callCount++;
+          const turn = callCount;
+          const ref = generateId(12);
+
+          async function* events(): AsyncIterable<EngineEvent> {
+            yield { type: 'started' };
+
+            if (turn === 1) {
+              // Turn 1: store a fact.
+              yield { type: 'text_delta', delta: 'Storing project info.' };
+              yield {
+                type: 'tool_start',
+                id: 'tc_store',
+                tool: 'memory_store',
+                args: {
+                  key: 'project/name',
+                  content: 'ch4p is a security-first AI assistant platform.',
+                  metadata: { source: 'test', importance: 'high' },
+                },
+              };
+              yield {
+                type: 'completed',
+                answer: 'Storing project info.',
+                usage: { inputTokens: 20, outputTokens: 10 },
+              };
+            } else if (turn === 2) {
+              // Turn 2: recall the stored fact.
+              yield { type: 'text_delta', delta: 'Looking up project info.' };
+              yield {
+                type: 'tool_start',
+                id: 'tc_recall',
+                tool: 'memory_recall',
+                args: { query: 'ch4p', limit: 5 },
+              };
+              yield {
+                type: 'completed',
+                answer: 'Looking up project info.',
+                usage: { inputTokens: 40, outputTokens: 15 },
+              };
+            } else {
+              // Turn 3: final answer referencing the recalled data.
+              const answer = 'Based on my memory, ch4p is a security-first AI assistant platform.';
+              yield { type: 'text_delta', delta: answer };
+              yield {
+                type: 'completed',
+                answer,
+                usage: { inputTokens: 60, outputTokens: 20 },
+              };
+            }
+          }
+
+          return { ref, events: events(), async cancel() {}, steer() {} };
+        },
+
+        async resume() { throw new Error('Not supported'); },
+      };
+    }
+
+    it('should store and recall memory entries through the agent loop', async () => {
+      const engine = createMemoryTestEngine();
+      const session = new Session(createTestSessionConfig());
+      const registry = ToolRegistry.createDefault({ include: ['memory_store', 'memory_recall'] });
+      const memoryBackend = createMockMemoryBackend();
+      const observer = new NoopObserver();
+
+      const loop = new AgentLoop(session, engine, registry.list(), observer, {
+        memoryBackend,
+        enableStateSnapshots: false,
+      });
+
+      const events = await collectEvents(loop, 'Remember the project name and then look it up');
+
+      // Should have tool events for both store and recall.
+      const toolStarts = events.filter((e) => e.type === 'tool_start');
+      const toolEnds = events.filter((e) => e.type === 'tool_end');
+      expect(toolStarts).toHaveLength(2);
+      expect(toolEnds).toHaveLength(2);
+
+      // First tool call should be memory_store.
+      expect((toolStarts[0] as { tool: string }).tool).toBe('memory_store');
+      // Second tool call should be memory_recall.
+      expect((toolStarts[1] as { tool: string }).tool).toBe('memory_recall');
+
+      // memory_store should succeed.
+      const storeResult = (toolEnds[0] as { result: ToolResult }).result;
+      expect(storeResult.success).toBe(true);
+      expect(storeResult.output).toContain('project/name');
+
+      // memory_recall should find the stored entry.
+      const recallResult = (toolEnds[1] as { result: ToolResult }).result;
+      expect(recallResult.success).toBe(true);
+      expect(recallResult.output).toContain('ch4p');
+      expect(recallResult.output).toContain('security-first');
+
+      // Final answer should reference the recalled info.
+      const completes = events.filter((e) => e.type === 'complete');
+      expect(completes).toHaveLength(1);
+      expect((completes[0] as { answer: string }).answer).toContain('security-first');
+    });
+
+    it('should track session metadata for memory tool invocations', async () => {
+      const engine = createMemoryTestEngine();
+      const session = new Session(createTestSessionConfig());
+      const registry = ToolRegistry.createDefault({ include: ['memory_store', 'memory_recall'] });
+      const memoryBackend = createMockMemoryBackend();
+      const observer = new NoopObserver();
+
+      const loop = new AgentLoop(session, engine, registry.list(), observer, {
+        memoryBackend,
+        enableStateSnapshots: false,
+      });
+
+      await collectEvents(loop, 'Store and recall');
+
+      const meta = session.getMetadata();
+      expect(meta.state).toBe('completed');
+      expect(meta.loopIterations).toBe(3); // store turn + recall turn + final answer turn
+      expect(meta.llmCalls).toBe(3);
+      expect(meta.toolInvocations).toBe(2); // store + recall
+      expect(meta.errors).toHaveLength(0);
+    });
+
+    it('should handle memory recall with no results', async () => {
+      // Engine that only does a recall (no prior store).
+      let callCount = 0;
+      const recallOnlyEngine: IEngine = {
+        id: 'recall-only',
+        name: 'Recall Only Engine',
+        async startRun() {
+          callCount++;
+          const ref = generateId(12);
+          async function* events(): AsyncIterable<EngineEvent> {
+            yield { type: 'started' };
+            if (callCount === 1) {
+              yield { type: 'text_delta', delta: 'Searching memory.' };
+              yield {
+                type: 'tool_start',
+                id: 'tc_recall_empty',
+                tool: 'memory_recall',
+                args: { query: 'nonexistent topic' },
+              };
+              yield {
+                type: 'completed',
+                answer: 'Searching memory.',
+                usage: { inputTokens: 10, outputTokens: 5 },
+              };
+            } else {
+              const answer = 'No relevant memories found.';
+              yield { type: 'text_delta', delta: answer };
+              yield {
+                type: 'completed',
+                answer,
+                usage: { inputTokens: 20, outputTokens: 10 },
+              };
+            }
+          }
+          return { ref, events: events(), async cancel() {}, steer() {} };
+        },
+        async resume() { throw new Error('Not supported'); },
+      };
+
+      const session = new Session(createTestSessionConfig());
+      const registry = ToolRegistry.createDefault({ include: ['memory_recall'] });
+      const memoryBackend = createMockMemoryBackend();
+      const observer = new NoopObserver();
+
+      const loop = new AgentLoop(session, recallOnlyEngine, registry.list(), observer, {
+        memoryBackend,
+        enableStateSnapshots: false,
+      });
+
+      const events = await collectEvents(loop, 'What do you remember?');
+
+      // Recall should succeed but return empty.
+      const toolEnds = events.filter((e) => e.type === 'tool_end');
+      expect(toolEnds).toHaveLength(1);
+      const recallResult = (toolEnds[0] as { result: ToolResult }).result;
+      expect(recallResult.success).toBe(true);
+      expect(recallResult.output).toContain('No matching memory entries found');
+    });
+
+    it('should fail gracefully when memory backend is not configured', async () => {
+      const engine = createMockEngine({
+        responseText: 'Storing data.',
+        toolCalls: [
+          {
+            id: 'tc_no_mem',
+            name: 'memory_store',
+            args: { key: 'test', content: 'data' },
+          },
+        ],
+        followUpText: 'Memory not available.',
+      });
+
+      const session = new Session(createTestSessionConfig());
+      const registry = ToolRegistry.createDefault({ include: ['memory_store'] });
+      const observer = new NoopObserver();
+
+      // No memoryBackend provided — tools should error.
+      const loop = new AgentLoop(session, engine, registry.list(), observer, {
+        enableStateSnapshots: false,
+      });
+
+      const events = await collectEvents(loop, 'Store something');
+
+      // Tool should have been called but returned an error.
+      const toolEnds = events.filter((e) => e.type === 'tool_end');
+      expect(toolEnds).toHaveLength(1);
+      const result = (toolEnds[0] as { result: ToolResult }).result;
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Memory backend');
+    });
+
+    it('should persist data across store and recall within the same session', async () => {
+      const memoryBackend = createMockMemoryBackend();
+
+      // Verify the mock backend works independently first.
+      await memoryBackend.store('fact/1', 'TypeScript is great', { tag: 'language' });
+      await memoryBackend.store('fact/2', 'Vitest is a fast test runner', { tag: 'tool' });
+
+      const results = await memoryBackend.recall('TypeScript');
+      expect(results).toHaveLength(1);
+      expect(results[0]!.key).toBe('fact/1');
+      expect(results[0]!.content).toContain('TypeScript');
+
+      const allResults = await memoryBackend.recall('fast');
+      expect(allResults).toHaveLength(1);
+      expect(allResults[0]!.key).toBe('fact/2');
+
+      // Verify list with prefix.
+      const facts = await memoryBackend.list('fact/');
+      expect(facts).toHaveLength(2);
+
+      // Verify forget.
+      const forgotten = await memoryBackend.forget('fact/1');
+      expect(forgotten).toBe(true);
+      const afterForget = await memoryBackend.recall('TypeScript');
+      expect(afterForget).toHaveLength(0);
+    });
+
+    it('should notify observer for memory tool invocations', async () => {
+      const engine = createMemoryTestEngine();
+      const session = new Session(createTestSessionConfig());
+      const registry = ToolRegistry.createDefault({ include: ['memory_store', 'memory_recall'] });
+      const memoryBackend = createMockMemoryBackend();
+      const observer = new NoopObserver();
+      const toolSpy = vi.spyOn(observer, 'onToolInvocation');
+
+      const loop = new AgentLoop(session, engine, registry.list(), observer, {
+        memoryBackend,
+        enableStateSnapshots: false,
+      });
+
+      await collectEvents(loop, 'Store and recall with observation');
+
+      // Observer should have been called for both memory tools.
+      expect(toolSpy).toHaveBeenCalledTimes(2);
+
+      const firstCall = toolSpy.mock.calls[0]![0];
+      expect(firstCall.tool).toBe('memory_store');
+      expect(firstCall.result.success).toBe(true);
+      expect(firstCall.duration).toBeGreaterThanOrEqual(0);
+
+      const secondCall = toolSpy.mock.calls[1]![0];
+      expect(secondCall.tool).toBe('memory_recall');
+      expect(secondCall.result.success).toBe(true);
     });
   });
 });
