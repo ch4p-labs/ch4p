@@ -605,7 +605,7 @@ function handleInboundMessage(
 
       // Get or create a shared context for this channel+user so conversation
       // history persists across messages (like the REPL's sharedContext).
-      const contextKey = `${msg.channelId ?? ''}:${msg.from.userId ?? 'anon'}`;
+      const contextKey = `${msg.channelId ?? ''}:${msg.from.userId ?? 'anonymous'}`;
       let sharedContext = conversationContexts.get(contextKey);
       if (!sharedContext) {
         sharedContext = new ContextManager();
