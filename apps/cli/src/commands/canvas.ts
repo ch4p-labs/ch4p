@@ -11,13 +11,13 @@
  *   ch4p canvas --no-open    — don't auto-open browser
  */
 
-import type { Ch4pConfig, ISecurityPolicy, InboundMessage } from '@ch4p/core';
+import type { Ch4pConfig, IEngine, ISecurityPolicy, InboundMessage } from '@ch4p/core';
 import { generateId } from '@ch4p/core';
 import { loadConfig, getLogsDir } from '../config.js';
 import { SessionManager, GatewayServer, PairingManager, CanvasSessionManager, type WebSocketBridge } from '@ch4p/gateway';
 import { CanvasTool, CanvasChannel, type CanvasToolContext } from '@ch4p/canvas';
 import { Session, AgentLoop } from '@ch4p/agent';
-import { NativeEngine } from '@ch4p/engines';
+import { NativeEngine, createClaudeCliEngine, createCodexCliEngine } from '@ch4p/engines';
 import { ProviderRegistry } from '@ch4p/providers';
 import { ToolRegistry, LoadSkillTool } from '@ch4p/tools';
 import { SkillRegistry } from '@ch4p/skills';
@@ -237,7 +237,36 @@ export async function canvas(args: string[]): Promise<void> {
 // Engine factory
 // ---------------------------------------------------------------------------
 
-function createCanvasEngine(config: Ch4pConfig) {
+function createCanvasEngine(config: Ch4pConfig): IEngine | null {
+  const engineId = config.engines?.default ?? 'native';
+  const engineConfig = config.engines?.available?.[engineId] as Record<string, unknown> | undefined;
+
+  // ----- Subprocess engines (claude-cli, codex-cli) -----
+  if (engineId === 'claude-cli') {
+    try {
+      return createClaudeCliEngine({
+        command: (engineConfig?.command as string) ?? undefined,
+        cwd: (engineConfig?.cwd as string) ?? undefined,
+        timeout: (engineConfig?.timeout as number) ?? undefined,
+      });
+    } catch {
+      // Fall through to native.
+    }
+  }
+
+  if (engineId === 'codex-cli') {
+    try {
+      return createCodexCliEngine({
+        command: (engineConfig?.command as string) ?? undefined,
+        cwd: (engineConfig?.cwd as string) ?? undefined,
+        timeout: (engineConfig?.timeout as number) ?? undefined,
+      });
+    } catch {
+      // Fall through to native.
+    }
+  }
+
+  // ----- NativeEngine (LLM provider-backed) -----
   const providerName = config.agent.provider;
   const providerConfig = config.providers?.[providerName] as Record<string, unknown> | undefined;
   const apiKey = providerConfig?.apiKey as string | undefined;
@@ -272,7 +301,7 @@ function wireCanvasSession(
   sessionId: string,
   bridge: WebSocketBridge,
   canvasSessionManager: CanvasSessionManager,
-  engine: NativeEngine,
+  engine: IEngine,
   config: Ch4pConfig,
   observer: ReturnType<typeof createObserver>,
   memoryBackend?: ReturnType<typeof createMemoryBackend>,
@@ -303,11 +332,13 @@ function wireCanvasSession(
         });
 
         // Create tool registry with the CanvasTool.
-        const tools = ToolRegistry.createDefault({
-          exclude: config.autonomy.level === 'readonly'
-            ? ['bash', 'file_write', 'file_edit', 'delegate']
-            : ['delegate'],
-        });
+        const exclude = config.autonomy.level === 'readonly'
+          ? ['bash', 'file_write', 'file_edit', 'delegate']
+          : ['delegate'];
+        if (!config.mesh?.enabled) {
+          exclude.push('mesh');
+        }
+        const tools = ToolRegistry.createDefault({ exclude });
         tools.register(new CanvasTool());
 
         // Register load_skill tool when skills are available.
