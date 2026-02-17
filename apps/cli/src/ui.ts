@@ -58,6 +58,16 @@ export const WARN = `${YELLOW}\u26a0${RESET}`;    // ⚠
 export const BULLET = `${TEAL}\u25cf${RESET}`;    // ●
 
 // ---------------------------------------------------------------------------
+// Chat UI characters
+// ---------------------------------------------------------------------------
+
+/** Compact Chappie glyph for inline assistant headers. */
+export const CHAPPIE_GLYPH = '\u25c6';  // ◆
+
+/** REPL prompt character (heavy right-pointing angle). */
+export const PROMPT_CHAR = '\u276f';  // ❯
+
+// ---------------------------------------------------------------------------
 // Spinner characters (cycle at ~200ms for thinking/loading)
 // ---------------------------------------------------------------------------
 
@@ -226,4 +236,78 @@ export function statusBadge(status: 'pass' | 'warn' | 'fail' | 'ok'): string {
     case 'fail':
       return `${RED}FAIL${RESET}`;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Chat UI rendering
+// ---------------------------------------------------------------------------
+
+/**
+ * Render a chat turn header.
+ *
+ * Used for both user and assistant message headers:
+ *   ❯ You
+ *   ◆ ch4p
+ *
+ * Icon and label are rendered in TEAL+BOLD. Preceded by a blank line
+ * for visual separation between turns.
+ */
+export function chatHeader(icon: string, label: string): string {
+  return `\n${TEAL}${BOLD}${icon} ${label}${RESET}`;
+}
+
+/**
+ * Render a token usage footer.
+ *
+ * Visual output:
+ *   ─ 1,234 in · 567 out
+ *
+ * All in DIM. Horizontal rule prefix in TEAL_DIM. Middle dot separator.
+ */
+export function tokenFooter(usage: { inputTokens: number; outputTokens: number }): string {
+  const inStr = usage.inputTokens.toLocaleString();
+  const outStr = usage.outputTokens.toLocaleString();
+  return `\n  ${DIM}${TEAL_DIM}${BOX.horizontal}${RESET} ${DIM}${inStr} in ${TEAL_DIM}\u00b7${RESET} ${DIM}${outStr} out${RESET}`;
+}
+
+/**
+ * Render the session startup banner.
+ *
+ * Places the CHAPPIE_SMALL mascot on the left and key-value session info
+ * on the right, all inside a box(). Reuses the same layout pattern as
+ * the onboard wizard welcome banner.
+ *
+ * Visual output:
+ * ╭──────────────────────────────────────────────────╮
+ * │                                                    │
+ * │   ▐▌   ▐▌     ch4p                                │
+ * │   ▐▙▄▄▄▟▌                                         │
+ * │  ▐█▀▀▀▀▀█▌    Model     claude-sonnet-4            │
+ * │  ▐█ ▀▘▝▀ █▌   Autonomy  supervised                 │
+ * │   ▝▀▀▀▀▀▘     Tools     12 loaded                  │
+ * │                                                    │
+ * ╰──────────────────────────────────────────────────╯
+ */
+export function sessionBanner(info: Record<string, string>): string {
+  // Build right-side: "ch4p" title, blank line, then kv rows.
+  const rightLines: string[] = [
+    `${TEAL}${BOLD}ch4p${RESET}`,
+    '',
+  ];
+  for (const [key, value] of Object.entries(info)) {
+    rightLines.push(kvRow(key, value, 12));
+  }
+
+  // Zip mascot lines with info lines.
+  const totalLines = Math.max(CHAPPIE_SMALL.length, rightLines.length);
+  const combined: string[] = [];
+  for (let i = 0; i < totalLines; i++) {
+    const art = i < CHAPPIE_SMALL.length
+      ? `${TEAL}${CHAPPIE_SMALL[i]}${RESET}`
+      : '            '; // 12-char blank matching mascot visible width
+    const text = i < rightLines.length ? rightLines[i]! : '';
+    combined.push(`${art}    ${text}`);
+  }
+
+  return box('', combined);
 }

@@ -30,74 +30,16 @@ import { DefaultSecurityPolicy } from '@ch4p/security';
 import { SkillRegistry } from '@ch4p/skills';
 import { loadConfig, getLogsDir } from '../config.js';
 import { playBriefSplash } from './splash.js';
-import { TEAL, RESET, BOLD, DIM, GREEN, YELLOW, RED, MAGENTA, BLUE, box, separator } from '../ui.js';
+import {
+  TEAL, TEAL_DIM, RESET, BOLD, DIM, GREEN, YELLOW, RED, MAGENTA, BLUE,
+  BOX, CHECK, CROSS, WARN,
+  CHAPPIE_GLYPH, PROMPT_CHAR,
+  chatHeader, sessionBanner, tokenFooter, separator,
+} from '../ui.js';
 
 // ---------------------------------------------------------------------------
-// AgentEvent output handler
+// String helpers
 // ---------------------------------------------------------------------------
-
-function handleAgentEvent(event: AgentEvent): void {
-  switch (event.type) {
-    case 'text':
-      process.stdout.write(event.delta);
-      break;
-
-    case 'thinking':
-      process.stdout.write(`${DIM}${event.delta}${RESET}`);
-      break;
-
-    case 'tool_start':
-      console.log(`\n  ${MAGENTA}[tool]${RESET} ${BOLD}${event.tool}${RESET}${DIM}(${truncateArgs(event.args)})${RESET}`);
-      break;
-
-    case 'tool_progress':
-      process.stdout.write(`  ${DIM}${event.update}${RESET}\n`);
-      break;
-
-    case 'tool_end':
-      if (event.result.success) {
-        console.log(`  ${GREEN}[done]${RESET} ${DIM}${truncate(event.result.output, 120)}${RESET}`);
-      } else {
-        console.log(`  ${RED}[fail]${RESET} ${event.result.error ?? 'Unknown error'}`);
-      }
-      break;
-
-    case 'tool_validation_error':
-      console.log(`  ${YELLOW}[validation]${RESET} ${event.tool}: ${event.errors.join(', ')}`);
-      break;
-
-    case 'verification': {
-      const v = event.result;
-      const outcomeColor = v.outcome === 'success' ? GREEN : v.outcome === 'partial' ? YELLOW : RED;
-      console.log(`\n  ${BLUE}[verify]${RESET} ${outcomeColor}${v.outcome}${RESET} ${DIM}confidence=${v.confidence.toFixed(2)}${RESET}`);
-      if (v.reasoning) {
-        console.log(`  ${DIM}${v.reasoning}${RESET}`);
-      }
-      if (v.issues && v.issues.length > 0) {
-        for (const issue of v.issues) {
-          console.log(`  ${YELLOW}⚠${RESET} ${issue}`);
-        }
-      }
-      break;
-    }
-
-    case 'complete':
-      if (event.usage) {
-        console.log(
-          `\n${DIM}  tokens: ${event.usage.inputTokens} in / ${event.usage.outputTokens} out${RESET}`,
-        );
-      }
-      break;
-
-    case 'error':
-      console.error(`\n  ${RED}Error:${RESET} ${event.error.message}`);
-      break;
-
-    case 'aborted':
-      console.log(`\n  ${YELLOW}Aborted:${RESET} ${event.reason}`);
-      break;
-  }
-}
 
 function truncateArgs(args: unknown): string {
   const str = typeof args === 'string' ? args : JSON.stringify(args);
@@ -107,6 +49,143 @@ function truncateArgs(args: unknown): string {
 function truncate(str: string, max: number): string {
   if (str.length <= max) return str;
   return str.slice(0, max - 3) + '...';
+}
+
+// ---------------------------------------------------------------------------
+// Teal gutter for tool/verification blocks
+// ---------------------------------------------------------------------------
+
+const GUTTER = `  ${TEAL_DIM}${BOX.vertical}${RESET} `;
+
+// ---------------------------------------------------------------------------
+// Stateful AgentEvent output handler (Claude CLI-inspired)
+// ---------------------------------------------------------------------------
+
+interface ChatRenderState {
+  /** Whether the assistant header (◆ ch4p) has been printed for this turn. */
+  headerPrinted: boolean;
+  /** Whether we are currently inside streaming text output. */
+  inTextStream: boolean;
+  /** Whether we were in a thinking block (to add separator before text). */
+  wasThinking: boolean;
+}
+
+function createChatRenderState(): ChatRenderState {
+  return { headerPrinted: false, inTextStream: false, wasThinking: false };
+}
+
+function resetChatRenderState(state: ChatRenderState): void {
+  state.headerPrinted = false;
+  state.inTextStream = false;
+  state.wasThinking = false;
+}
+
+function handleAgentEvent(event: AgentEvent, state: ChatRenderState): void {
+  // Ensure the assistant header is printed before any content.
+  const ensureHeader = () => {
+    if (!state.headerPrinted) {
+      console.log(chatHeader(CHAPPIE_GLYPH, 'ch4p'));
+      state.headerPrinted = true;
+    }
+  };
+
+  switch (event.type) {
+    case 'thinking':
+      ensureHeader();
+      if (!state.wasThinking) {
+        process.stdout.write('  '); // indent first thinking chunk
+      }
+      process.stdout.write(`${DIM}${event.delta}${RESET}`);
+      state.wasThinking = true;
+      break;
+
+    case 'text':
+      ensureHeader();
+      if (state.wasThinking && !state.inTextStream) {
+        // Transition from thinking to text: add separation.
+        process.stdout.write('\n\n');
+        state.wasThinking = false;
+      }
+      if (!state.inTextStream) {
+        // First text delta: start with 2-space indent.
+        process.stdout.write('  ');
+        state.inTextStream = true;
+      }
+      process.stdout.write(event.delta);
+      break;
+
+    case 'tool_start':
+      ensureHeader();
+      if (state.inTextStream) {
+        // End previous text stream before tool block.
+        process.stdout.write('\n');
+        state.inTextStream = false;
+      }
+      if (state.wasThinking) {
+        process.stdout.write('\n');
+        state.wasThinking = false;
+      }
+      console.log('');
+      console.log(`${GUTTER}${BOLD}${event.tool}${RESET}${DIM}(${truncateArgs(event.args)})${RESET}`);
+      break;
+
+    case 'tool_progress':
+      process.stdout.write(`${GUTTER}${DIM}${event.update}${RESET}\n`);
+      break;
+
+    case 'tool_end':
+      if (event.result.success) {
+        const output = truncate(event.result.output, 120);
+        if (output) {
+          console.log(`${GUTTER}${DIM}${output}${RESET}`);
+        }
+        console.log(`${GUTTER}${CHECK} ${DIM}Done${RESET}`);
+      } else {
+        console.log(`${GUTTER}${CROSS} ${event.result.error ?? 'Unknown error'}`);
+      }
+      break;
+
+    case 'tool_validation_error':
+      console.log(`${GUTTER}${WARN} ${YELLOW}${event.tool}: ${event.errors.join(', ')}${RESET}`);
+      break;
+
+    case 'verification': {
+      const v = event.result;
+      const outcomeColor = v.outcome === 'success' ? GREEN : v.outcome === 'partial' ? YELLOW : RED;
+      console.log(`\n${GUTTER}${BLUE}verify${RESET} ${outcomeColor}${v.outcome}${RESET} ${DIM}confidence=${v.confidence.toFixed(2)}${RESET}`);
+      if (v.reasoning) {
+        console.log(`${GUTTER}${DIM}${v.reasoning}${RESET}`);
+      }
+      if (v.issues && v.issues.length > 0) {
+        for (const issue of v.issues) {
+          console.log(`${GUTTER}${WARN} ${issue}`);
+        }
+      }
+      break;
+    }
+
+    case 'complete':
+      if (state.inTextStream) {
+        process.stdout.write('\n');
+        state.inTextStream = false;
+      }
+      if (event.usage) {
+        console.log(tokenFooter(event.usage));
+      }
+      // Reset state for next turn.
+      resetChatRenderState(state);
+      break;
+
+    case 'error':
+      ensureHeader();
+      console.error(`\n  ${RED}Error:${RESET} ${event.error.message}`);
+      break;
+
+    case 'aborted':
+      ensureHeader();
+      console.log(`\n  ${YELLOW}Aborted:${RESET} ${event.reason}`);
+      break;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -512,11 +591,13 @@ async function runAgentMessage(
   memoryBackend?: IMemoryBackend,
   skillRegistry?: SkillRegistry,
   extras?: CreateAgentLoopExtras,
+  renderState?: ChatRenderState,
 ): Promise<void> {
   const loop = createAgentLoop(config, engine, sessionConfig, memoryBackend, skillRegistry, extras);
+  const state = renderState ?? createChatRenderState();
 
   for await (const event of loop.run(message)) {
-    handleAgentEvent(event);
+    handleAgentEvent(event, state);
   }
 }
 
@@ -572,19 +653,24 @@ async function runRepl(config: Ch4pConfig): Promise<void> {
     await playBriefSplash();
   }
 
-  console.log(`  ${DIM}Interactive mode. Type ${TEAL}/help${DIM} for commands, ${TEAL}/exit${DIM} to quit.${RESET}`);
-  console.log(`  ${DIM}Engine: ${engine.name} | Model: ${config.agent.model} | Autonomy: ${config.autonomy.level}${RESET}`);
-  console.log(`  ${DIM}Tools: ${tools.names().join(', ')}${RESET}`);
-  console.log(`  ${DIM}Memory: ${memoryBackend ? `${config.memory.backend}${autoSave ? ' (auto)' : ''}` : 'disabled'}${RESET}`);
+  // Session banner with Chappie mascot + session info.
+  const bannerInfo: Record<string, string> = {
+    Engine: engine.name,
+    Model: config.agent.model,
+    Autonomy: config.autonomy.level,
+    Tools: `${tools.size} loaded`,
+    Memory: memoryBackend ? `${config.memory.backend}${autoSave ? ' (auto)' : ''}` : `${DIM}disabled${RESET}`,
+  };
   if (skillRegistry.size > 0) {
-    console.log(`  ${DIM}Skills: ${skillRegistry.names().join(', ')}${RESET}`);
+    bannerInfo.Skills = `${skillRegistry.size} loaded`;
   }
-  console.log('');
+  console.log('\n' + sessionBanner(bannerInfo));
+  console.log(`  ${DIM}Type ${TEAL}/help${DIM} for commands, ${TEAL}/exit${DIM} to quit.${RESET}\n`);
 
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
-    prompt: `${TEAL}${BOLD}> ${RESET}`,
+    prompt: `${TEAL}${BOLD}${PROMPT_CHAR} ${RESET}`,
     historySize: 200,
   });
 
@@ -692,19 +778,23 @@ async function runRepl(config: Ch4pConfig): Promise<void> {
       }
     }
 
+    // Echo the user's message with a styled header.
+    console.log(chatHeader(PROMPT_CHAR, 'You'));
+    console.log(`  ${input}`);
+
     // Run the message through the full AgentLoop pipeline.
-    console.log('');
+    const renderState = createChatRenderState();
     try {
       await runAgentMessage(config, engine, sessionConfig, input, memoryBackend, skillRegistry, {
         sessionOpts: { sharedContext },
         onBeforeFirstRun,
         onAfterComplete,
-      });
+      }, renderState);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`\n  ${RED}Error:${RESET} ${message}`);
     }
-    console.log('\n');
+    console.log('');
     rl.prompt();
   }
 }
@@ -731,6 +821,10 @@ async function runSingleMessage(config: Ch4pConfig, message: string): Promise<vo
     : undefined;
 
   try {
+    // Echo the user's message with a styled header (same as REPL).
+    console.log(chatHeader(PROMPT_CHAR, 'You'));
+    console.log(`  ${message}`);
+
     await runAgentMessage(config, engine, sessionConfig, message, memoryBackend, skillRegistry, {
       onBeforeFirstRun,
       onAfterComplete,

@@ -15,6 +15,9 @@ import {
   centerPad,
   statusPrefix,
   statusBadge,
+  chatHeader,
+  tokenFooter,
+  sessionBanner,
   TEAL,
   TEAL_DIM,
   RESET,
@@ -30,6 +33,8 @@ import {
   BULLET,
   SPINNER_CHARS,
   CHAPPIE_SMALL,
+  CHAPPIE_GLYPH,
+  PROMPT_CHAR,
 } from './ui.js';
 
 // ---------------------------------------------------------------------------
@@ -318,5 +323,136 @@ describe('statusBadge', () => {
   it('returns FAIL for fail', () => {
     expect(statusBadge('fail')).toContain('FAIL');
     expect(statusBadge('fail')).toContain(RED);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chat UI characters
+// ---------------------------------------------------------------------------
+
+describe('CHAPPIE_GLYPH', () => {
+  it('is the diamond character', () => {
+    expect(CHAPPIE_GLYPH).toBe('\u25c6');
+  });
+
+  it('is a single visible character', () => {
+    expect(visibleLength(CHAPPIE_GLYPH)).toBe(1);
+  });
+});
+
+describe('PROMPT_CHAR', () => {
+  it('is the heavy right-pointing angle quotation mark', () => {
+    expect(PROMPT_CHAR).toBe('\u276f');
+  });
+
+  it('is a single visible character', () => {
+    expect(visibleLength(PROMPT_CHAR)).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// chatHeader
+// ---------------------------------------------------------------------------
+
+describe('chatHeader', () => {
+  it('includes the icon and label', () => {
+    const result = chatHeader(PROMPT_CHAR, 'You');
+    expect(result).toContain(PROMPT_CHAR);
+    expect(result).toContain('You');
+  });
+
+  it('uses TEAL and BOLD styling', () => {
+    const result = chatHeader(CHAPPIE_GLYPH, 'ch4p');
+    expect(result).toContain(TEAL);
+    expect(result).toContain(BOLD);
+  });
+
+  it('starts with a newline for visual separation', () => {
+    const result = chatHeader(PROMPT_CHAR, 'You');
+    expect(result.startsWith('\n')).toBe(true);
+  });
+
+  it('has icon followed by space and label', () => {
+    const result = chatHeader('>', 'Test');
+    // Strip ANSI to check layout
+    const plain = result.replace(/\x1b\[[0-9;]*m/g, '');
+    expect(plain).toContain('> Test');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// tokenFooter
+// ---------------------------------------------------------------------------
+
+describe('tokenFooter', () => {
+  it('renders input and output token counts', () => {
+    const result = tokenFooter({ inputTokens: 1000, outputTokens: 500 });
+    expect(result).toContain('1,000');
+    expect(result).toContain('500');
+    expect(result).toContain('in');
+    expect(result).toContain('out');
+  });
+
+  it('uses DIM styling', () => {
+    const result = tokenFooter({ inputTokens: 1, outputTokens: 1 });
+    expect(result).toContain(DIM);
+  });
+
+  it('includes a horizontal dash prefix', () => {
+    const result = tokenFooter({ inputTokens: 100, outputTokens: 50 });
+    expect(result).toContain(BOX.horizontal);
+  });
+
+  it('includes a middle-dot separator', () => {
+    const result = tokenFooter({ inputTokens: 100, outputTokens: 50 });
+    expect(result).toContain('\u00b7');
+  });
+
+  it('formats large numbers with locale separators', () => {
+    const result = tokenFooter({ inputTokens: 1234567, outputTokens: 89012 });
+    // Number formatting depends on locale but should contain digits
+    expect(result).toContain('1');
+    expect(result).toContain('89');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sessionBanner
+// ---------------------------------------------------------------------------
+
+describe('sessionBanner', () => {
+  it('renders a boxed banner with Chappie mascot', () => {
+    const result = sessionBanner({ Model: 'test-model', Tools: '5 loaded' });
+    expect(result).toContain(BOX.topLeft);
+    expect(result).toContain(BOX.bottomLeft);
+    expect(result).toContain('ch4p');
+    expect(result).toContain('Model');
+    expect(result).toContain('test-model');
+  });
+
+  it('includes all info entries', () => {
+    const result = sessionBanner({ A: 'one', B: 'two', C: 'three' });
+    expect(result).toContain('one');
+    expect(result).toContain('two');
+    expect(result).toContain('three');
+  });
+
+  it('renders CHAPPIE_SMALL art lines', () => {
+    const result = sessionBanner({ X: 'val' });
+    // Should contain Unicode block characters from the mascot
+    expect(result).toContain('\u2588'); // █ (full block from CHAPPIE_SMALL)
+  });
+
+  it('renders with empty info', () => {
+    const result = sessionBanner({});
+    expect(result).toContain('ch4p');
+    expect(result).toContain(BOX.topLeft);
+    expect(result).toContain(BOX.bottomLeft);
+  });
+
+  it('renders keys as bold labels', () => {
+    const result = sessionBanner({ Engine: 'test' });
+    expect(result).toContain(BOLD);
+    expect(result).toContain('Engine');
   });
 });
