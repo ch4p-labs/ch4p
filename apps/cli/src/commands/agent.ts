@@ -28,6 +28,8 @@ import { createMemoryBackend } from '@ch4p/memory';
 import type { MemoryConfig } from '@ch4p/memory';
 import { DefaultSecurityPolicy } from '@ch4p/security';
 import { SkillRegistry } from '@ch4p/skills';
+import { WakeListener, WhisperSTT, DeepgramSTT, ElevenLabsTTS } from '@ch4p/voice';
+import type { WakeEvent } from '@ch4p/voice';
 import { loadConfig, getLogsDir } from '../config.js';
 import { playBriefSplash } from './splash.js';
 import {
@@ -609,6 +611,47 @@ async function runAgentMessage(
 }
 
 // ---------------------------------------------------------------------------
+// Voice wake listener creation
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a WakeListener from voice config.
+ *
+ * Returns null if voice wake is not configured or prerequisites are missing.
+ * Logs a warning and returns null on failure so the agent still boots.
+ */
+function createWakeListener(config: Ch4pConfig): WakeListener | null {
+  const voiceCfg = config.voice;
+  if (!voiceCfg?.enabled || !voiceCfg.wake?.enabled) return null;
+
+  try {
+    const stt = voiceCfg.stt.provider === 'deepgram'
+      ? new DeepgramSTT({ apiKey: voiceCfg.stt.apiKey ?? '' })
+      : new WhisperSTT({ apiKey: voiceCfg.stt.apiKey ?? '' });
+
+    const tts = voiceCfg.tts.provider === 'elevenlabs'
+      ? new ElevenLabsTTS({ apiKey: voiceCfg.tts.apiKey ?? '', voiceId: voiceCfg.tts.voiceId })
+      : undefined;
+
+    return new WakeListener({
+      stt,
+      tts,
+      config: {
+        enabled: true,
+        wakeWord: voiceCfg.wake.wakeWord,
+        energyThreshold: voiceCfg.wake.energyThreshold,
+        silenceDurationMs: voiceCfg.wake.silenceDurationMs,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.log(`  ${YELLOW}⚠ Voice wake failed to initialise: ${message}${RESET}`);
+    console.log(`  ${DIM}Voice wake will be unavailable this session.${RESET}\n`);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // REPL help
 // ---------------------------------------------------------------------------
 
@@ -628,7 +671,7 @@ ${separator()}
 // Interactive REPL mode
 // ---------------------------------------------------------------------------
 
-async function runRepl(config: Ch4pConfig): Promise<void> {
+async function runRepl(config: Ch4pConfig, voiceEnabled = false): Promise<void> {
   const engine = createEngine(config);
   const skillRegistry = createSkillRegistry(config);
   const memoryBackend = createMemory(config);
@@ -671,6 +714,14 @@ async function runRepl(config: Ch4pConfig): Promise<void> {
   if (skillRegistry.size > 0) {
     bannerInfo.Skills = `${skillRegistry.size} loaded`;
   }
+
+  // Voice wake setup.
+  const wakeListener = voiceEnabled ? createWakeListener(config) : null;
+  if (wakeListener) {
+    const wakeCfg = config.voice?.wake;
+    bannerInfo.Voice = `${GREEN}wake${RESET}${wakeCfg?.wakeWord ? ` "${wakeCfg.wakeWord}"` : ''}`;
+  }
+
   console.log('\n' + sessionBanner(bannerInfo));
   console.log(`  ${DIM}Type ${TEAL}/help${DIM} for commands, ${TEAL}/exit${DIM} to quit.${RESET}\n`);
 
@@ -692,10 +743,69 @@ async function runRepl(config: Ch4pConfig): Promise<void> {
   rl.on('close', () => {
     if (running) {
       running = false;
+      wakeListener?.stop();
       void memoryBackend?.close();
       console.log(`\n${DIM}  Goodbye!${RESET}\n`);
     }
   });
+
+  // -----------------------------------------------------------------------
+  // Voice wake — feed transcriptions into the agent loop.
+  // -----------------------------------------------------------------------
+  if (wakeListener) {
+    let voiceProcessing = false;
+
+    wakeListener.on('listening', () => {
+      console.log(`\n  ${TEAL}🎙 Voice wake active${RESET}${config.voice?.wake?.wakeWord ? ` — say "${config.voice.wake.wakeWord}" to start` : ''}${RESET}`);
+      rl.prompt();
+    });
+
+    wakeListener.on('wake', (event: WakeEvent) => {
+      if (voiceProcessing || !running) return;
+      voiceProcessing = true;
+
+      // Echo the transcribed speech as a user message.
+      console.log(chatHeader(PROMPT_CHAR, 'You') + `  ${DIM}(voice)${RESET}`);
+      console.log(`  ${event.text}`);
+
+      const renderState = createChatRenderState();
+      runAgentMessage(config, engine, sessionConfig, event.text, memoryBackend, skillRegistry, {
+        sessionOpts: { sharedContext },
+        onBeforeFirstRun,
+        onAfterComplete,
+      }, renderState)
+        .then(async () => {
+          // Speak the response back if TTS is configured.
+          // Collect the last assistant text from the shared context.
+          const messages = sharedContext.getMessages();
+          const lastAssistant = messages.filter((m) => m.role === 'assistant').pop();
+          if (lastAssistant && typeof lastAssistant.content === 'string') {
+            await wakeListener.speak(lastAssistant.content);
+          }
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(`\n  ${RED}Error:${RESET} ${message}`);
+        })
+        .finally(() => {
+          voiceProcessing = false;
+          console.log('');
+          rl.prompt();
+        });
+    });
+
+    wakeListener.on('error', (err: Error) => {
+      console.error(`  ${YELLOW}Voice error:${RESET} ${err.message}`);
+    });
+
+    try {
+      wakeListener.start();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.log(`  ${YELLOW}⚠ Voice wake start failed: ${message}${RESET}`);
+      console.log(`  ${DIM}Continuing without voice wake.${RESET}\n`);
+    }
+  }
 
   rl.prompt();
 
@@ -716,6 +826,7 @@ async function runRepl(config: Ch4pConfig): Promise<void> {
         case '/quit':
         case '/q':
           running = false;
+          wakeListener?.stop();
           console.log(`\n${DIM}  Goodbye!${RESET}\n`);
           rl.close();
           await memoryBackend?.close();
@@ -855,6 +966,7 @@ async function runSingleMessage(config: Ch4pConfig, message: string): Promise<vo
  *
  * Usage:
  *   ch4p agent                — Interactive REPL
+ *   ch4p agent --voice        — Interactive REPL with voice wake
  *   ch4p agent -m "message"   — Single message
  *   ch4p agent --message "m"  — Single message (long form)
  */
@@ -872,6 +984,8 @@ export async function agent(args: string[]): Promise<void> {
 
   // Parse -m / --message flag.
   let singleMessage: string | null = null;
+  let voiceEnabled = false;
+
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg === '-m' || arg === '--message') {
@@ -883,6 +997,9 @@ export async function agent(args: string[]): Promise<void> {
       singleMessage = arg.slice(2);
       break;
     }
+    if (arg === '--voice') {
+      voiceEnabled = true;
+    }
   }
 
   if (singleMessage !== null) {
@@ -893,6 +1010,6 @@ export async function agent(args: string[]): Promise<void> {
     }
     await runSingleMessage(config, singleMessage);
   } else {
-    await runRepl(config);
+    await runRepl(config, voiceEnabled);
   }
 }

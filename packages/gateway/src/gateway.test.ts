@@ -725,6 +725,192 @@ describe('GatewayServer with pairing', () => {
 });
 
 // ===========================================================================
+// Multi-session routing (integration tests)
+// ===========================================================================
+
+describe('Multi-session routing', () => {
+  let sessionManager: SessionManager;
+  let router: MessageRouter;
+
+  beforeEach(() => {
+    sessionManager = new SessionManager();
+    router = new MessageRouter(sessionManager, {
+      engineId: 'native',
+      model: 'test-model',
+      provider: 'test',
+    });
+  });
+
+  it('should maintain session isolation across multiple channels and users', () => {
+    // Simulate a realistic multi-channel scenario.
+    const telegramAlice = makeInboundMessage({ channelId: 'telegram', from: { userId: 'alice', name: 'Alice' } });
+    const telegramBob = makeInboundMessage({ channelId: 'telegram', from: { userId: 'bob', name: 'Bob' } });
+    const discordAlice = makeInboundMessage({ channelId: 'discord', from: { userId: 'alice', name: 'Alice' } });
+    const slackCarol = makeInboundMessage({ channelId: 'slack', from: { userId: 'carol', name: 'Carol' } });
+
+    const r1 = router.route(telegramAlice)!;
+    const r2 = router.route(telegramBob)!;
+    const r3 = router.route(discordAlice)!;
+    const r4 = router.route(slackCarol)!;
+
+    // All sessions should be distinct.
+    const ids = new Set([r1.sessionId, r2.sessionId, r3.sessionId, r4.sessionId]);
+    expect(ids.size).toBe(4);
+
+    // Each should have the right channel/user in its config.
+    expect(r1.config.channelId).toBe('telegram');
+    expect(r1.config.userId).toBe('alice');
+    expect(r3.config.channelId).toBe('discord');
+    expect(r3.config.userId).toBe('alice');
+
+    // SessionManager should track all 4.
+    expect(sessionManager.listSessions()).toHaveLength(4);
+  });
+
+  it('should persist sessions across multiple messages from the same user', () => {
+    const msg1 = makeInboundMessage({ channelId: 'telegram', from: { userId: 'alice', name: 'Alice' }, text: 'Hello' });
+    const msg2 = makeInboundMessage({ channelId: 'telegram', from: { userId: 'alice', name: 'Alice' }, text: 'How are you?' });
+    const msg3 = makeInboundMessage({ channelId: 'telegram', from: { userId: 'alice', name: 'Alice' }, text: 'Thanks' });
+
+    const r1 = router.route(msg1)!;
+    const r2 = router.route(msg2)!;
+    const r3 = router.route(msg3)!;
+
+    // All three messages should route to the same session.
+    expect(r1.sessionId).toBe(r2.sessionId);
+    expect(r2.sessionId).toBe(r3.sessionId);
+
+    // Only one session should exist.
+    expect(sessionManager.listSessions()).toHaveLength(1);
+  });
+
+  it('should recover when a session is ended mid-conversation', () => {
+    const msg = makeInboundMessage({ channelId: 'telegram', from: { userId: 'alice', name: 'Alice' } });
+
+    const r1 = router.route(msg)!;
+    const originalId = r1.sessionId;
+
+    // End the session (simulating timeout or admin action).
+    sessionManager.endSession(originalId);
+    expect(sessionManager.listSessions()).toHaveLength(0);
+
+    // Next message from Alice should get a new session.
+    const r2 = router.route(msg)!;
+    expect(r2.sessionId).not.toBe(originalId);
+    expect(r2.config.channelId).toBe('telegram');
+    expect(r2.config.userId).toBe('alice');
+    expect(sessionManager.listSessions()).toHaveLength(1);
+  });
+
+  it('should handle high-volume concurrent routing for many users', () => {
+    const channels = ['telegram', 'discord', 'slack'];
+    const users = Array.from({ length: 20 }, (_, i) => `user-${i}`);
+
+    // Route messages for all channel+user combinations.
+    const results = new Map<string, string>();
+    for (const channel of channels) {
+      for (const user of users) {
+        const msg = makeInboundMessage({ channelId: channel, from: { userId: user, name: user } });
+        const result = router.route(msg)!;
+        results.set(`${channel}:${user}`, result.sessionId);
+      }
+    }
+
+    // Should have 60 distinct sessions (3 channels * 20 users).
+    expect(sessionManager.listSessions()).toHaveLength(60);
+
+    // Verify each combination maps to a unique session.
+    const uniqueIds = new Set(results.values());
+    expect(uniqueIds.size).toBe(60);
+
+    // Verify routing is stable — same input gets same session.
+    for (const channel of channels) {
+      for (const user of users) {
+        const msg = makeInboundMessage({ channelId: channel, from: { userId: user, name: user } });
+        const result = router.route(msg)!;
+        expect(result.sessionId).toBe(results.get(`${channel}:${user}`));
+      }
+    }
+  });
+});
+
+// ===========================================================================
+// Multi-session HTTP API (integration tests)
+// ===========================================================================
+
+describe('GatewayServer multi-session API', () => {
+  let sessionManager: SessionManager;
+  let server: GatewayServer;
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    sessionManager = new SessionManager();
+    server = new GatewayServer({
+      port: 0,
+      host: '127.0.0.1',
+      sessionManager,
+    });
+    await server.start();
+    const addr = server.getAddress()!;
+    baseUrl = `http://${addr.host}:${addr.port}`;
+  });
+
+  afterEach(async () => {
+    await server.stop();
+  });
+
+  it('should track multiple sessions and reflect count in health', async () => {
+    // Create 3 sessions via the API.
+    for (let i = 0; i < 3; i++) {
+      const { status } = await fetchJson(baseUrl, '/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ channelId: `ch-${i}`, userId: `user-${i}` }),
+      });
+      expect(status).toBe(201);
+    }
+
+    // Health should report 3 sessions.
+    const { body: health } = await fetchJson(baseUrl, '/health');
+    expect(health.sessions).toBe(3);
+
+    // List should return all 3.
+    const { body: list } = await fetchJson(baseUrl, '/sessions');
+    expect((list.sessions as unknown[]).length).toBe(3);
+  });
+
+  it('should independently manage lifecycle of multiple sessions', async () => {
+    // Create 2 sessions.
+    const { body: s1 } = await fetchJson(baseUrl, '/sessions', {
+      method: 'POST',
+      body: JSON.stringify({ channelId: 'telegram', userId: 'alice' }),
+    });
+    const { body: s2 } = await fetchJson(baseUrl, '/sessions', {
+      method: 'POST',
+      body: JSON.stringify({ channelId: 'discord', userId: 'bob' }),
+    });
+
+    const id1 = s1.sessionId as string;
+    const id2 = s2.sessionId as string;
+
+    // Delete only the first session.
+    const { status: delStatus } = await fetchJson(baseUrl, `/sessions/${id1}`, { method: 'DELETE' });
+    expect(delStatus).toBe(200);
+
+    // First session should be gone, second should remain.
+    const { status: get1 } = await fetchJson(baseUrl, `/sessions/${id1}`);
+    expect(get1).toBe(404);
+
+    const { status: get2, body: remaining } = await fetchJson(baseUrl, `/sessions/${id2}`);
+    expect(get2).toBe(200);
+    expect(remaining.sessionId).toBe(id2);
+
+    // Health should show 1 session.
+    const { body: health } = await fetchJson(baseUrl, '/health');
+    expect(health.sessions).toBe(1);
+  });
+});
+
+// ===========================================================================
 // Server lifecycle
 // ===========================================================================
 

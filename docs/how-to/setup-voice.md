@@ -151,8 +151,21 @@ Set `wakeWord` to filter utterances — only speech starting with the wake word 
 
 ---
 
+### CLI usage
+
+Start the agent REPL with voice wake:
+
+```bash
+ch4p agent --voice
+```
+
+The `--voice` flag activates voice wake when `voice.wake.enabled` is `true` in config. Transcribed speech is injected into the agent loop as user messages, and responses are spoken back via TTS when configured. The session banner shows voice status when active.
+
+---
+
 ## Limitations
 
-- Voice pipeline requires the gateway to be running (`ch4p gateway`)
+- Voice wake in the agent REPL requires SoX (`rec` command) installed locally
+- Gateway voice processing requires inbound audio support from the channel (e.g., Telegram voice notes)
 - Not all channels support voice messages
 - Audio format conversion may be needed depending on the channel and provider

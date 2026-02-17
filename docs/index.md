@@ -50,6 +50,7 @@ Practical recipes for specific tasks. Assumes you already understand the basics.
 - [Use Observability](how-to/use-observability.md) — Logging, monitoring, and debugging
 - [Alternative LLM Setups](how-to/alternative-llm-setups.md) — Ollama, LiteLLM proxy, CLI passthrough
 - [Use Mesh Orchestration](how-to/use-mesh.md) — Swarm-style multi-agent delegation across engines
+- [Test Channels](how-to/test-channels.md) — Verify channel connectivity, multi-session isolation, and voice wake
 
 ### Reference — Information-Oriented
 

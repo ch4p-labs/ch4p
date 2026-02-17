@@ -58,7 +58,7 @@ Provider (Anthropic, OpenAI, Google/Gemini, OpenRouter, Ollama, Bedrock)
 ```
 
 Three modes of interaction:
-- **`ch4p agent`** — interactive chat REPL with teal-branded UI, Chappie mascot banner, and bordered tool-call rendering
+- **`ch4p agent`** — interactive chat REPL with teal-branded UI, Chappie mascot banner, bordered tool-call rendering, and optional `--voice` wake mode
 - **`ch4p gateway`** — multi-channel server with voice (Telegram, Discord, Slack, etc.)
 - **`ch4p canvas`** — interactive browser workspace with an infinite spatial canvas
 
@@ -196,7 +196,7 @@ corepack pnpm --filter @ch4p/core build
 - ESM-only (all imports use `.js` extension)
 - Zero required external runtime dependencies for core, security, and CLI packages (`playwright-core` is optional for browser tool)
 - `tsup` for bundling, `vitest` for testing, `vite` for web frontend (code-split with lazy loading)
-- 71 test files, 2088 tests
+- 71 test files, 2094 tests
 
 ## Configuration
 

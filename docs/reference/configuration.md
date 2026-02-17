@@ -295,6 +295,16 @@ Always-on voice wake configuration. Opt-in only — disabled by default.
 
 Requires SoX (`rec` command) for microphone capture. On macOS: `brew install sox`. On Linux: `apt install sox`.
 
+### CLI usage
+
+Start the agent REPL with voice wake enabled:
+
+```
+ch4p agent --voice
+```
+
+The `--voice` flag activates voice wake when `voice.wake.enabled` is `true` in config. Transcribed speech is fed into the agent loop, and responses are spoken back via TTS if configured. The voice indicator appears in the session banner when active.
+
 ---
 
 ## mesh
