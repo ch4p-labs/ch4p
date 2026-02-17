@@ -70,8 +70,11 @@ export async function canvas(args: string[]): Promise<void> {
   const staticDir = resolve(__dirname, '..', '..', '..', 'apps', 'web', 'dist');
 
   // Create gateway components.
+  // Canvas is always local-only (127.0.0.1), so pairing is only enforced
+  // when explicitly set in canvas config — the gateway-level requirePairing
+  // is for external channel access, not the local workspace.
   const sessionManager = new SessionManager();
-  const pairingManager = config.gateway.requirePairing ? new PairingManager() : undefined;
+  const pairingManager = config.canvas?.requirePairing ? new PairingManager() : undefined;
   const canvasSessionManager = new CanvasSessionManager(config.canvas?.maxComponents);
 
   // Create the engine.

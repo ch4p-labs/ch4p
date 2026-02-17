@@ -141,6 +141,8 @@ export interface Ch4pConfig {
     port?: number;
     /** Per-session component limit (default 500). */
     maxComponents?: number;
+    /** Require pairing for canvas connections. Default: false (canvas is local-only). */
+    requirePairing?: boolean;
   };
   /** ERC-8004 on-chain identity configuration. */
   identity?: {
