@@ -8,6 +8,7 @@
 import type { Editor } from 'tldraw';
 import { createShapeId } from 'tldraw';
 import type { CanvasNode, CanvasConnection } from '@ch4p/canvas';
+import { KNOWN_COMPONENT_TYPES } from '@ch4p/canvas';
 
 /** Map a server component ID to a tldraw shape ID. */
 function shapeId(componentId: string) {
@@ -34,12 +35,16 @@ export function syncToEditor(
   const currentIds = new Set(nodes.map((n) => n.component.id));
   const prevIds = new Set(prevNodes.map((n) => n.component.id));
 
-  // Shapes to create (new nodes)
-  const toCreate = nodes.filter((n) => !prevIds.has(n.component.id));
+  // Shapes to create (new nodes) — skip unknown component types that would
+  // crash tldraw because no ShapeUtil is registered for them.
+  const toCreate = nodes.filter(
+    (n) => !prevIds.has(n.component.id) && KNOWN_COMPONENT_TYPES.has(n.component.type),
+  );
 
-  // Shapes to update (existing nodes that changed)
+  // Shapes to update (existing nodes that changed) — also skip unknown types.
   const toUpdate = nodes.filter((n) => {
     if (!prevIds.has(n.component.id)) return false;
+    if (!KNOWN_COMPONENT_TYPES.has(n.component.type)) return false;
     const prev = prevNodes.find((p) => p.component.id === n.component.id);
     if (!prev) return false;
     // Simple equality check — compare stringified versions

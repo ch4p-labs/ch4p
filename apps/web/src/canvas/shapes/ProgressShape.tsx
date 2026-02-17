@@ -17,8 +17,9 @@ export class ProgressShapeUtil extends BaseBoxShapeUtil<ProgressShape> {
 
   override component(shape: ProgressShape) {
     const comp = shape.props.component as ProgressComponent;
-    const max = comp.max ?? 100;
-    const pct = Math.min(100, Math.max(0, (comp.value / max) * 100));
+    const value = typeof comp.value === 'number' ? comp.value : 0;
+    const max = typeof comp.max === 'number' && comp.max > 0 ? comp.max : 100;
+    const pct = Math.min(100, Math.max(0, (value / max) * 100));
 
     return (
       <div

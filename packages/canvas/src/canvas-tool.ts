@@ -10,7 +10,7 @@
 import type { ITool, ToolContext, ToolResult, ValidationResult, StateSnapshot } from '@ch4p/core';
 import type { JSONSchema7 } from '@ch4p/core';
 import type { A2UIComponent, ComponentPosition } from './components.js';
-import { isA2UIComponent } from './components.js';
+import { isA2UIComponent, validateComponentFields } from './components.js';
 import type { CanvasState } from './state.js';
 
 // ---------------------------------------------------------------------------
@@ -136,8 +136,16 @@ export class CanvasTool implements ITool {
 
     switch (a.action) {
       case 'add':
-        if (!a.component) errors.push('"add" requires a "component" object.');
-        else if (!isA2UIComponent(a.component)) errors.push('"component" must have "id" and "type" fields.');
+        if (!a.component) {
+          errors.push('"add" requires a "component" object.');
+        } else if (!isA2UIComponent(a.component)) {
+          errors.push('"component" must have "id" and "type" fields.');
+        } else {
+          // Validate type-specific required fields so malformed components
+          // never reach the frontend and crash the tldraw renderer.
+          const fieldErrors = validateComponentFields(a.component);
+          errors.push(...fieldErrors);
+        }
         if (!a.position) errors.push('"add" requires a "position" object.');
         else if (typeof a.position.x !== 'number' || typeof a.position.y !== 'number')
           errors.push('"position" must have numeric "x" and "y" fields.');

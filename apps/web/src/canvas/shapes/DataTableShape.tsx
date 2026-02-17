@@ -17,6 +17,17 @@ export class DataTableShapeUtil extends BaseBoxShapeUtil<DataTableShape> {
 
   override component(shape: DataTableShape) {
     const comp = shape.props.component as DataTableComponent;
+    const columns = Array.isArray(comp.columns) ? comp.columns : [];
+    const rows = Array.isArray(comp.rows) ? comp.rows : [];
+
+    if (columns.length === 0) {
+      return (
+        <div style={{ padding: 16, color: '#999', fontSize: 13, fontFamily: '-apple-system, sans-serif' }}>
+          Table: no columns defined
+        </div>
+      );
+    }
+
     return (
       <div
         style={{
@@ -41,7 +52,7 @@ export class DataTableShapeUtil extends BaseBoxShapeUtil<DataTableShape> {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr>
-                {comp.columns.map((col) => (
+                {columns.map((col) => (
                   <th
                     key={col.key}
                     style={{
@@ -61,9 +72,9 @@ export class DataTableShapeUtil extends BaseBoxShapeUtil<DataTableShape> {
               </tr>
             </thead>
             <tbody>
-              {comp.rows.map((row, i) => (
+              {rows.map((row, i) => (
                 <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                  {comp.columns.map((col) => (
+                  {columns.map((col) => (
                     <td key={col.key} style={{ padding: '6px 12px', color: '#333' }}>
                       {String(row[col.key] ?? '')}
                     </td>

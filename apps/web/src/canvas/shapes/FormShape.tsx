@@ -21,11 +21,13 @@ export class FormShapeUtil extends BaseBoxShapeUtil<FormShape> {
     const comp = shape.props.component as FormComponent;
     const formRef = useRef<HTMLFormElement>(null);
 
+    const fields = Array.isArray(comp.fields) ? comp.fields : [];
+
     const handleSubmit = useCallback(() => {
       const form = formRef.current;
       if (!form) return;
       const values: Record<string, unknown> = {};
-      for (const field of comp.fields) {
+      for (const field of fields) {
         const el = form.elements.namedItem(field.name);
         if (el instanceof HTMLInputElement) {
           values[field.name] = el.type === 'checkbox' ? el.checked : el.value;
@@ -60,7 +62,7 @@ export class FormShapeUtil extends BaseBoxShapeUtil<FormShape> {
             {comp.title}
           </div>
         )}
-        {comp.fields.map((field) => (
+        {fields.map((field) => (
           <div key={field.name} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <label style={{ fontSize: 12, fontWeight: 500, color: '#555' }}>
               {field.label}

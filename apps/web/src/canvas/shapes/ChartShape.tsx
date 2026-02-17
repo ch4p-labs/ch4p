@@ -6,6 +6,15 @@ type ChartShape = Ch4pShape<'ch4p-chart'>;
 
 /** Simple SVG-based bar chart renderer. */
 function SimpleBarChart({ comp, w, h }: { comp: ChartComponent; w: number; h: number }) {
+  // Defensive: bail gracefully if data is missing or malformed.
+  if (!comp.data?.datasets || !comp.data?.labels) {
+    return (
+      <div style={{ padding: 16, color: '#999', fontSize: 13 }}>
+        Chart: missing data
+      </div>
+    );
+  }
+
   const padding = { top: 30, right: 20, bottom: 40, left: 50 };
   const chartW = w - padding.left - padding.right;
   const chartH = h - padding.top - padding.bottom;

@@ -24,7 +24,7 @@ export type {
   A2UIComponent,
   A2UIComponentType,
 } from './components.js';
-export { isA2UIComponent } from './components.js';
+export { isA2UIComponent, validateComponentFields, KNOWN_COMPONENT_TYPES } from './components.js';
 
 // State model
 export type {

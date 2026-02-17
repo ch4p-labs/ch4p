@@ -190,6 +190,17 @@ export type A2UIComponent =
 export type A2UIComponentType = A2UIComponent['type'];
 
 // ---------------------------------------------------------------------------
+// Known component types
+// ---------------------------------------------------------------------------
+
+/** Set of all valid A2UI component type strings. */
+export const KNOWN_COMPONENT_TYPES = new Set<string>([
+  'card', 'chart', 'form', 'button', 'text_field',
+  'data_table', 'code_block', 'markdown', 'image',
+  'progress', 'status',
+]);
+
+// ---------------------------------------------------------------------------
 // Runtime type guard
 // ---------------------------------------------------------------------------
 
@@ -201,6 +212,61 @@ export function isA2UIComponent(value: unknown): value is A2UIComponent {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
-  const obj = value as Record<string, unknown>;
+  const obj = value as unknown as Record<string, unknown>;
   return typeof obj.id === 'string' && typeof obj.type === 'string';
+}
+
+/**
+ * Validate type-specific required fields for an A2UI component.
+ *
+ * Returns an array of error strings, or empty array if valid.
+ * Assumes `isA2UIComponent(value)` has already passed.
+ */
+export function validateComponentFields(value: A2UIComponent): string[] {
+  const errors: string[] = [];
+
+  if (!KNOWN_COMPONENT_TYPES.has(value.type)) {
+    errors.push(`Unknown component type "${value.type}". Known types: ${[...KNOWN_COMPONENT_TYPES].join(', ')}.`);
+    return errors;
+  }
+
+  const obj = value as unknown as Record<string, unknown>;
+
+  switch (value.type) {
+    case 'card':
+      if (typeof obj.title !== 'string') errors.push('Card component requires a "title" string.');
+      if (typeof obj.body !== 'string') errors.push('Card component requires a "body" string.');
+      break;
+    case 'chart':
+      if (typeof obj.chartType !== 'string') errors.push('Chart component requires a "chartType" string.');
+      if (!obj.data || typeof obj.data !== 'object') errors.push('Chart component requires a "data" object.');
+      break;
+    case 'form':
+      if (!Array.isArray(obj.fields)) errors.push('Form component requires a "fields" array.');
+      break;
+    case 'button':
+      if (typeof obj.text !== 'string') errors.push('Button component requires a "text" string.');
+      break;
+    case 'data_table':
+      if (!Array.isArray(obj.columns)) errors.push('DataTable component requires a "columns" array.');
+      if (!Array.isArray(obj.rows)) errors.push('DataTable component requires a "rows" array.');
+      break;
+    case 'code_block':
+      if (typeof obj.code !== 'string') errors.push('CodeBlock component requires a "code" string.');
+      break;
+    case 'markdown':
+      if (typeof obj.content !== 'string') errors.push('Markdown component requires a "content" string.');
+      break;
+    case 'image':
+      if (typeof obj.src !== 'string') errors.push('Image component requires a "src" string.');
+      break;
+    case 'progress':
+      if (typeof obj.value !== 'number') errors.push('Progress component requires a numeric "value".');
+      break;
+    case 'status':
+      if (typeof obj.state !== 'string') errors.push('Status component requires a "state" string.');
+      break;
+  }
+
+  return errors;
 }
