@@ -380,6 +380,7 @@ function createMemory(config: Ch4pConfig): IMemoryBackend | undefined {
       vectorWeight: config.memory.vectorWeight,
       keywordWeight: config.memory.keywordWeight,
       embeddingProvider: config.memory.embeddingProvider,
+      openaiApiKey: (config.providers?.openai?.apiKey as string) || undefined,
     };
     const backend = createMemoryBackend(memCfg);
     return backend;
@@ -570,6 +571,7 @@ async function runRepl(config: Ch4pConfig): Promise<void> {
   rl.on('close', () => {
     if (running) {
       running = false;
+      void memoryBackend?.close();
       console.log(`\n${DIM}  Goodbye!${RESET}\n`);
     }
   });
@@ -595,6 +597,7 @@ async function runRepl(config: Ch4pConfig): Promise<void> {
           running = false;
           console.log(`\n${DIM}  Goodbye!${RESET}\n`);
           rl.close();
+          await memoryBackend?.close();
           return;
 
         case '/clear':
@@ -709,6 +712,8 @@ async function runSingleMessage(config: Ch4pConfig, message: string): Promise<vo
     const errMessage = err instanceof Error ? err.message : String(err);
     console.error(`\n${RED}Error:${RESET} ${errMessage}`);
     process.exitCode = 1;
+  } finally {
+    await memoryBackend?.close();
   }
 }
 

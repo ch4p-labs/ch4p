@@ -30,7 +30,7 @@ import {
   IMessageChannel,
 } from '@ch4p/channels';
 import { createTunnelProvider } from '@ch4p/tunnels';
-import { Session, AgentLoop, createAutoRecallHook, createAutoSummarizeHook } from '@ch4p/agent';
+import { Session, AgentLoop, ContextManager, createAutoRecallHook, createAutoSummarizeHook } from '@ch4p/agent';
 import { NativeEngine, createClaudeCliEngine, createCodexCliEngine } from '@ch4p/engines';
 import { ProviderRegistry } from '@ch4p/providers';
 import { ToolRegistry, LoadSkillTool } from '@ch4p/tools';
@@ -229,6 +229,7 @@ export async function gateway(args: string[]): Promise<void> {
       vectorWeight: config.memory.vectorWeight,
       keywordWeight: config.memory.keywordWeight,
       embeddingProvider: config.memory.embeddingProvider,
+      openaiApiKey: (config.providers?.openai?.apiKey as string) || undefined,
     };
     memoryBackend = createMemoryBackend(memCfg);
   } catch {
@@ -300,6 +301,10 @@ export async function gateway(args: string[]): Promise<void> {
   console.log(`  ${DIM}  DELETE /sessions/:id        - end a session${RESET}`);
   console.log('');
 
+  // Per-user conversation context so messages within the same channel+user
+  // share history (like the REPL's sharedContext).
+  const conversationContexts = new Map<string, ContextManager>();
+
   // ----- Start channel adapters -----
   const channelRegistry = new ChannelRegistry();
   const startedChannels: IChannel[] = [];
@@ -323,7 +328,8 @@ export async function gateway(args: string[]): Promise<void> {
         // Wire inbound messages: channel → voice → messageRouter → AgentLoop → channel.send()
         channel.onMessage((msg: InboundMessage) => {
           handleInboundMessage(
-            msg, channel, messageRouter, engine, config, observer, memoryBackend, skillRegistry, voiceProcessor,
+            msg, channel, messageRouter, engine, config, observer,
+            conversationContexts, memoryBackend, skillRegistry, voiceProcessor,
           );
         });
 
@@ -398,6 +404,15 @@ export async function gateway(args: string[]): Promise<void> {
         }
       }
 
+      // Close memory backend so WAL is checkpointed before exit.
+      if (memoryBackend) {
+        try {
+          await memoryBackend.close();
+        } catch {
+          // Best-effort close.
+        }
+      }
+
       await server.stop();
       await observer.flush?.();
       console.log(`  ${DIM}Goodbye!${RESET}\n`);
@@ -428,6 +443,7 @@ function handleInboundMessage(
   engine: ReturnType<typeof createGatewayEngine>,
   config: Ch4pConfig,
   observer: ReturnType<typeof createObserver>,
+  conversationContexts: Map<string, ContextManager>,
   memoryBackend?: ReturnType<typeof createMemoryBackend>,
   skillRegistry?: SkillRegistry,
   voiceProcessor?: VoiceProcessor,
@@ -461,7 +477,19 @@ function handleInboundMessage(
       // After voice processing, ensure we have text to work with.
       if (!processedMsg.text) return;
 
-      const session = new (await import('@ch4p/agent')).Session(routeResult.config);
+      // Get or create a shared context for this channel+user so conversation
+      // history persists across messages (like the REPL's sharedContext).
+      const contextKey = `${msg.channelId ?? ''}:${msg.from.userId ?? 'anon'}`;
+      let sharedContext = conversationContexts.get(contextKey);
+      if (!sharedContext) {
+        sharedContext = new ContextManager();
+        if (routeResult.config.systemPrompt) {
+          sharedContext.setSystemPrompt(routeResult.config.systemPrompt);
+        }
+        conversationContexts.set(contextKey, sharedContext);
+      }
+
+      const session = new Session(routeResult.config, { sharedContext });
       const tools = ToolRegistry.createDefault({
         // In gateway mode, exclude heavyweight tools for safety.
         exclude: config.autonomy.level === 'readonly'

@@ -110,6 +110,7 @@ export async function canvas(args: string[]): Promise<void> {
       vectorWeight: config.memory.vectorWeight,
       keywordWeight: config.memory.keywordWeight,
       embeddingProvider: config.memory.embeddingProvider,
+      openaiApiKey: (config.providers?.openai?.apiKey as string) || undefined,
     };
     memoryBackend = createMemoryBackend(memCfg);
   } catch {
@@ -221,6 +222,16 @@ export async function canvas(args: string[]): Promise<void> {
     const shutdown = async () => {
       console.log(`\n  ${DIM}Shutting down canvas...${RESET}`);
       canvasSessionManager.endAll();
+
+      // Close memory backend so WAL is checkpointed before exit.
+      if (memoryBackend) {
+        try {
+          await memoryBackend.close();
+        } catch {
+          // Best-effort close.
+        }
+      }
+
       await server.stop();
       await observer.flush?.();
       console.log(`  ${DIM}Goodbye!${RESET}\n`);
