@@ -1,5 +1,5 @@
 import { BaseBoxShapeUtil } from 'tldraw';
-import type { Ch4pShape } from './base';
+import { type Ch4pShape, safeRender } from './base';
 import type { ChartComponent } from '@ch4p/canvas';
 
 type ChartShape = Ch4pShape<'ch4p-chart'>;
@@ -90,7 +90,7 @@ export class ChartShapeUtil extends BaseBoxShapeUtil<ChartShape> {
 
   override component(shape: ChartShape) {
     const comp = shape.props.component as ChartComponent;
-    return (
+    return safeRender('chart', shape.props.w, shape.props.h, () => (
       <div
         style={{
           width: shape.props.w,
@@ -104,7 +104,7 @@ export class ChartShapeUtil extends BaseBoxShapeUtil<ChartShape> {
       >
         <SimpleBarChart comp={comp} w={shape.props.w} h={shape.props.h} />
       </div>
-    );
+    ));
   }
 
   override indicator(shape: ChartShape) {

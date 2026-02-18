@@ -1,5 +1,5 @@
 import { BaseBoxShapeUtil } from 'tldraw';
-import type { Ch4pShape } from './base';
+import { type Ch4pShape, safeRender } from './base';
 import type { DataTableComponent } from '@ch4p/canvas';
 
 type DataTableShape = Ch4pShape<'ch4p-data_table'>;
@@ -28,7 +28,7 @@ export class DataTableShapeUtil extends BaseBoxShapeUtil<DataTableShape> {
       );
     }
 
-    return (
+    return safeRender('data_table', shape.props.w, shape.props.h, () => (
       <div
         style={{
           width: shape.props.w,
@@ -85,7 +85,7 @@ export class DataTableShapeUtil extends BaseBoxShapeUtil<DataTableShape> {
           </table>
         </div>
       </div>
-    );
+    ));
   }
 
   override indicator(shape: DataTableShape) {

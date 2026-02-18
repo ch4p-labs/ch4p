@@ -1,5 +1,5 @@
 import { BaseBoxShapeUtil } from 'tldraw';
-import type { Ch4pShape } from './base';
+import { type Ch4pShape, safeRender } from './base';
 import type { ButtonComponent } from '@ch4p/canvas';
 import { interactionHandlers } from '../CanvasEditor';
 
@@ -26,7 +26,7 @@ export class ButtonShapeUtil extends BaseBoxShapeUtil<ButtonShape> {
     const comp = shape.props.component as ButtonComponent;
     const styles = VARIANT_STYLES[comp.variant ?? 'primary'] ?? VARIANT_STYLES.primary!;
 
-    return (
+    return safeRender('button', shape.props.w, shape.props.h, () => (
       <div
         style={{
           width: shape.props.w,
@@ -57,7 +57,7 @@ export class ButtonShapeUtil extends BaseBoxShapeUtil<ButtonShape> {
           {comp.text}
         </button>
       </div>
-    );
+    ));
   }
 
   override indicator(shape: ButtonShape) {

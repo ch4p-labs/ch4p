@@ -1,5 +1,5 @@
 import { BaseBoxShapeUtil } from 'tldraw';
-import type { Ch4pShape } from './base';
+import { type Ch4pShape, safeRender } from './base';
 import type { TextFieldComponent } from '@ch4p/canvas';
 
 type TextFieldShape = Ch4pShape<'ch4p-text_field'>;
@@ -19,7 +19,7 @@ export class TextFieldShapeUtil extends BaseBoxShapeUtil<TextFieldShape> {
     const comp = shape.props.component as TextFieldComponent;
     const isMultiline = comp.multiline;
 
-    return (
+    return safeRender('text_field', shape.props.w, shape.props.h, () => (
       <div
         style={{
           width: shape.props.w,
@@ -65,7 +65,7 @@ export class TextFieldShapeUtil extends BaseBoxShapeUtil<TextFieldShape> {
           />
         )}
       </div>
-    );
+    ));
   }
 
   override indicator(shape: TextFieldShape) {

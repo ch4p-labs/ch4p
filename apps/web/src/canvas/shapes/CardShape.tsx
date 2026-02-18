@@ -1,5 +1,5 @@
 import { BaseBoxShapeUtil } from 'tldraw';
-import type { Ch4pShape } from './base';
+import { type Ch4pShape, safeRender } from './base';
 import type { CardComponent } from '@ch4p/canvas';
 import { interactionHandlers } from '../CanvasEditor';
 
@@ -18,7 +18,8 @@ export class CardShapeUtil extends BaseBoxShapeUtil<CardShape> {
 
   override component(shape: CardShape) {
     const comp = shape.props.component as CardComponent;
-    return (
+    const actions = Array.isArray(comp.actions) ? comp.actions : [];
+    return safeRender('card', shape.props.w, shape.props.h, () => (
       <div
         style={{
           width: shape.props.w,
@@ -47,9 +48,9 @@ export class CardShapeUtil extends BaseBoxShapeUtil<CardShape> {
         <div style={{ fontSize: 13, color: '#555', flex: 1, overflow: 'auto', lineHeight: 1.5 }}>
           {comp.body}
         </div>
-        {comp.actions && comp.actions.length > 0 && (
+        {actions.length > 0 && (
           <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-            {comp.actions.map((action) => (
+            {actions.map((action) => (
               <button
                 key={action.id}
                 style={{
@@ -70,7 +71,7 @@ export class CardShapeUtil extends BaseBoxShapeUtil<CardShape> {
           </div>
         )}
       </div>
-    );
+    ));
   }
 
   override indicator(shape: CardShape) {

@@ -1,6 +1,6 @@
 import { useRef, useCallback } from 'react';
 import { BaseBoxShapeUtil } from 'tldraw';
-import type { Ch4pShape } from './base';
+import { type Ch4pShape, safeRender } from './base';
 import type { FormComponent } from '@ch4p/canvas';
 import { interactionHandlers } from '../CanvasEditor';
 
@@ -38,7 +38,7 @@ export class FormShapeUtil extends BaseBoxShapeUtil<FormShape> {
       interactionHandlers.onFormSubmit(comp.id, values);
     }, [comp.id, comp.fields]);
 
-    return (
+    return safeRender('form', shape.props.w, shape.props.h, () => (
       <form
         ref={formRef}
         onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}
@@ -143,7 +143,7 @@ export class FormShapeUtil extends BaseBoxShapeUtil<FormShape> {
           {comp.submitLabel ?? 'Submit'}
         </button>
       </form>
-    );
+    ));
   }
 
   override indicator(shape: FormShape) {

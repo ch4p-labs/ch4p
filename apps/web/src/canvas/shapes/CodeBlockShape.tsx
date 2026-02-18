@@ -1,5 +1,5 @@
 import { BaseBoxShapeUtil } from 'tldraw';
-import type { Ch4pShape } from './base';
+import { type Ch4pShape, safeRender } from './base';
 import type { CodeBlockComponent } from '@ch4p/canvas';
 
 type CodeBlockShape = Ch4pShape<'ch4p-code_block'>;
@@ -17,7 +17,7 @@ export class CodeBlockShapeUtil extends BaseBoxShapeUtil<CodeBlockShape> {
 
   override component(shape: CodeBlockShape) {
     const comp = shape.props.component as CodeBlockComponent;
-    return (
+    return safeRender('code_block', shape.props.w, shape.props.h, () => (
       <div
         style={{
           width: shape.props.w,
@@ -58,7 +58,7 @@ export class CodeBlockShapeUtil extends BaseBoxShapeUtil<CodeBlockShape> {
           <code>{comp.code}</code>
         </pre>
       </div>
-    );
+    ));
   }
 
   override indicator(shape: CodeBlockShape) {

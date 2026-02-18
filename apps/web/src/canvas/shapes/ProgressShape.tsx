@@ -1,5 +1,5 @@
 import { BaseBoxShapeUtil } from 'tldraw';
-import type { Ch4pShape } from './base';
+import { type Ch4pShape, safeRender } from './base';
 import type { ProgressComponent } from '@ch4p/canvas';
 
 type ProgressShape = Ch4pShape<'ch4p-progress'>;
@@ -21,7 +21,7 @@ export class ProgressShapeUtil extends BaseBoxShapeUtil<ProgressShape> {
     const max = typeof comp.max === 'number' && comp.max > 0 ? comp.max : 100;
     const pct = Math.min(100, Math.max(0, (value / max) * 100));
 
-    return (
+    return safeRender('progress', shape.props.w, shape.props.h, () => (
       <div
         style={{
           width: shape.props.w,
@@ -54,7 +54,7 @@ export class ProgressShapeUtil extends BaseBoxShapeUtil<ProgressShape> {
           />
         </div>
       </div>
-    );
+    ));
   }
 
   override indicator(shape: ProgressShape) {

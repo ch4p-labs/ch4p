@@ -1,5 +1,5 @@
 import { BaseBoxShapeUtil } from 'tldraw';
-import type { Ch4pShape } from './base';
+import { type Ch4pShape, safeRender } from './base';
 import type { MarkdownComponent } from '@ch4p/canvas';
 
 type MarkdownShape = Ch4pShape<'ch4p-markdown'>;
@@ -17,7 +17,7 @@ export class MarkdownShapeUtil extends BaseBoxShapeUtil<MarkdownShape> {
 
   override component(shape: MarkdownShape) {
     const comp = shape.props.component as MarkdownComponent;
-    return (
+    return safeRender('markdown', shape.props.w, shape.props.h, () => (
       <div
         style={{
           width: shape.props.w,
@@ -37,7 +37,7 @@ export class MarkdownShapeUtil extends BaseBoxShapeUtil<MarkdownShape> {
       >
         {comp.content}
       </div>
-    );
+    ));
   }
 
   override indicator(shape: MarkdownShape) {

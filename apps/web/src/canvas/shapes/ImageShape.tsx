@@ -1,5 +1,5 @@
 import { BaseBoxShapeUtil } from 'tldraw';
-import type { Ch4pShape } from './base';
+import { type Ch4pShape, safeRender } from './base';
 import type { ImageComponent } from '@ch4p/canvas';
 
 type ImageShape = Ch4pShape<'ch4p-image'>;
@@ -17,7 +17,7 @@ export class ImageShapeUtil extends BaseBoxShapeUtil<ImageShape> {
 
   override component(shape: ImageShape) {
     const comp = shape.props.component as ImageComponent;
-    return (
+    return safeRender('image', shape.props.w, shape.props.h, () => (
       <div
         style={{
           width: shape.props.w,
@@ -51,7 +51,7 @@ export class ImageShapeUtil extends BaseBoxShapeUtil<ImageShape> {
           </div>
         )}
       </div>
-    );
+    ));
   }
 
   override indicator(shape: ImageShape) {

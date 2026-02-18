@@ -1,5 +1,5 @@
 import { BaseBoxShapeUtil } from 'tldraw';
-import type { Ch4pShape } from './base';
+import { type Ch4pShape, safeRender } from './base';
 import type { StatusComponent } from '@ch4p/canvas';
 
 type StatusShape = Ch4pShape<'ch4p-status'>;
@@ -26,7 +26,7 @@ export class StatusShapeUtil extends BaseBoxShapeUtil<StatusShape> {
   override component(shape: StatusShape) {
     const comp = shape.props.component as StatusComponent;
     const colors = STATUS_COLORS[comp.state] ?? STATUS_COLORS.idle!;
-    return (
+    return safeRender('status', shape.props.w, shape.props.h, () => (
       <div
         style={{
           width: shape.props.w,
@@ -61,7 +61,7 @@ export class StatusShapeUtil extends BaseBoxShapeUtil<StatusShape> {
           )}
         </div>
       </div>
-    );
+    ));
   }
 
   override indicator(shape: StatusShape) {
