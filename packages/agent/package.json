@@ -10,7 +10,8 @@
       "types": "./dist/index.d.ts"
     },
     "./worker": {
-      "import": "./dist/worker.js"
+      "import": "./dist/worker.js",
+      "default": "./dist/worker.js"
     }
   },
   "scripts": {
