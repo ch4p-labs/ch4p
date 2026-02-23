@@ -39,6 +39,7 @@ import type {
 } from '@ch4p/core';
 import { generateId } from '@ch4p/core';
 import { execFile as execFileCb } from 'node:child_process';
+import { homedir } from 'node:os';
 import { promisify } from 'node:util';
 
 const execFile = promisify(execFileCb);
@@ -196,9 +197,9 @@ export class IMessageChannel implements IChannel {
     }
 
     // -- Configuration -----------------------------------------------------
-    this.pollInterval = cfg.pollInterval ?? 2000;
+    this.pollInterval = Math.max(100, cfg.pollInterval ?? 2000);
     this.allowedHandles = new Set(cfg.allowedHandles ?? []);
-    this.dbPath = cfg.dbPath ?? `${process.env.HOME}/Library/Messages/chat.db`;
+    this.dbPath = cfg.dbPath ?? `${homedir()}/Library/Messages/chat.db`;
 
     // -- Determine initial ROWID offset ------------------------------------
     // Query the current max ROWID so we only process messages that arrive
@@ -363,6 +364,11 @@ export class IMessageChannel implements IChannel {
   private async getMessageInfo(
     guid: string,
   ): Promise<{ text: string; chatIdentifier: string } | null> {
+    // Validate GUID format before interpolating into SQL.
+    // Apple GUIDs are UUIDs (with optional prefix like "p:0/"), hex digits, hyphens, colons, slashes.
+    if (!/^[A-Za-z0-9\-:\/]+$/.test(guid)) {
+      return null;
+    }
     const safeGuid = guid.replace(/'/g, "''");
     const sql = `
       SELECT m.text, c.chat_identifier
@@ -627,7 +633,12 @@ export function buildTapbackScript(
 ): string {
   /** Escape a string for embedding inside a JXA double-quoted string. */
   const esc = (s: string): string =>
-    s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+    s
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r')
+      .replace(/\x00/g, '');  // strip null bytes — they truncate JXA strings
 
   return `(function() {
   const app = Application("Messages");

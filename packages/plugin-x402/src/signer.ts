@@ -106,10 +106,20 @@ const TRANSFER_WITH_AUTHORIZATION_TYPES: Record<string, Array<{ name: string; ty
  * });
  * ```
  */
+/** Validate a private key is a 0x-prefixed 32-byte hex string. */
+function assertValidPrivateKey(key: string): void {
+  if (!/^0x[a-fA-F0-9]{64}$/.test(key)) {
+    throw new Error(
+      'Invalid private key: expected a 0x-prefixed 64-character hex string (32 bytes).',
+    );
+  }
+}
+
 export function createEIP712Signer(
   privateKey: string,
   opts: EIP712SignerOpts = {},
 ): (authorization: X402PaymentAuthorization) => Promise<string> {
+  assertValidPrivateKey(privateKey);
   const wallet = new ethers.Wallet(privateKey);
 
   const domain = {
@@ -144,5 +154,6 @@ export function createEIP712Signer(
  * @param privateKey  0x-prefixed hex private key.
  */
 export function walletAddress(privateKey: string): string {
+  assertValidPrivateKey(privateKey);
   return new ethers.Wallet(privateKey).address;
 }

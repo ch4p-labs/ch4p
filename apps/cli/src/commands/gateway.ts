@@ -827,6 +827,13 @@ function handleInboundMessage(
       // instead of the zero-filled placeholder used when no signer is provided.
       if (x402PluginCfg?.enabled && x402PluginCfg.client?.privateKey) {
         const cc = x402PluginCfg.client;
+        if (!/^0x[a-fA-F0-9]{64}$/.test(cc.privateKey)) {
+          throw new Error(
+            'x402.client.privateKey is invalid: expected a 0x-prefixed 64-character hex string. ' +
+            'Set it via the X402_PRIVATE_KEY environment variable: ' +
+            '"privateKey": "${X402_PRIVATE_KEY}"',
+          );
+        }
         toolContextExtensions.x402Signer = createEIP712Signer(cc.privateKey, {
           chainId:      cc.chainId,
           tokenAddress: cc.tokenAddress,

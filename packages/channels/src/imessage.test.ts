@@ -624,9 +624,10 @@ describe('IMessageChannel', () => {
       });
 
       channel.onMessage(() => {});
+      // pollInterval: 1 is clamped to the 100ms minimum, so wait long enough
+      // for at least two cycles (200ms) plus a small buffer.
       await channel.start({ dbPath: '/tmp/test.db', pollInterval: 1 });
-      // Wait long enough for at least two poll cycles.
-      await new Promise(r => setTimeout(r, 60));
+      await new Promise(r => setTimeout(r, 250));
       await channel.stop();
 
       // After first poll, lastRowId should be 5. The next poll should use ROWID > 5.

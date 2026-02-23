@@ -606,6 +606,9 @@ type StreamingEvent = StreamingTextEvent | StreamingToolEvent;
  * the first few characters of `<tool_call>`, those bytes are held back until
  * the next chunk confirms whether they form an opening tag.
  */
+/** Maximum bytes accumulated in the tool-call buffer before giving up and emitting as text. */
+const MAX_TOOL_BUF = 1_048_576; // 1 MiB
+
 export class StreamingToolParser {
   private state: 'streaming' | 'buffering' = 'streaming';
   /** Partial TOOL_OPEN prefix held back while in streaming mode. */
@@ -643,8 +646,16 @@ export class StreamingToolParser {
         const combined   = this.buf + remaining;
         const closeIdx   = combined.indexOf(TOOL_CLOSE);
         if (closeIdx === -1) {
-          this.buf  = combined;
-          remaining = '';
+          // Guard against runaway output that never closes the tag.
+          if (combined.length > MAX_TOOL_BUF) {
+            out.push({ type: 'text', delta: TOOL_OPEN + combined });
+            this.buf   = '';
+            this.state = 'streaming';
+            remaining  = '';
+          } else {
+            this.buf  = combined;
+            remaining = '';
+          }
         } else {
           const jsonContent = combined.slice(0, closeIdx);
           remaining = combined.slice(closeIdx + TOOL_CLOSE.length);
