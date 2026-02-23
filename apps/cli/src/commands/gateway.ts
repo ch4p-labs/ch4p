@@ -388,7 +388,7 @@ export async function gateway(args: string[]): Promise<void> {
       handleInboundMessage(
         syntheticMsg, logChannel as unknown as IChannel, messageRouter, engine, config, observer,
         conversationContexts, agentRouter, defaultSystemPrompt,
-        memoryBackend, skillRegistry, voiceProcessor, trackInflight,
+        memoryBackend, skillRegistry, voiceProcessor, trackInflight, workerPool,
       );
     },
   });
@@ -469,7 +469,7 @@ export async function gateway(args: string[]): Promise<void> {
           handleInboundMessage(
             msg, channel, messageRouter, engine, config, observer,
             conversationContexts, agentRouter, defaultSystemPrompt,
-            memoryBackend, skillRegistry, voiceProcessor, trackInflight,
+            memoryBackend, skillRegistry, voiceProcessor, trackInflight, workerPool,
           );
         });
 
@@ -556,7 +556,7 @@ export async function gateway(args: string[]): Promise<void> {
           handleInboundMessage(
             syntheticMsg, logChannel as unknown as IChannel, messageRouter, engine, config, observer,
             conversationContexts, agentRouter, defaultSystemPrompt,
-            memoryBackend, skillRegistry, voiceProcessor, trackInflight,
+            memoryBackend, skillRegistry, voiceProcessor, trackInflight, workerPool,
           );
         },
       });
@@ -724,6 +724,7 @@ function handleInboundMessage(
   skillRegistry?: SkillRegistry,
   voiceProcessor?: VoiceProcessor,
   onInflightChange?: (delta: 1 | -1) => void,
+  workerPool?: ToolWorkerPool,
 ): void {
   if (!engine) {
     // No engine available — send a polite error back.
