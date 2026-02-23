@@ -1,6 +1,6 @@
 # How to Use Alternative LLM Setups
 
-This guide covers three ways to use ch4p without paying for a separate API key: local models via Ollama, the LiteLLM proxy for unified access, and CLI passthrough via the SubprocessEngine.
+This guide covers three alternative LLM setups: local models via Ollama, the LiteLLM proxy for unified access, and CLI passthrough via the SubprocessEngine.
 
 ---
 
@@ -135,7 +135,9 @@ Route through any CLI tool that accepts prompts. If you have Claude Code, Codex 
 
 ch4p ships with pre-configured engine IDs for popular CLI tools. Just set `engines.default` — the factory functions handle flags and prompt modes automatically.
 
-**Claude CLI** (requires Claude Code / Max subscription):
+**Claude CLI** (requires Claude Code installed):
+
+> **Personal use only:** This setup is intended for personal, local use — ch4p running on your own machine, calling the `claude` binary you installed. Do not use it in a commercial product or multi-user service where ch4p routes your subscription credentials on behalf of other users. For production or shared deployments, use an API key instead (see [console.anthropic.com](https://console.anthropic.com)).
 
 ```json
 {
@@ -145,7 +147,7 @@ ch4p ships with pre-configured engine IDs for popular CLI tools. Just set `engin
 }
 ```
 
-This spawns `claude --print "<prompt>"` under the hood. No API key needed — it uses your existing Claude Code / Max authentication.
+This spawns `claude --print "<prompt>"` under the hood using your existing Claude Code authentication.
 
 **Codex CLI** (requires OpenAI subscription):
 
@@ -200,9 +202,8 @@ Prompt modes:
 
 ### Trade-offs
 
-- **Uses existing subscriptions** — no separate API key needed
+- **Personal use only (Claude CLI)** — intended for local personal use; do not use in a commercial product or shared service
 - **Limited streaming** — output arrives when the subprocess finishes (no real-time token streaming)
-- **No tool use** — the subprocess engine can't do multi-turn tool calling
 - **Depends on external CLI** — if the CLI tool updates or breaks, ch4p is affected
 
 ---
@@ -213,7 +214,7 @@ Prompt modes:
 |-----------|---------------|
 | Want free + private | Ollama with a local model |
 | Have multiple API keys, want fallbacks | LiteLLM proxy |
-| Have Claude Max / Code subscription | CLI passthrough with `claude` |
+| Have Claude Max / Pro subscription | CLI passthrough with `claude` (personal use only) |
 | Want the best quality | Direct API provider (Anthropic, OpenAI) — the default |
 | Offline / air-gapped | Ollama |
 

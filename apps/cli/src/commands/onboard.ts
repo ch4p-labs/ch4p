@@ -73,7 +73,7 @@ export function detectEngines(): DetectedEngine[] {
     engines.push({
       id: 'claude-cli',
       label: 'Claude Code CLI',
-      description: 'Uses your Max/Pro plan — no API key needed',
+      description: 'Uses your Max/Pro plan locally — no API key needed',
     });
   }
 
@@ -881,8 +881,17 @@ export async function onboard(): Promise<void> {
         if (chosen.id === 'claude-cli' || chosen.id === 'codex-cli') {
           // Subprocess engine — set as default.
           config.engines.default = chosen.id;
-          console.log(`  ${GREEN}Engine set to ${chosen.label}.${RESET}`);
-          console.log(`  ${DIM}Auth handled by your subscription. No API keys needed.${RESET}\n`);
+          console.log(`  ${GREEN}Engine set to ${chosen.label}.${RESET}\n`);
+
+          if (chosen.id === 'claude-cli') {
+            console.log(`  ${YELLOW}${BOLD}⚠  Personal use only${RESET}`);
+            console.log(`  ${YELLOW}This setup is intended for personal, local use only.${RESET}`);
+            console.log(`  ${YELLOW}Do not use it in a commercial product or multi-user service${RESET}`);
+            console.log(`  ${YELLOW}where ch4p routes your subscription on behalf of other users.${RESET}`);
+            console.log('');
+            console.log(`  ${DIM}For production or shared deployments, use an API key instead.${RESET}`);
+            console.log(`  ${DIM}See: https://console.anthropic.com${RESET}\n`);
+          }
         } else if (chosen.id === 'ollama') {
           // Ollama — native engine with ollama provider.
           config.engines.default = 'native';
