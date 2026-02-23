@@ -402,15 +402,38 @@ Persistent memory configuration.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | `boolean` | `true` | Enable persistent memory. |
-| `path` | `string` | `"~/.ch4p/memory.db"` | SQLite database path. |
-| `search.ftsWeight` | `number` | `0.4` | Weight for FTS5/BM25 results (0-1). |
-| `search.vectorWeight` | `number` | `0.6` | Weight for vector similarity results (0-1). |
-| `search.minScore` | `number` | `0.2` | Minimum combined score threshold. |
-| `search.maxResults` | `number` | `20` | Maximum results per query. |
-| `embedding.provider` | `string` | `"local"` | Embedding provider: `"local"`, `"openai"`. |
-| `embedding.model` | `string` | `"all-MiniLM-L6-v2"` | Embedding model name. |
-| `embedding.dimensions` | `number` | `384` | Embedding vector dimensions. |
+| `backend` | `string` | `"sqlite"` | Backend type: `"sqlite"`, `"markdown"`, `"noop"`. |
+| `path` | `string` | `~/.local/share/ch4p/memory.db` | SQLite database or markdown directory path. |
+| `autoSave` | `boolean` | `true` | Automatically recall memories before and summarize after each conversation. |
+| `vectorWeight` | `number` | `0.7` | Weight for vector (semantic) similarity in hybrid search (0–1). |
+| `keywordWeight` | `number` | `0.3` | Weight for FTS5 keyword (BM25) results in hybrid search (0–1). |
+| `embeddingProvider` | `string` | `undefined` | Embedding provider for semantic search: `"openai"` or `"noop"`. When omitted, only keyword search is used. |
+| `embeddingModel` | `string` | `"text-embedding-3-small"` | OpenAI embedding model (when `embeddingProvider` is `"openai"`). |
+| `embeddingDimensions` | `number` | `1536` | Embedding vector dimensions. Must match the model. |
+| `openaiApiKey` | `string` | `$OPENAI_API_KEY` | OpenAI API key for embeddings. Defaults to the `OPENAI_API_KEY` environment variable. |
+| `openaiBaseUrl` | `string` | `undefined` | Override the OpenAI API base URL (useful for compatible providers). |
+| `maxCacheEntries` | `number` | `10000` | Maximum number of embedding vectors to cache in memory. |
+
+### Hybrid Memory (Vector + Keyword)
+
+ch4p uses **hybrid search** — combining FTS5 BM25 keyword ranking with OpenAI vector embeddings for semantic similarity. Results are merged using configurable weights.
+
+To enable full hybrid search with semantic recall, add to your config:
+
+```json
+"memory": {
+  "backend": "sqlite",
+  "embeddingProvider": "openai",
+  "vectorWeight": 0.7,
+  "keywordWeight": 0.3
+}
+```
+
+Ensure `OPENAI_API_KEY` is set in your environment. Without `embeddingProvider`, ch4p falls back to keyword-only search (still effective for exact and BM25 recall).
+
+### Per-User Memory Isolation (Gateway)
+
+In multi-user gateway deployments (Discord, Telegram, etc.), memories are automatically **scoped per user per channel** using the key namespace `u:{channelId}:{userId}`. This prevents memory bleed between users and across channels — Telegram user 123 and Discord user 123 maintain completely separate memory stores.
 
 ---
 

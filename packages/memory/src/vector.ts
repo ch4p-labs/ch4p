@@ -26,17 +26,20 @@ export class VectorSearch {
    * @param queryEmbedding - The query vector as Float32Array
    * @param limit          - Maximum results to return (default 20)
    * @param minScore       - Minimum similarity threshold (default 0.0)
+   * @param keyPrefix      - Optional key prefix to scope results to a namespace
    * @returns Scored results sorted by similarity (higher = more similar)
    */
-  search(queryEmbedding: Float32Array, limit = 20, minScore = 0.0): VectorResult[] {
-    // Fetch all memories that have embeddings
-    const stmt = this.db.prepare(`
-      SELECT key, content, embedding
-      FROM memories
-      WHERE embedding IS NOT NULL
-    `);
+  search(queryEmbedding: Float32Array, limit = 20, minScore = 0.0, keyPrefix?: string): VectorResult[] {
+    // Fetch memories that have embeddings, optionally scoped to a key prefix
+    let sql = `SELECT key, content, embedding FROM memories WHERE embedding IS NOT NULL`;
+    const params: unknown[] = [];
 
-    const rows = stmt.all() as Array<{
+    if (keyPrefix) {
+      sql += ` AND key LIKE ?`;
+      params.push(`${keyPrefix}%`);
+    }
+
+    const rows = this.db.prepare(sql).all(...params) as Array<{
       key: string;
       content: string;
       embedding: Buffer;

@@ -11,6 +11,8 @@ export interface RecallOpts {
   keywordWeight?: number;  // 0-1, weight for keyword search (default 0.3)
   minScore?: number;
   filter?: Record<string, unknown>;
+  /** SQL key prefix filter — only return entries whose key starts with this string. */
+  keyPrefix?: string;
 }
 
 export interface MemoryResult {

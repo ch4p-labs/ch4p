@@ -24,6 +24,13 @@ export interface AutoRecallOpts {
   minScore?: number;
   /** RecallOpts forwarded to the backend (vectorWeight, keywordWeight, etc.). */
   recallOpts?: RecallOpts;
+  /**
+   * Memory namespace to scope recalls to a specific user/channel.
+   * Should be in the format 'u:{channelId}:{userId}'.
+   * When set, only memories stored under this namespace are returned.
+   * Omit for CLI (single-user) where all memories are shared.
+   */
+  namespace?: string;
 }
 
 export interface AutoSummarizeOpts {
@@ -31,6 +38,13 @@ export interface AutoSummarizeOpts {
   minMessages?: number;
   /** Maximum length of the stored summary content. Default: 2000 chars. */
   maxSummaryLength?: number;
+  /**
+   * Memory namespace to prefix stored keys with, scoping memories to a user/channel.
+   * Should be in the format 'u:{channelId}:{userId}'.
+   * When set, stored keys are prefixed: '{namespace}:conv:{timestamp}:{query}'.
+   * Omit for CLI (single-user) where keys are stored without a prefix.
+   */
+  namespace?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,6 +75,7 @@ export function createAutoRecallHook(
       limit: maxResults,
       minScore,
       ...opts?.recallOpts,
+      ...(opts?.namespace ? { keyPrefix: `${opts.namespace}:` } : {}),
     });
 
     if (results.length === 0) return;
@@ -119,9 +134,11 @@ export function createAutoSummarizeHook(
     }
 
     // Generate a unique key from the timestamp and user query prefix.
+    // Prefix with namespace when provided to scope memories per user/channel.
     const timestamp = new Date().toISOString();
     const queryPrefix = userQueries[0]?.slice(0, 50).replace(/[^a-zA-Z0-9 ]/g, '') ?? 'conversation';
-    const key = `conv:${timestamp}:${queryPrefix}`;
+    const nsPrefix = opts?.namespace ? `${opts.namespace}:` : '';
+    const key = `${nsPrefix}conv:${timestamp}:${queryPrefix}`;
 
     await backend.store(key, summary, {
       type: 'conversation_summary',

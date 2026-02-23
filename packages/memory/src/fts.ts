@@ -23,16 +23,17 @@ export class FTSSearch {
   /**
    * Search the FTS5 index using BM25 ranking.
    *
-   * @param query  - User search query (will be escaped for FTS5)
-   * @param limit  - Maximum results to return (default 20)
+   * @param query     - User search query (will be escaped for FTS5)
+   * @param limit     - Maximum results to return (default 20)
+   * @param keyPrefix - Optional key prefix to scope results to a namespace
    * @returns Scored results sorted by relevance (higher score = more relevant)
    */
-  search(query: string, limit = 20): FTSResult[] {
+  search(query: string, limit = 20, keyPrefix?: string): FTSResult[] {
     const escaped = this.escapeQuery(query);
     if (!escaped) return [];
 
     try {
-      const stmt = this.db.prepare(`
+      let sql = `
         SELECT
           m.key,
           m.content,
@@ -40,11 +41,19 @@ export class FTSSearch {
         FROM memories_fts
         JOIN memories m ON memories_fts.rowid = m.rowid
         WHERE memories_fts MATCH ?
-        ORDER BY rank
-        LIMIT ?
-      `);
+      `;
+      const params: unknown[] = [escaped];
 
-      const rows = stmt.all(escaped, limit) as Array<{
+      if (keyPrefix) {
+        sql += ` AND m.key LIKE ?`;
+        params.push(`${keyPrefix}%`);
+      }
+
+      sql += ` ORDER BY rank LIMIT ?`;
+      params.push(limit);
+
+      const stmt = this.db.prepare(sql);
+      const rows = stmt.all(...params) as Array<{
         key: string;
         content: string;
         score: number;
@@ -60,7 +69,7 @@ export class FTSSearch {
     } catch {
       // If the query fails (e.g. invalid FTS syntax despite escaping),
       // fall back to a simple LIKE search.
-      return this.fallbackSearch(query, limit);
+      return this.fallbackSearch(query, limit, keyPrefix);
     }
   }
 
@@ -85,17 +94,28 @@ export class FTSSearch {
   /**
    * Fallback search using LIKE when FTS5 query fails.
    */
-  private fallbackSearch(query: string, limit: number): FTSResult[] {
+  private fallbackSearch(query: string, limit: number, keyPrefix?: string): FTSResult[] {
     const pattern = `%${query}%`;
-    const stmt = this.db.prepare(`
+    const params: unknown[] = [pattern, pattern];
+
+    // Wrap the OR condition in parens before adding the namespace AND clause
+    // to avoid accidental binding of AND only to the second OR term.
+    let sql = `
       SELECT key, content
       FROM memories
-      WHERE content LIKE ? OR key LIKE ?
-      ORDER BY updated_at DESC
-      LIMIT ?
-    `);
+      WHERE (content LIKE ? OR key LIKE ?)
+    `;
 
-    const rows = stmt.all(pattern, pattern, limit) as Array<{
+    if (keyPrefix) {
+      sql += ` AND key LIKE ?`;
+      params.push(`${keyPrefix}%`);
+    }
+
+    sql += ` ORDER BY updated_at DESC LIMIT ?`;
+    params.push(limit);
+
+    const stmt = this.db.prepare(sql);
+    const rows = stmt.all(...params) as Array<{
       key: string;
       content: string;
     }>;

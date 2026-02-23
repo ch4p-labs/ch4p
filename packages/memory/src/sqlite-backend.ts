@@ -112,18 +112,19 @@ export class SQLiteMemoryBackend implements IMemoryBackend {
     const vectorWeight = opts.vectorWeight ?? 0.7;
     const keywordWeight = opts.keywordWeight ?? 0.3;
     const minScore = opts.minScore ?? 0;
+    const keyPrefix = opts.keyPrefix;
 
-    // Run FTS5 keyword search
-    const ftsResults = this.fts.search(query, limit * 2);
+    // Run FTS5 keyword search (scoped to keyPrefix if provided)
+    const ftsResults = this.fts.search(query, limit * 2, keyPrefix);
 
-    // Run vector search if provider is available
+    // Run vector search if provider is available (scoped to keyPrefix if provided)
     let vectorResults: Array<{ key: string; content: string; score: number }> = [];
     if (this.embeddingProvider) {
       try {
         const queryEmbedding = await this.getOrComputeEmbedding(query);
         if (queryEmbedding) {
           const queryFloat = new Float32Array(queryEmbedding);
-          vectorResults = this.vector.search(queryFloat, limit * 2);
+          vectorResults = this.vector.search(queryFloat, limit * 2, minScore, keyPrefix);
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

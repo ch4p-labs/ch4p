@@ -1,4 +1,6 @@
-import { cosineSimilarity, embeddingToBlob, blobToEmbedding } from './vector.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import Database from 'better-sqlite3';
+import { VectorSearch, cosineSimilarity, embeddingToBlob, blobToEmbedding } from './vector.js';
 
 describe('cosineSimilarity', () => {
   it('returns 1 for identical vectors', () => {
@@ -82,5 +84,69 @@ describe('embeddingToBlob / blobToEmbedding', () => {
     expect(restored[0]).toBeCloseTo(-1.5, 5);
     expect(restored[1]).toBeCloseTo(-0.01, 5);
     expect(restored[2]).toBeCloseTo(0.0, 5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// VectorSearch.search — keyPrefix namespace isolation
+// ---------------------------------------------------------------------------
+
+function createVectorTestDb(): Database.Database {
+  const db = new Database(':memory:');
+  db.exec(`
+    CREATE TABLE memories (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      key        TEXT    NOT NULL UNIQUE,
+      content    TEXT    NOT NULL,
+      embedding  BLOB,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+  `);
+  return db;
+}
+
+function insertVectorRow(db: Database.Database, key: string, content: string, embedding: number[]): void {
+  const blob = embeddingToBlob(embedding);
+  db.prepare('INSERT INTO memories (key, content, embedding) VALUES (?, ?, ?)').run(key, content, blob);
+}
+
+describe('VectorSearch.search — keyPrefix namespace isolation', () => {
+  let db: Database.Database;
+  let vector: VectorSearch;
+
+  // Use 3-dimensional embeddings for simplicity.
+  const embA = [1.0, 0.0, 0.0]; // telegram user 1
+  const embB = [0.0, 1.0, 0.0]; // discord user 2
+  const query = new Float32Array([1.0, 0.0, 0.0]); // closest to embA
+
+  beforeEach(() => {
+    db = createVectorTestDb();
+    vector = new VectorSearch(db);
+
+    insertVectorRow(db, 'u:telegram:1:conv:a', 'telegram user memory', embA);
+    insertVectorRow(db, 'u:discord:2:conv:a', 'discord user memory', embB);
+  });
+
+  it('returns only entries matching the keyPrefix', () => {
+    const results = vector.search(query, 10, 0.0, 'u:telegram:1:');
+    expect(results.length).toBe(1);
+    expect(results[0]!.key).toBe('u:telegram:1:conv:a');
+  });
+
+  it('scopes to a different namespace when that prefix is used', () => {
+    const results = vector.search(query, 10, 0.0, 'u:discord:2:');
+    expect(results.length).toBe(1);
+    expect(results[0]!.key).toBe('u:discord:2:conv:a');
+  });
+
+  it('returns all entries when no keyPrefix is given', () => {
+    const results = vector.search(query, 10, 0.0);
+    expect(results.length).toBe(2);
+  });
+
+  it('returns empty array when keyPrefix matches no keys', () => {
+    const results = vector.search(query, 10, 0.0, 'u:slack:99:');
+    expect(results.length).toBe(0);
   });
 });

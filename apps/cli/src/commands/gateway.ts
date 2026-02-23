@@ -705,12 +705,16 @@ function handleInboundMessage(
       });
 
       // Wire auto-memory hooks when memory is available and autoSave is on.
+      // Use a per-user namespace (u:{channelId}:{userId}) so memories are
+      // scoped per user per channel — preventing cross-user and cross-channel
+      // memory bleed in multi-tenant gateway deployments.
       const autoSave = config.memory.autoSave !== false;
+      const memNamespace = `u:${msg.channelId ?? 'unknown'}:${userId ?? 'anonymous'}`;
       const onBeforeFirstRun = (memoryBackend && autoSave)
-        ? createAutoRecallHook(memoryBackend)
+        ? createAutoRecallHook(memoryBackend, { namespace: memNamespace })
         : undefined;
       const onAfterComplete = (memoryBackend && autoSave)
-        ? createAutoSummarizeHook(memoryBackend)
+        ? createAutoSummarizeHook(memoryBackend, { namespace: memNamespace })
         : undefined;
 
       // Build toolContextExtensions for search config when available.

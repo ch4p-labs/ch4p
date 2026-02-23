@@ -324,3 +324,102 @@ describe('Session with sharedContext', () => {
     expect(messages[0]!.content).toBe('System prompt');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Namespace isolation (per-user / per-channel memory scoping)
+// ---------------------------------------------------------------------------
+
+describe('createAutoRecallHook — namespace', () => {
+  it('passes keyPrefix derived from namespace to backend.recall', async () => {
+    const backend = createMockBackend([]);
+    const hook = createAutoRecallHook(backend, { namespace: 'u:telegram:42' });
+
+    const ctx = new ContextManager();
+    await ctx.addMessage({ role: 'user', content: 'What do you remember about me?' });
+
+    await hook(ctx);
+
+    expect(backend.recallCalls).toHaveLength(1);
+    const opts = backend.recallCalls[0]!.opts as Record<string, unknown>;
+    expect(opts.keyPrefix).toBe('u:telegram:42:');
+  });
+
+  it('does not set keyPrefix when no namespace is provided', async () => {
+    const backend = createMockBackend([]);
+    const hook = createAutoRecallHook(backend); // No namespace
+
+    const ctx = new ContextManager();
+    await ctx.addMessage({ role: 'user', content: 'Hello' });
+
+    await hook(ctx);
+
+    const opts = backend.recallCalls[0]!.opts as Record<string, unknown>;
+    expect(opts.keyPrefix).toBeUndefined();
+  });
+
+  it('namespace from opts.recallOpts does not overwrite the namespace keyPrefix', async () => {
+    const backend = createMockBackend([]);
+    // recallOpts with a custom vectorWeight — must not clobber namespace keyPrefix
+    const hook = createAutoRecallHook(backend, {
+      namespace: 'u:discord:7',
+      recallOpts: { vectorWeight: 0.5, keywordWeight: 0.5 },
+    });
+
+    const ctx = new ContextManager();
+    await ctx.addMessage({ role: 'user', content: 'test' });
+
+    await hook(ctx);
+
+    const opts = backend.recallCalls[0]!.opts as Record<string, unknown>;
+    expect(opts.keyPrefix).toBe('u:discord:7:');
+    expect(opts.vectorWeight).toBe(0.5);
+  });
+});
+
+describe('createAutoSummarizeHook — namespace', () => {
+  it('prefixes stored key with namespace', async () => {
+    const backend = createMockBackend();
+    const hook = createAutoSummarizeHook(backend, { namespace: 'u:telegram:42' });
+
+    const ctx = new ContextManager();
+    await ctx.addMessage({ role: 'user', content: 'Tell me about TypeScript' });
+
+    await hook(ctx, 'TypeScript is a typed superset of JavaScript.');
+
+    expect(backend.storeCalls).toHaveLength(1);
+    expect(backend.storeCalls[0]!.key).toMatch(/^u:telegram:42:conv:/);
+  });
+
+  it('stores without prefix when no namespace is provided', async () => {
+    const backend = createMockBackend();
+    const hook = createAutoSummarizeHook(backend); // No namespace
+
+    const ctx = new ContextManager();
+    await ctx.addMessage({ role: 'user', content: 'Hello world' });
+
+    await hook(ctx, 'Hello! How can I help you today?');
+
+    expect(backend.storeCalls).toHaveLength(1);
+    // Key should start with conv: not with a namespace prefix
+    expect(backend.storeCalls[0]!.key).toMatch(/^conv:/);
+  });
+
+  it('different namespaces produce different key prefixes', async () => {
+    const backend1 = createMockBackend();
+    const backend2 = createMockBackend();
+    const telegramHook = createAutoSummarizeHook(backend1, { namespace: 'u:telegram:1' });
+    const discordHook = createAutoSummarizeHook(backend2, { namespace: 'u:discord:1' });
+
+    const makeCtx = async (): Promise<ContextManager> => {
+      const ctx = new ContextManager();
+      await ctx.addMessage({ role: 'user', content: 'Same question' });
+      return ctx;
+    };
+
+    await telegramHook(await makeCtx(), 'An answer long enough to be stored.');
+    await discordHook(await makeCtx(), 'An answer long enough to be stored.');
+
+    expect(backend1.storeCalls[0]!.key).toMatch(/^u:telegram:1:conv:/);
+    expect(backend2.storeCalls[0]!.key).toMatch(/^u:discord:1:conv:/);
+  });
+});
