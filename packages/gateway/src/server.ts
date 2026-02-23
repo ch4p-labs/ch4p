@@ -7,6 +7,7 @@
  *
  * Routes:
  *   GET    /health                - liveness probe (no auth required)
+ *   GET    /ready                 - readiness probe (no auth required)
  *   GET    /.well-known/agent.json - ERC-8004 service discovery (no auth)
  *   POST   /pair                  - exchange pairing code for token
  *   GET    /sessions              - list active sessions
@@ -255,6 +256,16 @@ export class GatewayServer {
         canvas: this.canvasSessionManager?.listSessionIds().length ?? 0,
         ...(stats ? { pairing: stats } : {}),
         ...(this.tunnelUrl ? { tunnel: this.tunnelUrl } : {}),
+      });
+      return;
+    }
+
+    // GET /ready — readiness probe (checks the HTTP server is up and accepting traffic)
+    if (method === 'GET' && url === '/ready') {
+      this.sendJson(res, 200, {
+        ready: true,
+        timestamp: new Date().toISOString(),
+        sessions: this.sessionManager.listSessions().length,
       });
       return;
     }

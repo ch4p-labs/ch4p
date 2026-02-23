@@ -45,9 +45,14 @@ export interface SlackConfig extends ChannelConfig {
   mode?: 'socket' | 'events';
   allowedChannels?: string[];
   allowedUsers?: string[];
+  streamMode?: 'off' | 'edit' | 'block';
 }
 
 const API_BASE = 'https://slack.com/api';
+const SLACK_EDIT_RATE_LIMIT_MS = 1_000;
+
+const SLACK_RECONNECT_BASE_MS = 1_000;
+const SLACK_RECONNECT_MAX_MS = 60_000;
 
 /** Minimal Slack message event. */
 interface SlackMessageEvent {
@@ -104,6 +109,7 @@ export class SlackChannel implements IChannel {
   private botToken = '';
   private appToken = '';
   private signingSecret = '';
+  private streamMode: 'off' | 'edit' | 'block' = 'off';
   private messageHandler: ((msg: InboundMessage) => void) | null = null;
   private presenceHandler: ((event: PresenceEvent) => void) | null = null;
   private running = false;
@@ -112,6 +118,8 @@ export class SlackChannel implements IChannel {
   private allowedChannels: Set<string> = new Set();
   private allowedUsers: Set<string> = new Set();
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private reconnectAttempts = 0;
+  private lastEditTimestamps = new Map<string, number>();
 
   // -----------------------------------------------------------------------
   // IChannel implementation
@@ -128,6 +136,7 @@ export class SlackChannel implements IChannel {
     this.botToken = cfg.botToken;
     this.appToken = cfg.appToken ?? '';
     this.signingSecret = cfg.signingSecret ?? '';
+    this.streamMode = cfg.streamMode ?? 'off';
     this.allowedChannels = new Set(cfg.allowedChannels ?? []);
     this.allowedUsers = new Set(cfg.allowedUsers ?? []);
 
@@ -216,6 +225,40 @@ export class SlackChannel implements IChannel {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+
+  /** Edit a previously sent message. Used for progressive streaming updates. */
+  async editMessage(to: Recipient, messageId: string, message: OutboundMessage): Promise<SendResult> {
+    const channel = to.groupId ?? to.userId;
+    if (!channel) {
+      return { success: false, error: 'Recipient must have groupId or userId' };
+    }
+    // Rate limit: skip if we edited this message too recently.
+    const lastEdit = this.lastEditTimestamps.get(messageId);
+    const now = Date.now();
+    if (lastEdit && now - lastEdit < SLACK_EDIT_RATE_LIMIT_MS) {
+      return { success: true, messageId };
+    }
+    try {
+      const result = await this.apiCall('chat.update', {
+        channel,
+        ts: messageId,
+        text: message.text,
+      });
+      if (!result.ok) {
+        return { success: false, error: result.error ?? 'chat.update failed' };
+      }
+      this.lastEditTimestamps.set(messageId, now);
+      return { success: true, messageId };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /** Return the configured stream mode. */
+  getStreamMode(): 'off' | 'edit' | 'block' {
+    return this.streamMode;
   }
 
   onMessage(handler: (msg: InboundMessage) => void): void {
@@ -321,6 +364,7 @@ export class SlackChannel implements IChannel {
 
       this.ws.on('open', () => {
         connected = true;
+        this.reconnectAttempts = 0;
         // Keep-alive pings every 30 seconds.
         this.pingTimer = setInterval(() => {
           if (this.ws?.readyState === 1) {
@@ -347,13 +391,7 @@ export class SlackChannel implements IChannel {
 
       this.ws.on('close', () => {
         if (this.running) {
-          // Auto-reconnect.
-          setTimeout(() => {
-            this.connectSocketMode().catch(() => {
-              // Retry with backoff.
-              setTimeout(() => this.connectSocketMode().catch(() => {}), 5000);
-            });
-          }, 1000);
+          this.scheduleReconnect();
         }
       });
 
@@ -363,6 +401,18 @@ export class SlackChannel implements IChannel {
         }
       }, 30000);
     });
+  }
+
+  private scheduleReconnect(): void {
+    this.reconnectAttempts++;
+    const delay = Math.min(SLACK_RECONNECT_BASE_MS * Math.pow(2, this.reconnectAttempts - 1), SLACK_RECONNECT_MAX_MS);
+    const jitter = delay * 0.2 * (Math.random() * 2 - 1);
+    setTimeout(() => {
+      if (!this.running) return;
+      this.connectSocketMode().catch(() => {
+        this.scheduleReconnect();
+      });
+    }, Math.max(0, delay + jitter));
   }
 
   private handleSocketEnvelope(envelope: SocketModeEnvelope): void {

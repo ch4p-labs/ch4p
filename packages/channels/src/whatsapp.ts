@@ -121,6 +121,7 @@ export class WhatsAppChannel implements IChannel {
   private allowedNumbers: Set<string> = new Set();
   private messageHandler: ((msg: InboundMessage) => void) | null = null;
   private running = false;
+  private lastEditTimestamps = new Map<string, number>();
 
   // -----------------------------------------------------------------------
   // IChannel implementation
@@ -198,6 +199,38 @@ export class WhatsAppChannel implements IChannel {
         success: false,
         error: err instanceof Error ? err.message : String(err),
       };
+    }
+  }
+
+
+  /** Edit a previously sent message using WhatsApp Cloud API. */
+  async editMessage(to: Recipient, messageId: string, message: OutboundMessage): Promise<SendResult> {
+    const recipient = to.userId;
+    if (!recipient) {
+      return { success: false, error: 'Recipient must have a userId (phone number)' };
+    }
+    const lastEdit = this.lastEditTimestamps.get(messageId);
+    const now = Date.now();
+    const WA_EDIT_RATE_LIMIT_MS = 1_000;
+    if (lastEdit && now - lastEdit < WA_EDIT_RATE_LIMIT_MS) {
+      return { success: true, messageId };
+    }
+    try {
+      await this.graphApiCall<GraphApiResponse>(
+        `${this.phoneNumberId}/messages`,
+        'POST',
+        {
+          messaging_product: 'whatsapp',
+          to: recipient,
+          type: 'text',
+          text: { body: message.text },
+          context: { message_id: messageId },
+        },
+      );
+      this.lastEditTimestamps.set(messageId, now);
+      return { success: true, messageId };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   }
 

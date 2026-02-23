@@ -379,6 +379,7 @@ export async function gateway(args: string[]): Promise<void> {
   console.log('');
   console.log(`  ${DIM}Routes:${RESET}`);
   console.log(`  ${DIM}  GET    /health              - liveness probe${RESET}`);
+  console.log(`  ${DIM}  GET    /ready               - readiness probe${RESET}`);
   if (agentRegistration) {
     console.log(`  ${DIM}  GET    /.well-known/agent.json - agent discovery${RESET}`);
   }
@@ -598,8 +599,50 @@ export async function gateway(args: string[]): Promise<void> {
 
     process.on('SIGINT', () => void shutdown());
     process.on('SIGTERM', () => void shutdown());
+
+    // Catch unhandled rejections so the gateway never silently dies.
+    process.on('unhandledRejection', (reason) => {
+      const msg = reason instanceof Error ? reason.message : String(reason);
+      console.error(`  ${RED}✗ Unhandled rejection:${RESET} ${msg}`);
+      observer.log?.('error', `Unhandled rejection: ${msg}`);
+    });
   });
 }
+
+// ---------------------------------------------------------------------------
+// Per-user rate limiter (sliding window)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sliding-window rate limiter. Allows up to `maxRequests` within a rolling
+ * `windowMs` period per key. Keys are auto-evicted after one full window
+ * of inactivity.
+ */
+class RateLimiter {
+  private readonly windows = new Map<string, number[]>();
+
+  constructor(
+    private readonly maxRequests: number,
+    private readonly windowMs: number,
+  ) {}
+
+  /** Returns true if the request is allowed; false if rate-limited. */
+  allow(key: string): boolean {
+    const now = Date.now();
+    const cutoff = now - this.windowMs;
+
+    const timestamps = (this.windows.get(key) ?? []).filter((t) => t > cutoff);
+    if (timestamps.length >= this.maxRequests) {
+      return false;
+    }
+    timestamps.push(now);
+    this.windows.set(key, timestamps);
+    return true;
+  }
+}
+
+/** Gateway-level per-user rate limiter: max 20 messages per 60 s window. */
+const gatewayRateLimiter = new RateLimiter(20, 60_000);
 
 // ---------------------------------------------------------------------------
 // Inbound message handler
@@ -642,6 +685,17 @@ function handleInboundMessage(
   // that the VoiceProcessor will transcribe.
   const hasAudio = msg.attachments?.some((a) => a.type === 'audio') ?? false;
   if (!msg.text && !hasAudio) return;
+
+  // Per-user rate limit — reject excess messages to prevent DoS.
+  const { userId } = msg.from;
+  const rateLimitKey = `${msg.channelId ?? 'unknown'}:${userId ?? 'anonymous'}`;
+  if (!gatewayRateLimiter.allow(rateLimitKey)) {
+    channel.send(msg.from, {
+      text: 'You are sending messages too quickly. Please wait a moment.',
+      replyTo: msg.id,
+    }).catch(() => {});
+    return;
+  }
 
   // Route the message to a session.
   const routeResult = router.route(msg);

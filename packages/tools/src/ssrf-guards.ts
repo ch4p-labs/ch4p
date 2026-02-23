@@ -72,6 +72,21 @@ export function isPrivateIpV6(ip: string): boolean {
   const lower = ip.toLowerCase();
 
   if (lower === '::1' || lower === '::') return true;
+
+  // Expanded loopback forms (e.g. 0:0:0:0:0:0:0:1)
+  if (lower === '0:0:0:0:0:0:0:1' || lower === '0:0:0:0:0:0:0:0') return true;
+
+  // IPv4-mapped IPv6 with hex octets (e.g. ::ffff:7f00:1 = 127.0.0.1)
+  const v4MappedHex = lower.match(/^::ffff:([0-9a-f]+):([0-9a-f]+)$/);
+  if (v4MappedHex) {
+    const hi = parseInt(v4MappedHex[1]!, 16);
+    const lo = parseInt(v4MappedHex[2]!, 16);
+    const a = (hi >> 8) & 0xff;
+    const b = hi & 0xff;
+    const c = (lo >> 8) & 0xff;
+    const d = lo & 0xff;
+    if (isPrivateIpV4(`${a}.${b}.${c}.${d}`)) return true;
+  }
   if (lower.startsWith('fe80:')) return true;   // link-local
   if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // ULA
 

@@ -49,6 +49,9 @@ export interface DiscordConfig extends ChannelConfig {
 /** Minimum interval between message edits for streaming (Discord rate limit). */
 const DISCORD_EDIT_RATE_LIMIT_MS = 1_000;
 
+const DISCORD_RECONNECT_BASE_MS = 1_000;
+const DISCORD_RECONNECT_MAX_MS = 60_000;
+
 /** Discord Gateway opcodes. */
 const GatewayOp = {
   DISPATCH: 0,
@@ -129,6 +132,7 @@ export class DiscordChannel implements IChannel {
   private allowedGuilds: Set<string> = new Set();
   private allowedUsers: Set<string> = new Set();
   private streamMode: 'off' | 'edit' | 'block' = 'off';
+  private reconnectAttempts = 0;
   private lastEditTimestamps = new Map<string, number>();
 
   // -----------------------------------------------------------------------
@@ -347,7 +351,7 @@ export class DiscordChannel implements IChannel {
                 this.sessionId = null;
                 this.sequence = null;
               }
-              setTimeout(() => this.reconnect(), 1000 + Math.random() * 4000);
+              this.reconnect();
               break;
             }
 
@@ -361,6 +365,7 @@ export class DiscordChannel implements IChannel {
                 };
                 this.sessionId = ready.session_id;
                 this.resumeGatewayUrl = ready.resume_gateway_url;
+                this.reconnectAttempts = 0;
                 if (!identified) {
                   identified = true;
                   resolve();
@@ -381,8 +386,8 @@ export class DiscordChannel implements IChannel {
 
       this.ws.on('close', () => {
         if (this.running) {
-          // Auto-reconnect.
-          setTimeout(() => this.reconnect(), 5000);
+          // Auto-reconnect with exponential backoff.
+          this.reconnect();
         }
       });
 
@@ -414,6 +419,11 @@ export class DiscordChannel implements IChannel {
   }
 
   private reconnect(): void {
+    this.reconnectAttempts++;
+    const delayMs = Math.min(DISCORD_RECONNECT_BASE_MS * Math.pow(2, this.reconnectAttempts - 1), DISCORD_RECONNECT_MAX_MS);
+    // jitter: ±20%
+    const jitter = delayMs * 0.2 * (Math.random() * 2 - 1);
+
     if (this.ws) {
       try {
         this.ws.close(4000, 'Reconnecting');
@@ -429,10 +439,11 @@ export class DiscordChannel implements IChannel {
     }
 
     if (this.running) {
-      this.connectGateway().catch(() => {
-        // Retry with backoff.
-        setTimeout(() => this.reconnect(), 5000);
-      });
+      setTimeout(() => {
+        this.connectGateway().catch(() => {
+          this.reconnect();
+        });
+      }, Math.max(0, delayMs + jitter));
     }
   }
 

@@ -43,6 +43,13 @@ corepack pnpm bundle    # ~58 MB binary via bun compile
 ./dist/ch4p agent
 ```
 
+Or run in Docker:
+
+```bash
+# Start the gateway (mounts ~/.ch4p/config.json read-only)
+docker compose up -d
+```
+
 ## Architecture
 
 ```

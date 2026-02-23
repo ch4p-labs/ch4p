@@ -112,6 +112,7 @@ export class SignalChannel implements IChannel {
   private buffer = '';
   private nextRequestId = 1;
   private pendingRequests: Map<number, PendingRequest> = new Map();
+  private lastEditTimestamps = new Map<string, number>();
 
   // -----------------------------------------------------------------------
   // IChannel implementation
@@ -205,6 +206,38 @@ export class SignalChannel implements IChannel {
         success: false,
         error: err instanceof Error ? err.message : String(err),
       };
+    }
+  }
+
+
+  /** Edit a previously sent message via signal-cli editMessage RPC. */
+  async editMessage(to: Recipient, messageId: string, message: OutboundMessage): Promise<SendResult> {
+    const recipient = to.userId ?? to.groupId;
+    if (!recipient) {
+      return { success: false, error: 'Recipient must have userId or groupId' };
+    }
+    const lastEdit = this.lastEditTimestamps.get(messageId);
+    const now = Date.now();
+    const SIGNAL_EDIT_RATE_LIMIT_MS = 1_000;
+    if (lastEdit && now - lastEdit < SIGNAL_EDIT_RATE_LIMIT_MS) {
+      return { success: true, messageId };
+    }
+    try {
+      const params: Record<string, unknown> = {
+        account: this.account,
+        targetTimestamp: Number(messageId),
+        message: message.text,
+      };
+      if (to.groupId) {
+        params.groupId = to.groupId;
+      } else {
+        params.recipient = [to.userId];
+      }
+      await this.rpcCall('editMessage', params);
+      this.lastEditTimestamps.set(messageId, now);
+      return { success: true, messageId };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   }
 

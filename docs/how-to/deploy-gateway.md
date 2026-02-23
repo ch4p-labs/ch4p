@@ -266,6 +266,60 @@ TimeoutStopSec=40
 KillMode=mixed
 ```
 
+## Docker Deployment
+
+A `Dockerfile` and `docker-compose.yml` are included in the repository root.
+
+### Quick start with Docker Compose
+
+```bash
+# 1. Copy your config
+cp ~/.ch4p/config.json ./my-config.json
+
+# 2. Start the gateway
+CH4P_CONFIG=./my-config.json docker compose up -d
+
+# 3. Tail logs
+docker compose logs -f gateway
+```
+
+The gateway is exposed on port 3141 by default. Override with `CH4P_PORT=8080 docker compose up`.
+
+### Health / readiness checks
+
+The gateway exposes two probes:
+
+| Path | Purpose |
+|------|---------|
+| `GET /health` | **Liveness** — returns 200 while the process is alive |
+| `GET /ready` | **Readiness** — returns 200 once the server is fully up and accepting traffic |
+
+Use `/health` for Docker / systemd restart decisions, `/ready` for load-balancer or Kubernetes readiness gates.
+
+```bash
+curl http://localhost:3141/health  # {"status":"ok","timestamp":"...","sessions":0}
+curl http://localhost:3141/ready   # {"ready":true,"timestamp":"...","sessions":0}
+```
+
+For Kubernetes, add to your `Deployment`:
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 3141
+  initialDelaySeconds: 5
+  periodSeconds: 30
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 3141
+  initialDelaySeconds: 3
+  periodSeconds: 10
+```
+
+---
+
 ## Common Pitfalls
 
 - **Port in use**: Kill stale processes with `lsof -ti:18789 | xargs kill -9` before restarting.

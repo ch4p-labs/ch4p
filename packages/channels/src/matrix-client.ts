@@ -103,6 +103,26 @@ export class MinimalMatrixClient extends EventEmitter {
     return res.event_id as string;
   }
 
+  /** Edit a previously sent message using the m.replace relation. */
+  async editMessage(roomId: string, eventId: string, content: Record<string, unknown>): Promise<string> {
+    const newContent = {
+      ...content,
+      'm.new_content': { ...content },
+      'm.relates_to': {
+        rel_type: 'm.replace',
+        event_id: eventId,
+      },
+    };
+    const txnId = `ch4p_edit_${Date.now()}_${this.txnCounter++}`;
+    const encoded = encodeURIComponent(roomId);
+    const res = await this.api(
+      'PUT',
+      `/_matrix/client/v3/rooms/${encoded}/send/m.room.message/${txnId}`,
+      newContent,
+    );
+    return res.event_id as string;
+  }
+
   /** Join a room by ID or alias. */
   async joinRoom(roomId: string): Promise<void> {
     const encoded = encodeURIComponent(roomId);

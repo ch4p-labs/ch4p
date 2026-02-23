@@ -1,0 +1,36 @@
+# Build artefacts
+**/dist/
+**/dist-bundle/
+**/*.tsbuildinfo
+
+# Dependencies (rebuilt inside Docker)
+**/node_modules/
+
+# Test artefacts
+**/__snapshots__/
+**/*.test.ts.snap
+coverage/
+
+# Dev files
+.git/
+.github/
+.vscode/
+*.md
+!README.md
+
+# Sensitive — never bake secrets into the image
+.env
+.env.*
+**/.env
+**/.env.*
+~/.ch4p/
+
+# macOS / editor noise
+.DS_Store
+**/.DS_Store
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/

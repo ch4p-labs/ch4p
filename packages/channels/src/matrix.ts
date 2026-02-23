@@ -81,6 +81,7 @@ export class MatrixChannel implements IChannel {
   private allowedRooms: Set<string> = new Set();
   private allowedUsers: Set<string> = new Set();
   private botUserId: string | null = null;
+  private lastEditTimestamps = new Map<string, number>();
 
   // -----------------------------------------------------------------------
   // IChannel implementation
@@ -192,6 +193,35 @@ export class MatrixChannel implements IChannel {
         success: false,
         error: err instanceof Error ? err.message : String(err),
       };
+    }
+  }
+
+
+  /** Edit a previously sent message using Matrix m.replace relation. */
+  async editMessage(to: Recipient, messageId: string, message: OutboundMessage): Promise<SendResult> {
+    const roomId = to.groupId ?? to.userId;
+    if (!roomId) {
+      return { success: false, error: 'Recipient must have groupId (room ID) or userId' };
+    }
+    if (!this.client) {
+      return { success: false, error: 'Matrix client is not running' };
+    }
+    const lastEdit = this.lastEditTimestamps.get(messageId);
+    const now = Date.now();
+    const MATRIX_EDIT_RATE_LIMIT_MS = 1_000;
+    if (lastEdit && now - lastEdit < MATRIX_EDIT_RATE_LIMIT_MS) {
+      return { success: true, messageId };
+    }
+    try {
+      const content: Record<string, unknown> = {
+        msgtype: 'm.text',
+        body: `* ${message.text}`,
+      };
+      const newEventId = await this.client.editMessage(roomId, messageId, content);
+      this.lastEditTimestamps.set(messageId, now);
+      return { success: true, messageId: newEventId ?? messageId };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   }
 
