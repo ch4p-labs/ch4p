@@ -39,6 +39,7 @@ Practical recipes for specific tasks. Assumes you already understand the basics.
 - [Add a Verifier](how-to/add-verifier.md) — Implement IVerifier for custom task-level verification
 - [Configure Security](how-to/configure-security.md) — Filesystem scoping, command allowlists, autonomy levels
 - [Deploy the Gateway](how-to/deploy-gateway.md) — Run the gateway with a tunnel for external access
+- [Set Up iMessage](how-to/setup-imessage.md) — Grant macOS permissions and start receiving iMessages
 - [Use Memory](how-to/use-memory.md) — Store, recall, and forget with hybrid search
 - [Use Canvas](how-to/use-canvas.md) — Launch the interactive canvas workspace and render A2UI components
 - [Use Web Search](how-to/use-web-search.md) — Configure Brave Search API for web search
