@@ -34,6 +34,7 @@
     "@ch4p/skills": "workspace:*",
     "@ch4p/tunnels": "workspace:*",
     "@ch4p/voice": "workspace:*",
-    "@ch4p/canvas": "workspace:*"
+    "@ch4p/canvas": "workspace:*",
+    "@ch4p/plugin-x402": "workspace:*"
   }
 }

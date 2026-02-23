@@ -16,6 +16,8 @@
  */
 
 import type { Ch4pConfig, IChannel, InboundMessage, ISecurityPolicy, ITunnelProvider } from '@ch4p/core';
+import { createX402Middleware, X402PayTool } from '@ch4p/plugin-x402';
+import type { X402Config } from '@ch4p/plugin-x402';
 import { generateId } from '@ch4p/core';
 import { loadConfig, getLogsDir } from '../config.js';
 import { SessionManager, GatewayServer, MessageRouter, PairingManager, Scheduler, LogChannel } from '@ch4p/gateway';
@@ -213,6 +215,10 @@ export async function gateway(args: string[]): Promise<void> {
     };
   }
 
+  // Create x402 middleware if configured.
+  const x402Cfg = (config as Record<string, unknown>).x402 as X402Config | undefined;
+  const x402Middleware = x402Cfg ? createX402Middleware(x402Cfg) : null;
+
   // Create MessageRouter for channel → session routing.
   const messageRouter = new MessageRouter(sessionManager, defaultSessionConfig);
 
@@ -325,6 +331,7 @@ export async function gateway(args: string[]): Promise<void> {
     pairingManager,
     defaultSessionConfig,
     agentRegistration,
+    preHandler: x402Middleware ?? undefined,
     onWebhook: (name, payload) => {
       const syntheticMsg: InboundMessage = {
         id: generateId(16),
@@ -360,6 +367,7 @@ export async function gateway(args: string[]): Promise<void> {
     kvRow('Memory', memoryBackend ? config.memory.backend : `${DIM}disabled${RESET}`),
     kvRow('Voice', voiceProcessor ? `${GREEN}enabled${RESET} (STT: ${voiceCfg?.stt.provider ?? '?'}, TTS: ${voiceCfg?.tts.provider ?? 'none'})` : `${DIM}disabled${RESET}`),
     kvRow('Identity', agentRegistration ? `${GREEN}enabled${RESET} (chain ${config.identity?.chainId ?? 8453})` : `${DIM}disabled${RESET}`),
+    kvRow('x402', x402Cfg?.enabled ? `${GREEN}enabled${RESET} ${DIM}(${x402Cfg.server?.network ?? 'base'})${RESET}` : `${DIM}disabled${RESET}`),
   ]));
   console.log('');
   console.log(`  ${DIM}Routes:${RESET}`);
@@ -674,6 +682,12 @@ function handleInboundMessage(
       // Register load_skill tool when skills are available.
       if (skillRegistry && skillRegistry.size > 0) {
         tools.register(new LoadSkillTool(skillRegistry));
+      }
+
+      // Register x402_pay tool when x402 plugin is enabled.
+      const x402PluginCfg = (config as Record<string, unknown>).x402 as X402Config | undefined;
+      if (x402PluginCfg?.enabled) {
+        tools.register(new X402PayTool());
       }
 
       const securityPolicy = new DefaultSecurityPolicy({

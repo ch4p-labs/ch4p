@@ -51,6 +51,19 @@ export interface GatewayServerOptions {
   agentRegistration?: Record<string, unknown>;
   /** Called when a webhook message is received at POST /webhooks/:name. */
   onWebhook?: (name: string, payload: { message: string; userId?: string }) => void;
+  /**
+   * Optional pre-handler invoked before pairing auth and route dispatch.
+   * Called for every request after CORS/OPTIONS handling and public routes
+   * (/health, /.well-known/agent.json, /pair).
+   *
+   * Return true  → handler sent a response; request processing stops.
+   * Return false → continue to pairing auth and normal route dispatch.
+   *
+   * When the handler sets `(req as any)._x402Authenticated = true` before
+   * returning false, pairing auth is bypassed — payment acts as the
+   * authentication credential.
+   */
+  preHandler?: (req: IncomingMessage, res: ServerResponse) => boolean | Promise<boolean>;
 }
 
 export class GatewayServer {
@@ -66,6 +79,9 @@ export class GatewayServer {
   private readonly onCanvasConnection: ((sessionId: string, bridge: WebSocketBridge) => void) | null;
   private readonly agentRegistration: Record<string, unknown> | null;
   private readonly onWebhook: GatewayServerOptions['onWebhook'] | null;
+  private readonly preHandler:
+    | ((req: IncomingMessage, res: ServerResponse) => boolean | Promise<boolean>)
+    | null;
   private tunnelUrl: string | null = null;
 
   constructor(options: GatewayServerOptions) {
@@ -83,6 +99,7 @@ export class GatewayServer {
     this.onCanvasConnection = options.onCanvasConnection ?? null;
     this.agentRegistration = options.agentRegistration ?? null;
     this.onWebhook = options.onWebhook ?? null;
+    this.preHandler = options.preHandler ?? null;
   }
 
   /** Start listening on the configured port. */
@@ -283,6 +300,15 @@ export class GatewayServer {
       return;
     }
 
+    // ----- Optional pre-handler (e.g. x402 payment middleware) -----
+    // Runs before pairing auth. If it returns true, the response is already
+    // sent. If it sets req._x402Authenticated, pairing auth is bypassed.
+
+    if (this.preHandler) {
+      const handled = await this.preHandler(req, res);
+      if (handled) return;
+    }
+
     // ----- Protected routes (require auth if pairing is enabled) -----
 
     if (this.pairingManager && !this.checkAuth(req)) {
@@ -453,6 +479,9 @@ export class GatewayServer {
   // ---------------------------------------------------------------------------
 
   private checkAuth(req: IncomingMessage): boolean {
+    // x402 payment-authenticated requests bypass pairing.
+    if ((req as unknown as Record<string, unknown>)['_x402Authenticated'] === true) return true;
+
     if (!this.pairingManager) return true;
 
     const authHeader = req.headers['authorization'];

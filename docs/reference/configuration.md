@@ -496,6 +496,42 @@ Markdown body with detailed instructions...
 
 ---
 
+## x402
+
+x402 HTTP micropayment plugin (`@ch4p/plugin-x402`). Disabled by default.
+
+```json
+{
+  "x402": {
+    "enabled": true,
+    "server": {
+      "payTo": "0xYourWallet",
+      "amount": "1000000",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "network": "base",
+      "description": "Payment required to access this gateway.",
+      "protectedPaths": ["/sessions", "/sessions/*", "/webhooks/*"],
+      "maxTimeoutSeconds": 300
+    }
+  }
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | `boolean` | `false` | Enable the x402 plugin. |
+| `server.payTo` | `string` | — | Wallet address that receives payments. |
+| `server.amount` | `string` | — | Amount in the asset's smallest unit. E.g. `"1000000"` = 1 USDC. |
+| `server.asset` | `string` | USDC on Base | ERC-20 token contract address. |
+| `server.network` | `string` | `"base"` | Network identifier (`"base"`, `"base-sepolia"`, `"ethereum"`). |
+| `server.description` | `string` | auto | Human-readable payment description in the 402 response. |
+| `server.protectedPaths` | `string[]` | `["/*"]` | Paths to gate. Supports `"/*"` wildcard suffix. System paths are always exempt. |
+| `server.maxTimeoutSeconds` | `number` | `300` | Payment authorization TTL in seconds. |
+
+When enabled, the `x402_pay` agent tool is registered automatically for gateway sessions. See the [Use x402 Payments](../how-to/use-x402.md) guide.
+
+---
+
 ## logging
 
 Logging configuration.

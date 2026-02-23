@@ -98,6 +98,7 @@ packages/
   skills/         # Skill discovery, YAML frontmatter parsing, registry (OpenClaw compatible)
   voice/          # Voice pipeline: STT (Whisper, Deepgram), TTS (ElevenLabs), always-on voice wake
   tunnels/        # Tunnel providers: Cloudflare, Tailscale, ngrok
+  plugin-x402/    # x402 HTTP micropayment plugin: gateway middleware + x402_pay agent tool
 apps/
   cli/            # Command-line interface (standalone binary via bun compile)
   web/            # Canvas workspace: React + tldraw SPA with 11 custom A2UI shape types
@@ -191,12 +192,12 @@ corepack pnpm --filter @ch4p/core build
 
 ### Project Structure
 
-- 18 packages in a pnpm monorepo (use `corepack pnpm` — pnpm is not on PATH)
+- 19 packages in a pnpm monorepo (use `corepack pnpm` — pnpm is not on PATH)
 - TypeScript strict mode, ES2023 target, NodeNext module resolution
 - ESM-only (all imports use `.js` extension)
 - Zero required external runtime dependencies for core, security, and CLI packages (`playwright-core` is optional for browser tool)
 - `tsup` for bundling, `vitest` for testing, `vite` for web frontend (code-split with lazy loading)
-- 73 test files, 2139 tests
+- 75 test files, 2186 tests
 
 ## Configuration
 

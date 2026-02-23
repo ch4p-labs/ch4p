@@ -206,4 +206,32 @@ export interface Ch4pConfig {
     /** Default search language (e.g., 'en'). */
     searchLang?: string;
   };
+  /** x402 HTTP micropayment plugin configuration (@ch4p/plugin-x402). */
+  x402?: {
+    /** Whether x402 payment enforcement is active. Default: false. */
+    enabled?: boolean;
+    /** Server-side: protect gateway endpoints with payment requirements. */
+    server?: {
+      /** Wallet address that receives payments. */
+      payTo: string;
+      /**
+       * Payment amount in the asset's smallest unit.
+       * Example: "1000000" = 1 USDC (6 decimals).
+       */
+      amount: string;
+      /** ERC-20 token contract address. Defaults to USDC on Base. */
+      asset?: string;
+      /** Network identifier. Defaults to "base". */
+      network?: string;
+      /** Human-readable description shown in the 402 response. */
+      description?: string;
+      /**
+       * URL paths to gate. Supports trailing "/*" wildcard.
+       * Default: all paths except /health, /.well-known/agent.json, /pair.
+       */
+      protectedPaths?: string[];
+      /** Seconds before a payment authorization expires. Default: 300. */
+      maxTimeoutSeconds?: number;
+    };
+  };
 }
