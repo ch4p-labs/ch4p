@@ -19,6 +19,21 @@ export interface ToolContext {
   securityPolicy: ISecurityPolicy;
   abortSignal: AbortSignal;
   onProgress: (update: string) => void;
+  /**
+   * Signs an EIP-712 TransferWithAuthorization struct for x402 payments.
+   * Injected by the gateway when x402.client.privateKey is configured.
+   * Kept as an inline type so @ch4p/core stays free of plugin dependencies.
+   */
+  x402Signer?: (authorization: {
+    from: string;
+    to: string;
+    value: string;
+    validAfter: string;
+    validBefore: string;
+    nonce: string;
+  }) => Promise<string>;
+  /** Agent wallet address used as the payer in x402 transactions. */
+  agentWalletAddress?: string;
 }
 
 export interface ToolResult {

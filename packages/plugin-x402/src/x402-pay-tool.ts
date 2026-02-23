@@ -18,23 +18,10 @@ import type { X402Response, X402PaymentAuthorization, X402PaymentPayload } from 
 /**
  * Extended ToolContext for x402 payment operations.
  *
- * Populated by the gateway/agent runtime when wallet capability is available.
- * Typically set via `toolContextExtensions` in AgentLoop options.
+ * x402Signer and agentWalletAddress are now part of the base ToolContext
+ * in @ch4p/core, so this is a plain alias kept for backward compatibility.
  */
-export interface X402ToolContext extends ToolContext {
-  /**
-   * Signs an EIP-712 transferWithAuthorization struct and returns the
-   * hex-encoded signature string. Injected when an IIdentityProvider with
-   * a bound wallet private key is configured.
-   */
-  x402Signer?: (authorization: X402PaymentAuthorization) => Promise<string>;
-  /**
-   * Fallback payer wallet address (0x...) when wallet_address is not
-   * provided in the tool arguments. Populated via toolContextExtensions
-   * when an IIdentityProvider returns a wallet for the current agent.
-   */
-  agentWalletAddress?: string;
-}
+export type X402ToolContext = ToolContext;
 
 interface X402PayArgs {
   url: string;

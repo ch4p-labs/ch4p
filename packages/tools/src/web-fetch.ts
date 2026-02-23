@@ -11,6 +11,8 @@
  * at each hop.
  */
 
+import { randomBytes } from 'node:crypto';
+
 import type {
   ITool,
   ToolContext,
@@ -19,6 +21,41 @@ import type {
   JSONSchema7,
 } from '@ch4p/core';
 import { isBlockedHostname, resolveAndCheckPrivate } from './ssrf-guards.js';
+
+// ---------------------------------------------------------------------------
+// Local types for x402 payment handling (no dep on @ch4p/plugin-x402)
+// ---------------------------------------------------------------------------
+
+interface X402Req {
+  scheme: string;
+  network: string;
+  maxAmountRequired: string;
+  resource: string;
+  payTo: string;
+  maxTimeoutSeconds: number;
+  asset: string;
+}
+
+interface X402Body {
+  x402Version: number;
+  error: string;
+  accepts: X402Req[];
+}
+
+interface X402PayPayload {
+  x402Version: 1;
+  scheme: string;
+  network: string;
+  payload: {
+    signature: string;
+    authorization: {
+      from: string; to: string; value: string;
+      validAfter: string; validBefore: string; nonce: string;
+    };
+  };
+}
+
+// ---------------------------------------------------------------------------
 
 interface WebFetchArgs {
   url: string;
@@ -226,6 +263,41 @@ export class WebFetchTool implements ITool {
         };
       }
 
+      // --- x402 auto-payment ---
+      if (response.status === 402) {
+        const payResult = await this.tryX402Payment(response, context);
+        if (!payResult.headerValue) {
+          return {
+            success: false,
+            output: '',
+            error:
+              payResult.error ??
+              'Payment required (x402). Configure x402.client.privateKey to enable auto-payment.',
+            metadata: { url: fetchUrl, status: 402, x402Required: true },
+          };
+        }
+        // Single retry with payment header — no recursive 402 loop.
+        context.onProgress('Paying x402 fee and retrying...');
+        const retryResponse = await fetch(fetchUrl, {
+          signal: this.abortController!.signal,
+          headers: {
+            'User-Agent': 'ch4p/0.1.0',
+            Accept: 'text/html, application/json, text/plain, */*',
+            'X-PAYMENT': payResult.headerValue,
+          },
+        });
+        if (!retryResponse.ok) {
+          return {
+            success: false,
+            output: '',
+            error: `HTTP ${retryResponse.status} after x402 payment: ${retryResponse.statusText}`,
+            metadata: { url: fetchUrl, status: retryResponse.status, x402Paid: true },
+          };
+        }
+        response = retryResponse;
+      }
+      // --- end x402 ---
+
       if (!response.ok) {
         return {
           success: false,
@@ -332,6 +404,65 @@ export class WebFetchTool implements ITool {
 
   abort(_reason: string): void {
     this.abortController?.abort();
+  }
+
+  /**
+   * Attempt an x402 auto-payment for a 402 response.
+   *
+   * Parses the 402 body, builds an EIP-3009 authorization struct, signs it
+   * using context.x402Signer, and returns the base64-encoded X-PAYMENT header
+   * value. Returns an error string if payment is not possible.
+   */
+  private async tryX402Payment(
+    response: Response,
+    context: ToolContext,
+  ): Promise<{ headerValue?: string; error?: string }> {
+    if (!context.x402Signer || !context.agentWalletAddress) {
+      return {
+        error:
+          'No x402 signer configured. Set x402.client.privateKey to enable auto-payment.',
+      };
+    }
+
+    let body: X402Body;
+    try {
+      const text = await response.text();
+      body = JSON.parse(text) as X402Body;
+    } catch {
+      return { error: 'Could not parse x402 payment requirements from 402 response body.' };
+    }
+
+    // Prefer "exact" scheme; fall back to first entry.
+    const req = body.accepts?.find((r) => r.scheme === 'exact') ?? body.accepts?.[0];
+    if (!req) {
+      return { error: 'No acceptable payment scheme found in 402 response.' };
+    }
+
+    const nowSecs = Math.floor(Date.now() / 1000);
+    const authorization = {
+      from:        context.agentWalletAddress,
+      to:          req.payTo,
+      value:       req.maxAmountRequired,
+      validAfter:  '0',
+      validBefore: String(nowSecs + req.maxTimeoutSeconds),
+      nonce:       '0x' + randomBytes(32).toString('hex'),
+    };
+
+    let signature: string;
+    try {
+      signature = await context.x402Signer(authorization);
+    } catch (err) {
+      return { error: `x402 signing failed: ${(err as Error).message}` };
+    }
+
+    const payload: X402PayPayload = {
+      x402Version: 1,
+      scheme:      req.scheme,
+      network:     req.network,
+      payload:     { signature, authorization },
+    };
+
+    return { headerValue: Buffer.from(JSON.stringify(payload)).toString('base64') };
   }
 }
 

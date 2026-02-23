@@ -561,6 +561,11 @@ x402 HTTP micropayment plugin (`@ch4p/plugin-x402`). Disabled by default.
 
 When `client.privateKey` is set, the `x402_pay` tool produces real on-chain EIP-712 signatures instead of placeholder values. The agent's wallet address is derived automatically from the private key.
 
+When `client.privateKey` is set, the `web_fetch` tool also handles HTTP 402 responses
+automatically: it signs the EIP-712 authorization, adds the `X-PAYMENT` header, and retries
+the request transparently. No model intervention is required — the agent can browse
+x402-gated APIs as if they were open.
+
 When enabled, the `x402_pay` agent tool is registered automatically for gateway sessions. See the [Use x402 Payments](../how-to/use-x402.md) guide.
 
 ---
