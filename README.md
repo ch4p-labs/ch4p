@@ -197,7 +197,7 @@ corepack pnpm --filter @ch4p/core build
 - ESM-only (all imports use `.js` extension)
 - Zero required external runtime dependencies for core, security, and CLI packages (`playwright-core` is optional for browser tool)
 - `tsup` for bundling, `vitest` for testing, `vite` for web frontend (code-split with lazy loading)
-- 75 test files, 2186 tests
+- 77 test files, 2229 tests
 
 ## Configuration
 

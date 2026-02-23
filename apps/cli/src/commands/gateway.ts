@@ -57,6 +57,7 @@ import type { ChildHandle } from '@ch4p/supervisor';
 import { VoiceProcessor, WhisperSTT, DeepgramSTT, ElevenLabsTTS } from '@ch4p/voice';
 import type { VoiceConfig } from '@ch4p/voice';
 import { TEAL, RESET, BOLD, DIM, GREEN, YELLOW, RED, box, kvRow } from '../ui.js';
+import { buildSystemPrompt } from '../system-prompt.js';
 
 // ---------------------------------------------------------------------------
 // Channel factory
@@ -191,13 +192,47 @@ export async function gateway(args: string[]): Promise<void> {
   const sessionManager = new SessionManager();
   const pairingManager = requirePairing ? new PairingManager() : undefined;
 
+  // Create the engine for processing channel messages.
+  const engine = createGatewayEngine(config);
+
+  // Create skill registry (optional) — needed before system prompt is built.
+  let skillRegistry: SkillRegistry | undefined;
+  try {
+    if (config.skills?.enabled && config.skills?.paths?.length) {
+      skillRegistry = SkillRegistry.createFromPaths(config.skills.paths);
+    }
+  } catch {
+    // Skills not critical for gateway.
+  }
+
+  // Create memory backend (optional) — needed before system prompt is built.
+  let memoryBackend;
+  try {
+    const memCfg: MemoryConfig = {
+      backend: config.memory.backend,
+      vectorWeight: config.memory.vectorWeight,
+      keywordWeight: config.memory.keywordWeight,
+      embeddingProvider: config.memory.embeddingProvider,
+      openaiApiKey: (config.providers?.openai?.apiKey as string) || undefined,
+    };
+    memoryBackend = createMemoryBackend(memCfg);
+  } catch {
+    // Memory not critical for gateway.
+  }
+
+  // Build the system prompt with accurate capability hints now that we know
+  // which features are available.  The model must be told about memory and
+  // web search here — without these hints it tells users it has no memory and
+  // ignores tool capabilities entirely.
+  const hasMemory = !!memoryBackend;
+  const hasSearch = !!(config.search?.enabled && config.search.apiKey);
+  const defaultSystemPrompt = buildSystemPrompt({ hasMemory, hasSearch, skillRegistry });
+
   const defaultSessionConfig = {
     engineId: config.engines?.default ?? 'native',
     model: config.agent.model,
     provider: config.agent.provider,
-    systemPrompt:
-      'You are ch4p, a personal AI assistant. ' +
-      'You are helpful, concise, and security-conscious.',
+    systemPrompt: defaultSystemPrompt,
   };
 
   // Build agent registration file for ERC-8004 service discovery.
@@ -221,34 +256,6 @@ export async function gateway(args: string[]): Promise<void> {
 
   // Create MessageRouter for channel → session routing.
   const messageRouter = new MessageRouter(sessionManager, defaultSessionConfig);
-
-  // Create the engine for processing channel messages.
-  const engine = createGatewayEngine(config);
-
-  // Create skill registry (optional).
-  let skillRegistry: SkillRegistry | undefined;
-  try {
-    if (config.skills?.enabled && config.skills?.paths?.length) {
-      skillRegistry = SkillRegistry.createFromPaths(config.skills.paths);
-    }
-  } catch {
-    // Skills not critical for gateway.
-  }
-
-  // Create memory backend (optional).
-  let memoryBackend;
-  try {
-    const memCfg: MemoryConfig = {
-      backend: config.memory.backend,
-      vectorWeight: config.memory.vectorWeight,
-      keywordWeight: config.memory.keywordWeight,
-      embeddingProvider: config.memory.embeddingProvider,
-      openaiApiKey: (config.providers?.openai?.apiKey as string) || undefined,
-    };
-    memoryBackend = createMemoryBackend(memCfg);
-  } catch {
-    // Memory not critical for gateway.
-  }
 
   // Create observer.
   const obsCfg: ObservabilityConfig = {

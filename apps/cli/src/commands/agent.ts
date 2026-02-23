@@ -31,6 +31,7 @@ import { SkillRegistry } from '@ch4p/skills';
 import { WakeListener, WhisperSTT, DeepgramSTT, ElevenLabsTTS } from '@ch4p/voice';
 import type { WakeEvent } from '@ch4p/voice';
 import { loadConfig, getLogsDir } from '../config.js';
+import { buildSystemPrompt } from '../system-prompt.js';
 import { playBriefSplash } from './splash.js';
 import {
   TEAL, TEAL_DIM, RESET, BOLD, DIM, GREEN, YELLOW, RED, MAGENTA, BLUE,
@@ -359,34 +360,7 @@ function createStubEngine(config: Ch4pConfig): IEngine {
 // ---------------------------------------------------------------------------
 
 function createSessionConfig(config: Ch4pConfig, skillRegistry?: SkillRegistry, hasMemory?: boolean, hasSearch?: boolean): SessionConfig {
-  let systemPrompt =
-    'You are ch4p, a personal AI assistant. ' +
-    'You are helpful, concise, and security-conscious. ' +
-    'When asked to perform actions, respect the configured autonomy level.';
-
-  // When memory is available, let the LLM know it can remember things.
-  if (hasMemory) {
-    systemPrompt +=
-      ' You have persistent memory — you can recall information from previous conversations ' +
-      'and learn from interactions over time. Use the memory_store and memory_recall tools ' +
-      'to explicitly save or retrieve specific information when helpful.';
-  }
-
-  // When search is available, let the LLM know it can search the web.
-  if (hasSearch) {
-    systemPrompt +=
-      ' You have web search capability — use the web_search tool to find ' +
-      'current information, look up facts, or research topics when needed.';
-  }
-
-  // Inject skill descriptions for progressive disclosure.
-  if (skillRegistry && skillRegistry.size > 0) {
-    const descriptions = skillRegistry.getDescriptions()
-      .map((s) => `  - ${s.name}: ${s.description}`)
-      .join('\n');
-    systemPrompt +=
-      '\n\nAvailable skills (use the `load_skill` tool with the skill name to get full instructions):\n' + descriptions;
-  }
+  const systemPrompt = buildSystemPrompt({ hasMemory, hasSearch, skillRegistry });
 
   return {
     sessionId: generateId(16),
