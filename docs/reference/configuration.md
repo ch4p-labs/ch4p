@@ -555,6 +555,58 @@ When enabled, the `x402_pay` agent tool is registered automatically for gateway 
 
 ---
 
+## routing
+
+Config-driven multi-agent routing. Define named sub-agents with their own system prompts and models, then write routing rules to dispatch gateway messages to the right agent based on channel ID and/or message text patterns. Rules are evaluated in order — the first match wins.
+
+```json
+{
+  "routing": {
+    "agents": {
+      "coding": {
+        "systemPrompt": "You are an expert coding assistant. Be concise and precise.",
+        "model": "claude-opus-4-5",
+        "maxIterations": 50
+      },
+      "quick": {
+        "model": "claude-haiku-3-5",
+        "maxIterations": 5
+      }
+    },
+    "rules": [
+      { "channel": "telegram", "match": "code|debug|fix|build", "agent": "coding" },
+      { "match": "\\bhi\\b|hello|hey", "agent": "quick" }
+    ]
+  }
+}
+```
+
+### routing.agents
+
+Each key is an agent name. Agent configs override the defaults for matched messages.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `systemPrompt` | `string` | global prompt | Custom system prompt for this agent. |
+| `model` | `string` | `agent.model` | LLM model override. |
+| `provider` | `string` | `agent.provider` | Provider override. |
+| `maxIterations` | `number` | `20` | Max agent loop iterations. |
+| `toolExclude` | `string[]` | `[]` | Additional tool names to exclude for this agent. |
+
+### routing.rules
+
+An array of routing rules evaluated in order. First match wins.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `channel` | `string` | No | Channel ID to match (e.g. `"telegram"`, `"discord"`). Omit or `"*"` to match any channel. |
+| `match` | `string` | No | Case-insensitive regex tested against message text. Omit to match any message on the given channel. |
+| `agent` | `string` | Yes | Name of the agent in `routing.agents` to dispatch to. |
+
+If no rule matches, the default agent configuration is used.
+
+---
+
 ## logging
 
 Logging configuration.

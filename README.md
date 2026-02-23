@@ -50,6 +50,15 @@ Or run in Docker:
 docker compose up -d
 ```
 
+Or install as a system daemon (auto-start on login, no sudo needed):
+
+```bash
+ch4p install               # macOS (launchd) or Linux (systemd)
+ch4p install --status      # check status
+ch4p install --logs        # tail logs
+ch4p install --uninstall   # remove
+```
+
 ## Architecture
 
 ```
@@ -162,7 +171,8 @@ Inspired by the Agent World Model research, ch4p implements several techniques f
 - **Named context strategies** — configurable truncation strategies with tunable parameters: compaction targets, keep ratios, tool-call pair preservation, and task description pinning.
 - **MCP tool connectivity** — the built-in MCP client tool connects to any Model Context Protocol server, discovering and proxying tools via `list_tools` + `call_tool`.
 - **Browser control** — Playwright-based browser tool for page navigation, clicking, typing, screenshots, and JS evaluation with SSRF protection.
-- **Mesh orchestration** — swarm-style multi-agent delegation: spawn parallel sub-agents across engines, bounded concurrency, partial failure tolerance.
+- **Mesh orchestration** — swarm-style multi-agent delegation: spawn parallel sub-agents across engines, bounded concurrency, partial failure tolerance. Sub-agents accept optional parent context injection via the `context` field.
+- **Config-driven routing** — define named agents (own system prompt, model, tool exclusions) and routing rules that dispatch gateway messages to the right agent based on channel ID and/or message text regex patterns.
 - **Voice wake** — opt-in always-on microphone listening with energy-based VAD, wake word filtering, and STT transcription into the agent loop.
 
 ## Memory
@@ -204,7 +214,7 @@ corepack pnpm --filter @ch4p/core build
 - ESM-only (all imports use `.js` extension)
 - Zero required external runtime dependencies for core, security, and CLI packages (`playwright-core` is optional for browser tool)
 - `tsup` for bundling, `vitest` for testing, `vite` for web frontend (code-split with lazy loading)
-- 79 test files, 2286 tests
+- 81 test files, 2328 tests
 
 ## Configuration
 

@@ -21,6 +21,8 @@ interface DelegateArgs {
   task: string;
   engine?: string;
   model?: string;
+  /** Optional parent context to share with the sub-agent (e.g. conversation summary). */
+  context?: string;
 }
 
 /**
@@ -59,6 +61,13 @@ export class DelegateTool implements ITool {
         description:
           'Model ID to use for the sub-agent. Defaults to the current model.',
       },
+      context: {
+        type: 'string',
+        description:
+          'Optional parent context snippet to pass to the sub-agent (e.g. ' +
+          'a conversation summary or relevant background). The sub-agent ' +
+          'sees this as prior context before the task.',
+      },
     },
     required: ['task'],
     additionalProperties: false,
@@ -86,6 +95,11 @@ export class DelegateTool implements ITool {
       errors.push('model must be a string.');
     }
 
+    const { context } = args as Record<string, unknown>;
+    if (context !== undefined && typeof context !== 'string') {
+      errors.push('context must be a string.');
+    }
+
     return errors.length > 0 ? { valid: false, errors } : { valid: true };
   }
 
@@ -107,7 +121,7 @@ export class DelegateTool implements ITool {
       );
     }
 
-    const { task, engine: engineId, model } = args as DelegateArgs;
+    const { task, engine: engineId, model, context: parentContext } = args as DelegateArgs;
 
     // Resolve the target engine
     const targetEngine = delegateContext.resolveEngine(engineId);
@@ -134,10 +148,18 @@ export class DelegateTool implements ITool {
     );
 
     try {
+      // Build the message list for the sub-agent. If parent context is provided,
+      // prepend it as a prior assistant turn so the sub-agent has background.
+      const subMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+      if (parentContext) {
+        subMessages.push({ role: 'assistant', content: `[Parent context]\n${parentContext}` });
+      }
+      subMessages.push({ role: 'user', content: task });
+
       const handle = await targetEngine.startRun(
         {
           sessionId: `${context.sessionId}-delegate-${Date.now()}`,
-          messages: [{ role: 'user', content: task }],
+          messages: subMessages,
           model: model ?? delegateContext.defaultModel,
           systemPrompt:
             'You are a sub-agent executing a delegated task. Complete the task thoroughly and return your findings.',

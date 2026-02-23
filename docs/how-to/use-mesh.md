@@ -62,6 +62,26 @@ When the agent decides to use mesh orchestration, it calls the `mesh` tool with 
 }
 ```
 
+### Passing parent context
+
+Each task can include an optional `context` field with a snippet from the parent conversation. The sub-agent sees this as prior background before the task instruction — useful when sub-agents need to understand the problem space without receiving the full conversation history.
+
+```json
+{
+  "tasks": [
+    {
+      "task": "Write unit tests for the authentication module",
+      "context": "We are refactoring a Node.js/Express app to use JWT tokens instead of sessions. The auth module is in src/auth.ts.",
+      "model": "claude-opus-4-5"
+    },
+    {
+      "task": "Update the API documentation for the auth endpoints",
+      "context": "We are refactoring a Node.js/Express app to use JWT tokens instead of sessions."
+    }
+  ]
+}
+```
+
 Each task spawns an independent sub-agent. Results are returned as:
 
 ```json

@@ -21,6 +21,7 @@
  *   tools       List available tools
  *   pairing     Manage gateway pairing
  *   message     Send a message via a channel
+ *   install     Install/manage the gateway as a system daemon
  *   help        Show usage
  *   version     Show version
  */
@@ -97,6 +98,7 @@ function printHelp(): void {
     ${GREEN}skills${RESET}       Manage agent skills
     ${GREEN}canvas${RESET}       Start the interactive canvas workspace
     ${GREEN}identity${RESET}     Manage on-chain agent identity (ERC-8004)
+    ${GREEN}install${RESET}      Install gateway as a system daemon (systemd / launchd)
 
   ${BOLD}Agent Options${RESET}
     ${GREEN}-m, --message${RESET} "text"      Run a single message and exit
@@ -119,6 +121,7 @@ function printHelp(): void {
     ${DIM}$${RESET} ch4p tools                            ${DIM}# List tools${RESET}
     ${DIM}$${RESET} ch4p canvas                           ${DIM}# Start canvas workspace${RESET}
     ${DIM}$${RESET} ch4p message -c telegram "Hello!"     ${DIM}# Send via channel${RESET}
+    ${DIM}$${RESET} ch4p install                          ${DIM}# Install gateway daemon${RESET}
 
   ${DIM}Run ${TEAL}ch4p onboard${DIM} to get started.${RESET}
 `);
@@ -228,6 +231,12 @@ async function main(): Promise<void> {
     case 'identity': {
       const { identity } = await import('./commands/identity.js');
       await identity(rest);
+      break;
+    }
+
+    case 'install': {
+      const { install } = await import('./commands/install.js');
+      await install(rest);
       break;
     }
 

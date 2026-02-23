@@ -33,6 +33,8 @@ interface MeshTask {
   task: string;
   engine?: string;
   model?: string;
+  /** Optional parent context snippet for this specific sub-agent task. */
+  context?: string;
 }
 
 interface MeshArgs {
@@ -128,6 +130,12 @@ export class MeshTool implements ITool {
             model: {
               type: 'string',
               description: 'Model ID for this task (optional).',
+            },
+            context: {
+              type: 'string',
+              description:
+                'Optional parent context snippet to pass to this sub-agent task ' +
+                '(e.g. a conversation summary or relevant background).',
             },
           },
           required: ['task'],
@@ -339,10 +347,18 @@ export class MeshTool implements ITool {
       context.abortSignal.addEventListener('abort', parentAbortHandler, { once: true });
 
       try {
+        // Build messages for this sub-agent. If parent context is provided,
+        // prepend it as a prior assistant turn for background.
+        const subMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+        if (task.context) {
+          subMessages.push({ role: 'assistant', content: `[Parent context]\n${task.context}` });
+        }
+        subMessages.push({ role: 'user', content: task.task });
+
         const handle = await targetEngine.startRun(
           {
             sessionId: `${context.sessionId}-mesh-${Date.now()}-${_index}`,
-            messages: [{ role: 'user', content: task.task }],
+            messages: subMessages,
             model: task.model ?? context.defaultModel,
             systemPrompt:
               'You are a sub-agent executing a delegated task as part of a parallel mesh. ' +

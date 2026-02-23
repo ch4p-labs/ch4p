@@ -206,6 +206,69 @@ export interface Ch4pConfig {
     /** Default search language (e.g., 'en'). */
     searchLang?: string;
   };
+  /**
+   * Config-driven multi-agent routing.
+   *
+   * Define named sub-agents with their own system prompts and models, then
+   * write routing rules that dispatch inbound gateway messages to the right
+   * agent based on channel ID and/or message text patterns.
+   *
+   * Example:
+   * ```json
+   * {
+   *   "routing": {
+   *     "agents": {
+   *       "coding": {
+   *         "systemPrompt": "You are an expert coding assistant.",
+   *         "model": "claude-opus-4-5",
+   *         "maxIterations": 50
+   *       },
+   *       "quick": { "model": "claude-haiku-3-5", "maxIterations": 5 }
+   *     },
+   *     "rules": [
+   *       { "channel": "telegram", "match": "code|debug|fix", "agent": "coding" },
+   *       { "match": "\\bhi\\b|hello", "agent": "quick" }
+   *     ]
+   *   }
+   * }
+   * ```
+   */
+  routing?: {
+    /**
+     * Named agent configurations. Each entry can override the system prompt,
+     * model, provider, max iterations, and tool exclusions for that agent.
+     */
+    agents?: Record<string, {
+      /** Custom system prompt for this agent. */
+      systemPrompt?: string;
+      /** LLM model to use (overrides agent.model). */
+      model?: string;
+      /** Provider to use (overrides agent.provider). */
+      provider?: string;
+      /** Maximum agent loop iterations (default: 20). */
+      maxIterations?: number;
+      /** Additional tools to exclude beyond the global exclusion list. */
+      toolExclude?: string[];
+    }>;
+    /**
+     * Routing rules evaluated in order. The first matching rule wins.
+     * If no rule matches, the default agent configuration is used.
+     */
+    rules?: Array<{
+      /**
+       * Channel ID to match (e.g. "telegram", "discord").
+       * Omit or use "*" to match any channel.
+       */
+      channel?: string;
+      /**
+       * Regex pattern tested against the inbound message text (case-insensitive).
+       * Omit to match any message on the given channel.
+       */
+      match?: string;
+      /** Name of the agent in `routing.agents` to dispatch to. */
+      agent: string;
+    }>;
+  };
   /** x402 HTTP micropayment plugin configuration (@ch4p/plugin-x402). */
   x402?: {
     /** Whether x402 payment enforcement is active. Default: false. */

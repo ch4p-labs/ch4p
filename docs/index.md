@@ -53,6 +53,7 @@ Practical recipes for specific tasks. Assumes you already understand the basics.
 - [Use Mesh Orchestration](how-to/use-mesh.md) — Swarm-style multi-agent delegation across engines
 - [Test Channels](how-to/test-channels.md) — Verify channel connectivity, multi-session isolation, and voice wake
 - [Use x402 Payments](how-to/use-x402.md) — Protect gateway endpoints with HTTP 402 Payment Required and pay for gated resources
+- [Use Multi-Agent Routing](how-to/use-routing.md) — Config-driven routing rules that dispatch gateway messages to named sub-agents
 
 ### Reference — Information-Oriented
 

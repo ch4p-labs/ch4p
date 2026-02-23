@@ -58,6 +58,7 @@ import { VoiceProcessor, WhisperSTT, DeepgramSTT, ElevenLabsTTS } from '@ch4p/vo
 import type { VoiceConfig } from '@ch4p/voice';
 import { TEAL, RESET, BOLD, DIM, GREEN, YELLOW, RED, box, kvRow } from '../ui.js';
 import { buildSystemPrompt } from '../system-prompt.js';
+import { AgentRouter } from '../agent-router.js';
 
 // ---------------------------------------------------------------------------
 // Channel factory
@@ -235,6 +236,9 @@ export async function gateway(args: string[]): Promise<void> {
     systemPrompt: defaultSystemPrompt,
   };
 
+  // Create agent router — evaluates config.routing rules per inbound message.
+  const agentRouter = new AgentRouter(config);
+
   // Build agent registration file for ERC-8004 service discovery.
   let agentRegistration: Record<string, unknown> | undefined;
   if (config.identity?.enabled) {
@@ -349,7 +353,8 @@ export async function gateway(args: string[]): Promise<void> {
       };
       handleInboundMessage(
         syntheticMsg, logChannel as unknown as IChannel, messageRouter, engine, config, observer,
-        conversationContexts, memoryBackend, skillRegistry, voiceProcessor, trackInflight,
+        conversationContexts, agentRouter, defaultSystemPrompt,
+        memoryBackend, skillRegistry, voiceProcessor, trackInflight,
       );
     },
   });
@@ -428,7 +433,8 @@ export async function gateway(args: string[]): Promise<void> {
         channel.onMessage((msg: InboundMessage) => {
           handleInboundMessage(
             msg, channel, messageRouter, engine, config, observer,
-            conversationContexts, memoryBackend, skillRegistry, voiceProcessor, trackInflight,
+            conversationContexts, agentRouter, defaultSystemPrompt,
+            memoryBackend, skillRegistry, voiceProcessor, trackInflight,
           );
         });
 
@@ -514,7 +520,8 @@ export async function gateway(args: string[]): Promise<void> {
           };
           handleInboundMessage(
             syntheticMsg, logChannel as unknown as IChannel, messageRouter, engine, config, observer,
-            conversationContexts, memoryBackend, skillRegistry, voiceProcessor, trackInflight,
+            conversationContexts, agentRouter, defaultSystemPrompt,
+            memoryBackend, skillRegistry, voiceProcessor, trackInflight,
           );
         },
       });
@@ -667,6 +674,8 @@ function handleInboundMessage(
   config: Ch4pConfig,
   observer: ReturnType<typeof createObserver>,
   conversationContexts: Map<string, ContextManager>,
+  agentRouter: AgentRouter,
+  defaultSystemPrompt: string,
   memoryBackend?: ReturnType<typeof createMemoryBackend>,
   skillRegistry?: SkillRegistry,
   voiceProcessor?: VoiceProcessor,
@@ -713,6 +722,10 @@ function handleInboundMessage(
       // After voice processing, ensure we have text to work with.
       if (!processedMsg.text) return;
 
+      // Resolve routing decision early — before context creation so the
+      // routed system prompt is used on the very first message.
+      const routing = agentRouter.route(processedMsg, defaultSystemPrompt);
+
       // Get or create a shared context — key mirrors MessageRouter.buildRouteKey
       // so topic/thread conversations are isolated from each other.
       const { userId, groupId, threadId } = msg.from;
@@ -724,19 +737,32 @@ function handleInboundMessage(
       let sharedContext = conversationContexts.get(contextKey);
       if (!sharedContext) {
         sharedContext = new ContextManager();
-        if (routeResult.config.systemPrompt) {
-          sharedContext.setSystemPrompt(routeResult.config.systemPrompt);
-        }
+        // Use the routed system prompt (may be agent-specific or the default).
+        const initPrompt = routing.systemPrompt
+          ?? routeResult.config.systemPrompt
+          ?? defaultSystemPrompt;
+        sharedContext.setSystemPrompt(initPrompt);
         conversationContexts.set(contextKey, sharedContext);
       }
 
-      const session = new Session(routeResult.config, { sharedContext });
+      // Build routed session config.
+      const routedSessionConfig = {
+        ...routeResult.config,
+        model: routing.model ?? routeResult.config.model,
+        systemPrompt: routing.systemPrompt ?? routeResult.config.systemPrompt,
+      };
+
+      const session = new Session(routedSessionConfig, { sharedContext });
       // Build exclusion list based on autonomy level and feature flags.
       const toolExclude = config.autonomy.level === 'readonly'
         ? ['bash', 'file_write', 'file_edit', 'delegate', 'browser']
         : ['delegate', 'browser'];
       if (!config.mesh?.enabled) {
         toolExclude.push('mesh');
+      }
+      // Merge per-agent tool exclusions from routing decision.
+      for (const t of routing.toolExclude) {
+        if (!toolExclude.includes(t)) toolExclude.push(t);
       }
       const tools = ToolRegistry.createDefault({ exclude: toolExclude });
 
@@ -806,7 +832,7 @@ function handleInboundMessage(
       }
 
       const loop = new AgentLoop(session, engine, tools.list(), observer, {
-        maxIterations: 20, // Lower limit for channel messages.
+        maxIterations: routing.maxIterations, // Per-agent routing override.
         maxRetries: 2,
         enableStateSnapshots: true,
         verifier,

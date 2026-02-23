@@ -170,64 +170,33 @@ Existing shell environment variables take precedence over `.env` values — you 
 
 ## Run as a System Service
 
-### Using systemd (Linux)
-
-Create `/etc/systemd/system/ch4p-gateway.service`:
-
-```ini
-[Unit]
-Description=ch4p Gateway
-After=network.target
-
-[Service]
-Type=simple
-User=youruser
-EnvironmentFile=/home/youruser/.ch4p/.env
-ExecStart=/usr/local/bin/ch4p gateway
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
+Use `ch4p install` to install the gateway as a persistent background service. It auto-detects your platform and uses the appropriate service manager — no sudo required.
 
 ```bash
-sudo systemctl enable ch4p-gateway
-sudo systemctl start ch4p-gateway
+ch4p install
 ```
 
-### Using launchd (macOS)
+This creates and starts the service, routes logs to `~/.ch4p/logs/`, and configures it to restart automatically after crashes.
 
-Create `~/Library/LaunchAgents/com.ch4p.gateway.plist`:
+| Command | Description |
+|---------|-------------|
+| `ch4p install` | Install and start the daemon |
+| `ch4p install --status` | Show current service status |
+| `ch4p install --logs` | Tail live logs |
+| `ch4p install --uninstall` | Remove the daemon |
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.ch4p.gateway</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/usr/local/bin/ch4p</string>
-        <string>gateway</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-</dict>
-</plist>
-```
+### Platforms
 
-Load:
+| Platform | Service manager | Unit location |
+|----------|----------------|---------------|
+| macOS | launchd user agent | `~/Library/LaunchAgents/com.ch4p.gateway.plist` |
+| Linux | systemd user service | `~/.config/systemd/user/ch4p-gateway.service` |
 
-```bash
-launchctl load ~/Library/LaunchAgents/com.ch4p.gateway.plist
-```
+No `sudo` is required on either platform — the service runs as your user and picks up tokens from `~/.ch4p/.env` automatically.
+
+### Manual service files (advanced)
+
+If you prefer to manage the service file yourself, the generated files are standard platform formats. Run `ch4p install` once, inspect the file, then customize as needed before reloading with `systemctl --user daemon-reload` (Linux) or `launchctl unload && launchctl load` (macOS).
 
 ---
 
