@@ -83,7 +83,7 @@ LLM provider configuration.
 | `provider` | `string` | **required** | Provider name: `"anthropic"`, `"openai"`, `"ollama"`, or custom. |
 | `apiKey` | `string` | `null` | API key for the provider. Not required for local providers. |
 | `baseUrl` | `string` | provider default | Override the API base URL. |
-| `model` | `string` | provider default | Model identifier (e.g., `"claude-sonnet-4-20250514"`, `"gpt-4o"`). |
+| `model` | `string` | provider default | Model identifier (e.g., `"claude-sonnet-4-6"`, `"gpt-4o"`). |
 | `maxTokens` | `number` | `4096` | Maximum tokens in completion response. |
 | `temperature` | `number` | `0.7` | Sampling temperature (0.0 - 2.0). |
 | `topP` | `number` | `1.0` | Nucleus sampling parameter. |
@@ -114,8 +114,14 @@ Per-channel configuration. Each key is a channel name.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `mode` | `string` | `"polling"` | `"polling"` or `"webhook"`. |
+| `webhookUrl` | `string` | `null` | Public HTTPS URL for Telegram to POST updates to (webhook mode only). |
+| `webhookSecret` | `string` | `null` | Secret token for webhook signature verification. |
 | `pollInterval` | `number` | `1000` | Polling interval in ms (polling mode only). |
+| `allowedUsers` | `string[]` | `[]` | Numeric Telegram user IDs allowed to interact. Empty = all. |
+| `streamMode` | `string` | `"off"` | `"off"`, `"edit"` (progressive edits), or `"block"` (wait then send). |
 | `parseMode` | `string` | `"Markdown"` | Message format: `"Markdown"`, `"HTML"`, `"MarkdownV2"`. |
+
+Telegram forum topics (supergroups with topics enabled) are automatically supported. Messages in a topic are routed to a shared session for that topic. Replies are sent into the correct thread via `message_thread_id`.
 
 ### channels.discord
 

@@ -247,6 +247,25 @@ curl http://localhost:18789/sessions
 
 ---
 
+## Graceful Shutdown
+
+The gateway drains in-flight messages before exiting. When it receives `SIGINT` (Ctrl+C) or `SIGTERM`:
+
+1. **Channels stop** — no new inbound messages are accepted.
+2. **Drain** — active agent runs are given up to 30 seconds to complete. A warning is printed if the timeout expires with work still in flight.
+3. **Cleanup** — tunnel, memory WAL checkpoint, observer flush.
+
+This means a `systemd` or Docker rolling restart can send `SIGTERM` to the old process while the new one starts, and in-flight responses will still be delivered cleanly.
+
+```ini
+# /etc/systemd/system/ch4p.service
+[Service]
+ExecStart=/usr/local/bin/ch4p gateway
+Restart=on-failure
+TimeoutStopSec=40
+KillMode=mixed
+```
+
 ## Common Pitfalls
 
 - **Port in use**: Kill stale processes with `lsof -ti:18789 | xargs kill -9` before restarting.
