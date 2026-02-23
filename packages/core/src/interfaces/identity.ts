@@ -173,6 +173,21 @@ export interface IIdentityProvider {
   /** Read a metadata value by key. */
   getMetadata(agentId: string, key: string): Promise<Uint8Array | null>;
 
+  // --- Wallet Binding (EIP-712) ---
+
+  /**
+   * Bind an operational wallet to an agent identity via EIP-712 signature.
+   *
+   * The wallet address signs a typed data message proving consent. The NFT
+   * owner then submits this signature on-chain to bind the wallet. This lets
+   * the agent operate with a hot wallet while the NFT owner key stays cold.
+   */
+  bindWallet(agentId: string, walletAddress: string, deadline: number): Promise<void>;
+  /** Remove the bound wallet from an agent. */
+  unbindWallet(agentId: string): Promise<void>;
+  /** Get the bound operational wallet for an agent (null if unset). */
+  getAgentWallet(agentId: string): Promise<string | null>;
+
   // --- Reputation Registry ---
 
   /** Get aggregated reputation for an agent, filtered by trusted clients. */

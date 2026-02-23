@@ -22,6 +22,9 @@ import type {
   SanitizationResult,
   InputValidationResult,
   ConversationContext,
+  AgentTrustContext,
+  AgentTrustDecision,
+  IIdentityProvider,
 } from '@ch4p/core';
 
 import { FilesystemScope } from './filesystem-scope.js';
@@ -63,6 +66,23 @@ export interface DefaultSecurityPolicyConfig {
    * Defaults to ~/.ch4p/secrets.enc
    */
   secretsStorePath?: string;
+
+  /**
+   * Optional identity provider for on-chain trust gating (ERC-8004).
+   * When provided, enables checkAgentTrust() for reputation-based access control.
+   */
+  identityProvider?: IIdentityProvider;
+
+  /**
+   * Trust thresholds for gating external agent connections.
+   * Only used when identityProvider is set.
+   */
+  trust?: {
+    minReputation?: number;
+    minValidation?: number;
+    trustedClients?: string[];
+    trustedValidators?: string[];
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -79,6 +99,8 @@ export class DefaultSecurityPolicy implements ISecurityPolicy {
   private readonly inputValidator: InputValidator;
   private readonly autonomyGuard: AutonomyGuard;
   private readonly securityAuditor: SecurityAuditor;
+  private readonly identityProvider: IIdentityProvider | null;
+  private readonly trustConfig: { minReputation: number; minValidation: number; trustedClients: string[]; trustedValidators: string[] };
 
   constructor(config: DefaultSecurityPolicyConfig) {
     this.autonomyLevel = config.autonomyLevel ?? 'supervised';
@@ -113,6 +135,15 @@ export class DefaultSecurityPolicy implements ISecurityPolicy {
       blockedPaths: this.filesystemScope.getBlockedPaths(),
       secretsStorePath: secretsPath,
     });
+
+    // Identity / trust (optional — no-op when not configured).
+    this.identityProvider = config.identityProvider ?? null;
+    this.trustConfig = {
+      minReputation: config.trust?.minReputation ?? 0,
+      minValidation: config.trust?.minValidation ?? 0,
+      trustedClients: config.trust?.trustedClients ?? [],
+      trustedValidators: config.trust?.trustedValidators ?? [],
+    };
   }
 
   // -----------------------------------------------------------------------
@@ -145,6 +176,62 @@ export class DefaultSecurityPolicy implements ISecurityPolicy {
 
   validateInput(text: string, conversationContext?: ConversationContext): InputValidationResult {
     return this.inputValidator.validate(text, conversationContext);
+  }
+
+  // -----------------------------------------------------------------------
+  // ISecurityPolicy -- ERC-8004 on-chain trust gating
+  // -----------------------------------------------------------------------
+
+  async checkAgentTrust(agentId: string, context: AgentTrustContext): Promise<AgentTrustDecision> {
+    if (!this.identityProvider) {
+      return { allowed: true, reason: 'No identity provider configured; trust check skipped.' };
+    }
+
+    try {
+      const reputation = await this.identityProvider.getReputation(
+        agentId,
+        this.trustConfig.trustedClients.length > 0 ? this.trustConfig.trustedClients : undefined,
+      );
+
+      const validation = await this.identityProvider.getValidationSummary(
+        agentId,
+        this.trustConfig.trustedValidators.length > 0 ? this.trustConfig.trustedValidators : undefined,
+      );
+
+      const repScore = reputation.normalizedScore;
+      const valScore = validation.averageResponse;
+
+      if (repScore < this.trustConfig.minReputation) {
+        return {
+          allowed: false,
+          reason: `Reputation score ${repScore} below minimum ${this.trustConfig.minReputation} for ${context.operation}.`,
+          reputationScore: repScore,
+          validationScore: valScore,
+        };
+      }
+
+      if (valScore < this.trustConfig.minValidation) {
+        return {
+          allowed: false,
+          reason: `Validation score ${valScore} below minimum ${this.trustConfig.minValidation} for ${context.operation}.`,
+          reputationScore: repScore,
+          validationScore: valScore,
+        };
+      }
+
+      return {
+        allowed: true,
+        reason: `Agent ${agentId} meets trust thresholds for ${context.operation}.`,
+        reputationScore: repScore,
+        validationScore: valScore,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        allowed: false,
+        reason: `Trust check failed: ${message}`,
+      };
+    }
   }
 
   // -----------------------------------------------------------------------

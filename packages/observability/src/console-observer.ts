@@ -14,6 +14,7 @@ import type {
   LLMCallEvent,
   ChannelMessageEvent,
   SecurityEvent,
+  IdentityEvent,
 } from '@ch4p/core';
 
 // ---------------------------------------------------------------------------
@@ -206,6 +207,19 @@ export class ConsoleObserver implements IObserver {
     console.warn(
       `${DIM}${ts}${RESET} ${this.tag('SECURITY', FG.red)} ${color}[${severity.toUpperCase()}]${RESET}` +
         ` ${BOLD}${event.type}${RESET}` +
+        ` ${DIM}details=${RESET}${JSON.stringify(event.details)}`,
+    );
+  }
+
+  onIdentityEvent(event: IdentityEvent): void {
+    if (!this.shouldLog('info')) return;
+    const ts = this.timestamp();
+    const isFail = event.type === 'trust_check_failed';
+    const color = isFail ? FG.red : FG.green;
+    console.log(
+      `${DIM}${ts}${RESET} ${this.tag('IDENTITY', FG.cyan)} ${color}${event.type}${RESET}` +
+        (event.agentId ? ` ${DIM}agent=${RESET}${event.agentId}` : '') +
+        (event.chainId !== undefined ? ` ${DIM}chain=${RESET}${event.chainId}` : '') +
         ` ${DIM}details=${RESET}${JSON.stringify(event.details)}`,
     );
   }

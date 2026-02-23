@@ -22,6 +22,7 @@ import type {
   LLMCallEvent,
   ChannelMessageEvent,
   SecurityEvent,
+  IdentityEvent,
 } from '@ch4p/core';
 
 // ---------------------------------------------------------------------------
@@ -187,6 +188,16 @@ export class FileObserver implements IObserver {
   onSecurityEvent(event: SecurityEvent): void {
     this.write('security_event', {
       securityType: event.type,
+      details: event.details,
+      timestamp: event.timestamp.toISOString(),
+    });
+  }
+
+  onIdentityEvent(event: IdentityEvent): void {
+    this.write('identity_event', {
+      identityType: event.type,
+      agentId: event.agentId,
+      chainId: event.chainId,
       details: event.details,
       timestamp: event.timestamp.toISOString(),
     });

@@ -14,6 +14,7 @@ import type {
   LLMCallEvent,
   ChannelMessageEvent,
   SecurityEvent,
+  IdentityEvent,
 } from '@ch4p/core';
 
 export class MultiObserver implements IObserver {
@@ -64,6 +65,10 @@ export class MultiObserver implements IObserver {
 
   onSecurityEvent(event: SecurityEvent): void {
     this.safely((c) => c.onSecurityEvent(event));
+  }
+
+  onIdentityEvent(event: IdentityEvent): void {
+    this.safely((c) => c.onIdentityEvent?.(event));
   }
 
   async flush(): Promise<void> {

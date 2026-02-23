@@ -1,5 +1,5 @@
 import { NoopObserver } from './noop-observer.js';
-import type { SessionMeta, SessionStats } from '@ch4p/core';
+import type { SessionMeta, SessionStats, IdentityEvent } from '@ch4p/core';
 
 describe('NoopObserver', () => {
   let observer: NoopObserver;
@@ -80,6 +80,17 @@ describe('NoopObserver', () => {
     ).not.toThrow();
   });
 
+  it('onIdentityEvent does not throw', () => {
+    const event: IdentityEvent = {
+      type: 'identity_registered',
+      agentId: 'agent-1',
+      chainId: 8453,
+      details: { txHash: '0xabc' },
+      timestamp: new Date(),
+    };
+    expect(() => observer.onIdentityEvent(event)).not.toThrow();
+  });
+
   it('flush resolves', async () => {
     await expect(observer.flush()).resolves.toBeUndefined();
   });
@@ -92,6 +103,7 @@ describe('NoopObserver', () => {
     expect(typeof observer.onChannelMessage).toBe('function');
     expect(typeof observer.onError).toBe('function');
     expect(typeof observer.onSecurityEvent).toBe('function');
+    expect(typeof observer.onIdentityEvent).toBe('function');
     expect(typeof observer.flush).toBe('function');
   });
 });

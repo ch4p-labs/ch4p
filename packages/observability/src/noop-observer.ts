@@ -13,6 +13,7 @@ import type {
   LLMCallEvent,
   ChannelMessageEvent,
   SecurityEvent,
+  IdentityEvent,
 } from '@ch4p/core';
 
 export class NoopObserver implements IObserver {
@@ -41,6 +42,10 @@ export class NoopObserver implements IObserver {
   }
 
   onSecurityEvent(_event: SecurityEvent): void {
+    // intentionally empty
+  }
+
+  onIdentityEvent(_event: IdentityEvent): void {
     // intentionally empty
   }
 

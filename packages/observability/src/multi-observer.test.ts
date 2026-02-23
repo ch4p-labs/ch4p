@@ -8,6 +8,7 @@ import type {
   LLMCallEvent,
   ChannelMessageEvent,
   SecurityEvent,
+  IdentityEvent,
 } from '@ch4p/core';
 
 function makeMockObserver(): IObserver {
@@ -140,6 +141,35 @@ describe('MultiObserver', () => {
       multi.onSecurityEvent(event);
       expect(child1.onSecurityEvent).toHaveBeenCalledWith(event);
       expect(child2.onSecurityEvent).toHaveBeenCalledWith(event);
+    });
+  });
+
+  describe('onIdentityEvent', () => {
+    it('delegates to all children that implement it', () => {
+      const event: IdentityEvent = {
+        type: 'trust_check_passed',
+        agentId: 'agent-1',
+        chainId: 8453,
+        details: { operation: 'delegate' },
+        timestamp: new Date(),
+      };
+      const child1WithIdentity = { ...child1, onIdentityEvent: vi.fn() };
+      const child2WithIdentity = { ...child2, onIdentityEvent: vi.fn() };
+      const multi2 = new MultiObserver([child1WithIdentity, child2WithIdentity]);
+      multi2.onIdentityEvent(event);
+      expect(child1WithIdentity.onIdentityEvent).toHaveBeenCalledWith(event);
+      expect(child2WithIdentity.onIdentityEvent).toHaveBeenCalledWith(event);
+    });
+
+    it('does not throw when children lack onIdentityEvent', () => {
+      // makeMockObserver() does not include onIdentityEvent — it's optional
+      const event: IdentityEvent = {
+        type: 'trust_check_failed',
+        agentId: 'agent-2',
+        details: { reason: 'low score' },
+        timestamp: new Date(),
+      };
+      expect(() => multi.onIdentityEvent(event)).not.toThrow();
     });
   });
 

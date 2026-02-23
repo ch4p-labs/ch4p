@@ -8,6 +8,7 @@ import type {
   LLMCallEvent,
   ChannelMessageEvent,
   SecurityEvent,
+  IdentityEvent,
 } from '@ch4p/core';
 
 function makeMeta(): SessionMeta {
@@ -228,6 +229,66 @@ describe('ConsoleObserver', () => {
       expect(consoleSpy.warn).toHaveBeenCalledWith(
         expect.stringContaining('SECURITY'),
       );
+    });
+  });
+
+  describe('onIdentityEvent', () => {
+    it('logs identity events with IDENTITY tag', () => {
+      const observer = new ConsoleObserver('info');
+      const event: IdentityEvent = {
+        type: 'identity_registered',
+        agentId: 'agent-1',
+        chainId: 8453,
+        details: { txHash: '0xabc' },
+        timestamp: new Date(),
+      };
+      observer.onIdentityEvent(event);
+      expect(consoleSpy.log).toHaveBeenCalledWith(
+        expect.stringContaining('IDENTITY'),
+      );
+      expect(consoleSpy.log).toHaveBeenCalledWith(
+        expect.stringContaining('identity_registered'),
+      );
+    });
+
+    it('includes agentId and chainId in output', () => {
+      const observer = new ConsoleObserver('info');
+      const event: IdentityEvent = {
+        type: 'trust_check_passed',
+        agentId: 'agent-42',
+        chainId: 1,
+        details: {},
+        timestamp: new Date(),
+      };
+      observer.onIdentityEvent(event);
+      const output = consoleSpy.log.mock.calls.flat().join('');
+      expect(output).toContain('agent-42');
+      expect(output).toContain('1');
+    });
+
+    it('still logs trust_check_failed events', () => {
+      const observer = new ConsoleObserver('info');
+      const event: IdentityEvent = {
+        type: 'trust_check_failed',
+        agentId: 'agent-bad',
+        details: { reason: 'low score' },
+        timestamp: new Date(),
+      };
+      observer.onIdentityEvent(event);
+      expect(consoleSpy.log).toHaveBeenCalledWith(
+        expect.stringContaining('trust_check_failed'),
+      );
+    });
+
+    it('suppresses identity events below log level', () => {
+      const observer = new ConsoleObserver('warn');
+      const event: IdentityEvent = {
+        type: 'reputation_received',
+        details: {},
+        timestamp: new Date(),
+      };
+      observer.onIdentityEvent(event);
+      expect(consoleSpy.log).not.toHaveBeenCalled();
     });
   });
 

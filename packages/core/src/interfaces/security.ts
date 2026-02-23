@@ -64,6 +64,29 @@ export interface ISecurityPolicy {
   // Bagman-inspired I/O boundary defense
   sanitizeOutput(text: string): SanitizationResult;
   validateInput(text: string, conversationContext?: ConversationContext): InputValidationResult;
+
+  // ERC-8004 on-chain trust gating (optional — no-op when identity plugin is absent)
+  checkAgentTrust?(agentId: string, context: AgentTrustContext): Promise<AgentTrustDecision>;
+}
+
+/** Context for on-chain trust assessment. */
+export interface AgentTrustContext {
+  /** What operation is being gated. */
+  operation: 'delegate' | 'mcp_connect' | 'a2a_call' | 'tool_proxy';
+  /** Chain ID of the identity registry. */
+  chainId?: number;
+  /** Pre-fetched reputation score (if available). */
+  reputationScore?: number;
+  /** Pre-fetched validation score (if available). */
+  validationScore?: number;
+}
+
+/** Result of an on-chain trust check. */
+export interface AgentTrustDecision {
+  allowed: boolean;
+  reason: string;
+  reputationScore?: number;
+  validationScore?: number;
 }
 
 export interface ConversationContext {

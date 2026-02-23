@@ -56,6 +56,21 @@ export interface SecurityEvent {
   timestamp: Date;
 }
 
+export interface IdentityEvent {
+  type:
+    | 'identity_registered'
+    | 'reputation_received'
+    | 'reputation_submitted'
+    | 'validation_requested'
+    | 'validation_received'
+    | 'trust_check_passed'
+    | 'trust_check_failed';
+  agentId?: string;
+  chainId?: number;
+  details: Record<string, unknown>;
+  timestamp: Date;
+}
+
 export interface IObserver {
   onSessionStart(meta: SessionMeta): void;
   onSessionEnd(meta: SessionMeta, stats: SessionStats): void;
@@ -64,5 +79,6 @@ export interface IObserver {
   onChannelMessage(event: ChannelMessageEvent): void;
   onError(error: Error, context: Record<string, unknown>): void;
   onSecurityEvent(event: SecurityEvent): void;
+  onIdentityEvent?(event: IdentityEvent): void;
   flush?(): Promise<void>;
 }
