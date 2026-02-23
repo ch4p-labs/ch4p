@@ -114,6 +114,12 @@ importers:
       '@ch4p/core':
         specifier: workspace:*
         version: link:../core
+      '@ch4p/security':
+        specifier: workspace:*
+        version: link:../security
+      '@ch4p/tools':
+        specifier: workspace:*
+        version: link:../tools
 
   packages/canvas:
     dependencies:

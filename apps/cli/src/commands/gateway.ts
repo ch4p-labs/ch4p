@@ -15,6 +15,7 @@
  *   ch4p gateway --port N — override the configured port
  */
 
+import { createRequire } from 'node:module';
 import type { Ch4pConfig, IChannel, InboundMessage, ISecurityPolicy, ITunnelProvider } from '@ch4p/core';
 import { createX402Middleware, X402PayTool, createEIP712Signer, walletAddress } from '@ch4p/plugin-x402';
 import type { X402Config } from '@ch4p/plugin-x402';
@@ -42,7 +43,7 @@ import {
   MacOSChannel,
 } from '@ch4p/channels';
 import { createTunnelProvider } from '@ch4p/tunnels';
-import { Session, AgentLoop, ContextManager, FormatVerifier, LLMVerifier, createAutoRecallHook, createAutoSummarizeHook } from '@ch4p/agent';
+import { Session, AgentLoop, ContextManager, FormatVerifier, LLMVerifier, createAutoRecallHook, createAutoSummarizeHook, ToolWorkerPool } from '@ch4p/agent';
 import { NativeEngine, createClaudeCliEngine, createCodexCliEngine } from '@ch4p/engines';
 import { ProviderRegistry } from '@ch4p/providers';
 import { ToolRegistry, LoadSkillTool } from '@ch4p/tools';
@@ -283,6 +284,25 @@ export async function gateway(args: string[]): Promise<void> {
   };
   const observer = createObserver(obsCfg);
 
+  // Create tool worker pool — provides process isolation for heavyweight tools
+  // (web_fetch, browser). The pool is created once and shared across all sessions.
+  // NOTE: x402Signer is not available in worker context (functions are not
+  // serialisable across thread boundaries). If web_fetch hits a 402 in the worker,
+  // it returns x402Required: true and the agent uses x402_pay manually.
+  const _require = createRequire(import.meta.url);
+  let workerPool: ToolWorkerPool | undefined;
+  try {
+    const workerScriptPath = _require.resolve('@ch4p/agent/worker');
+    workerPool = new ToolWorkerPool({
+      workerScript: workerScriptPath,
+      maxWorkers: 4,
+      taskTimeoutMs: 60_000,
+    });
+  } catch {
+    // Worker script not built yet — heavyweight tools run inline.
+    workerPool = undefined;
+  }
+
   // Create voice processor (optional).
   let voiceProcessor: VoiceProcessor | undefined;
   const voiceCfg = config.voice;
@@ -392,6 +412,7 @@ export async function gateway(args: string[]): Promise<void> {
     kvRow('Engine', engine ? engine.name : `${YELLOW}none (no API key)${RESET}`),
     kvRow('Memory', memoryBackend ? config.memory.backend : `${DIM}disabled${RESET}`),
     kvRow('Voice', voiceProcessor ? `${GREEN}enabled${RESET} (STT: ${voiceCfg?.stt.provider ?? '?'}, TTS: ${voiceCfg?.tts.provider ?? 'none'})` : `${DIM}disabled${RESET}`),
+    kvRow('Workers', workerPool ? `${GREEN}enabled${RESET} ${DIM}(max 4 threads)${RESET}` : `${DIM}inline (worker script not built)${RESET}`),
     kvRow('Identity', agentRegistration ? `${GREEN}enabled${RESET} (chain ${config.identity?.chainId ?? 8453})` : `${DIM}disabled${RESET}`),
     kvRow('x402', x402Cfg?.enabled ? `${GREEN}enabled${RESET} ${DIM}(${x402Cfg.server?.network ?? 'base'})${RESET}` : `${DIM}disabled${RESET}`),
   ]));
@@ -600,6 +621,15 @@ export async function gateway(args: string[]): Promise<void> {
           await tunnel.stop();
         } catch {
           // Best-effort stop.
+        }
+      }
+
+      // Shut down the tool worker pool — terminates all worker threads.
+      if (workerPool) {
+        try {
+          await workerPool.shutdown();
+        } catch {
+          // Best-effort shutdown.
         }
       }
 
@@ -878,6 +908,7 @@ function handleInboundMessage(
         toolContextExtensions: Object.keys(toolContextExtensions).length > 0
           ? toolContextExtensions
           : undefined,
+        workerPool,
       });
 
       let responseText = '';

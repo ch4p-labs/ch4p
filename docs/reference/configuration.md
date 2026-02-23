@@ -621,6 +621,30 @@ If no rule matches, the default agent configuration is used.
 
 ---
 
+## agent.workerPool
+
+Heavyweight tools (`web_fetch`, `browser`) run inside isolated worker threads when the
+worker pool is enabled. This prevents blocking the main agent loop during long-running
+HTTP requests or browser operations.
+
+The worker pool is enabled automatically when the `@ch4p/agent` package has been built
+(`corepack pnpm -r build`). No config is required — the gateway detects the compiled
+worker script at startup and logs `Workers: enabled (max 4 threads)` in the banner.
+
+### x402 limitation in worker context
+
+`x402Signer` is a function and cannot be serialised across worker thread boundaries.
+When `web_fetch` runs in the worker and encounters an HTTP 402 Payment Required response,
+it returns `{ success: false, x402Required: true }`. The agent then uses the `x402_pay`
+tool to construct the payment header and retries manually.
+
+This fallback is transparent to the end user — the agent handles it automatically in the
+next tool call. Auto-payment (transparent 402 handling without model intervention) only
+works when `web_fetch` runs inline on the main thread, which happens when the worker
+script is not yet built.
+
+---
+
 ## logging
 
 Logging configuration.

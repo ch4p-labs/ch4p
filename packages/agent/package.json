@@ -8,14 +8,19 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./worker": {
+      "import": "./dist/worker.js"
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts",
-    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@ch4p/core": "workspace:*"
+    "@ch4p/core": "workspace:*",
+    "@ch4p/tools": "workspace:*",
+    "@ch4p/security": "workspace:*"
   }
 }
