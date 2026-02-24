@@ -290,14 +290,18 @@ export class SubprocessEngine implements IEngine {
         });
       }
 
-      // Write prompt to stdin if using stdin mode, then keep stdin open so
-      // permission-prompt responses can be forwarded via steer().
+      // Write prompt to stdin if using stdin mode.
       if (child.stdin) {
-        if (stdinRef) stdinRef.stream = child.stdin;
         if (this.promptMode === 'stdin') {
           child.stdin.write(prompt);
+          // Keep stdin open for steer() permission-prompt responses.
+          if (stdinRef) stdinRef.stream = child.stdin;
+        } else {
+          // For 'arg' and 'flag' modes the prompt is already in the CLI
+          // arguments.  Close stdin immediately so CLIs that auto-detect
+          // piped input (e.g. `claude --print`) don't block waiting for EOF.
+          child.stdin.end();
         }
-        // Do NOT close stdin here — keep open for interactive responses.
       }
 
       let fullAnswer = '';

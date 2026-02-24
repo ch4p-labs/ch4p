@@ -201,28 +201,29 @@ export function loadEnvFile(): number {
 
 /**
  * Recursively resolve ${VAR_NAME} references in config values.
- * Only string values are processed. Missing env vars resolve to empty string
- * and a warning is logged so users know which variables are undefined.
+ * Only string values are processed. Missing env vars resolve to empty string.
+ * Returns the resolved config and the set of unresolved variable names so
+ * the caller can warn once per variable (avoids noisy duplicate warnings).
  */
-function resolveEnvVars(obj: unknown): unknown {
+function resolveEnvVars(obj: unknown, missing?: Set<string>): unknown {
   if (typeof obj === 'string') {
     return obj.replace(/\$\{([^}]+)\}/g, (_match, varName: string) => {
       const value = process.env[varName];
       if (value === undefined) {
-        console.warn(`  ⚠  Config references \${${varName}} but it is not set in environment.`);
+        missing?.add(varName);
       }
       return value ?? '';
     });
   }
 
   if (Array.isArray(obj)) {
-    return obj.map(resolveEnvVars);
+    return obj.map((item) => resolveEnvVars(item, missing));
   }
 
   if (obj !== null && typeof obj === 'object') {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      result[key] = resolveEnvVars(value);
+      result[key] = resolveEnvVars(value, missing);
     }
     return result;
   }
@@ -393,7 +394,13 @@ export function loadConfig(): Ch4pConfig {
   }
 
   // Resolve env vars in the merged config.
-  const resolved = resolveEnvVars(merged) as Ch4pConfig;
+  const missingVars = new Set<string>();
+  const resolved = resolveEnvVars(merged, missingVars) as Ch4pConfig;
+
+  // Warn once per missing variable (deduplicated).
+  for (const varName of missingVars) {
+    console.warn(`  \u26a0  Config references \${${varName}} but it is not set in environment.`);
+  }
 
   // Validate.
   const errors = validateConfig(resolved);
