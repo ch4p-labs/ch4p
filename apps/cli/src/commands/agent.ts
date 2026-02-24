@@ -17,7 +17,6 @@ import * as readline from 'node:readline';
 import type { Ch4pConfig, IEngine, IMemoryBackend, ISecurityPolicy, SessionConfig } from '@ch4p/core';
 import { generateId } from '@ch4p/core';
 import { NativeEngine, createClaudeCliEngine, createCodexCliEngine, SubprocessEngine } from '@ch4p/engines';
-import type { SubprocessEngineConfig } from '@ch4p/engines';
 import { ProviderRegistry } from '@ch4p/providers';
 import { Session, AgentLoop, ContextManager, FormatVerifier, LLMVerifier, createAutoRecallHook, createAutoSummarizeHook } from '@ch4p/agent';
 import type { AgentEvent, AgentLoopOpts, SessionOpts } from '@ch4p/agent';
@@ -34,7 +33,7 @@ import { loadConfig, getLogsDir } from '../config.js';
 import { buildSystemPrompt } from '../system-prompt.js';
 import { playBriefSplash } from './splash.js';
 import {
-  TEAL, TEAL_DIM, RESET, BOLD, DIM, GREEN, YELLOW, RED, MAGENTA, BLUE,
+  TEAL, TEAL_DIM, RESET, BOLD, DIM, GREEN, YELLOW, RED, BLUE,
   BOX, CHECK, CROSS, WARN,
   CHAPPIE_GLYPH, PROMPT_CHAR,
   chatHeader, sessionBanner, tokenFooter, separator,
@@ -478,7 +477,7 @@ function createSecurityPolicy(config: Ch4pConfig, cwd: string): ISecurityPolicy 
  * Returns a FormatVerifier by default; upgrades to LLMVerifier when semantic
  * checks are enabled and an LLM provider is available.
  */
-function createVerifier(config: Ch4pConfig, engine: IEngine) {
+function createVerifier(config: Ch4pConfig, _engine: IEngine) {
   const vCfg = config.verification;
   if (!vCfg?.enabled) return undefined;
 

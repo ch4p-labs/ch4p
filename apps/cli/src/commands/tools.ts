@@ -6,7 +6,7 @@
  */
 
 import { ToolRegistry } from '@ch4p/tools';
-import { TEAL, RESET, BOLD, DIM, GREEN, YELLOW, MAGENTA, box, separator } from '../ui.js';
+import { TEAL, RESET, BOLD, DIM, GREEN, YELLOW, MAGENTA, separator } from '../ui.js';
 
 // ---------------------------------------------------------------------------
 // Display

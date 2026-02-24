@@ -121,6 +121,7 @@ async function identityStatus(): Promise<void> {
   if (idConfig.agentId && hasRpc) {
     console.log('');
     try {
+      // @ts-expect-error — @ch4p/plugin-erc8004 is a planned package, not yet created
       const { EthIdentityProvider } = await import('@ch4p/plugin-erc8004');
       const provider = new EthIdentityProvider({
         enabled: true,
@@ -208,6 +209,7 @@ async function identityRegister(): Promise<void> {
   console.log(`  ${DIM}Registering agent on-chain...${RESET}`);
 
   try {
+    // @ts-expect-error — @ch4p/plugin-erc8004 is a planned package, not yet created
     const { EthIdentityProvider } = await import('@ch4p/plugin-erc8004');
     const provider = new EthIdentityProvider({
       enabled: true,

@@ -16,7 +16,7 @@
  */
 
 import { createRequire } from 'node:module';
-import type { Ch4pConfig, IChannel, InboundMessage, ISecurityPolicy, ITunnelProvider } from '@ch4p/core';
+import type { Ch4pConfig, IChannel, IMemoryBackend, InboundMessage, ITunnelProvider } from '@ch4p/core';
 import { createX402Middleware, X402PayTool, createEIP712Signer, walletAddress } from '@ch4p/plugin-x402';
 import type { X402Config } from '@ch4p/plugin-x402';
 import { generateId } from '@ch4p/core';
@@ -221,7 +221,7 @@ export async function gateway(args: string[]): Promise<void> {
   }
 
   // Create memory backend (optional) — needed before system prompt is built.
-  let memoryBackend;
+  let memoryBackend: IMemoryBackend | undefined;
   try {
     const memCfg: MemoryConfig = {
       backend: config.memory.backend,
@@ -283,7 +283,7 @@ export async function gateway(args: string[]): Promise<void> {
   }
 
   // Create x402 middleware if configured.
-  const x402Cfg = (config as Record<string, unknown>).x402 as X402Config | undefined;
+  const x402Cfg = (config as unknown as Record<string, unknown>).x402 as X402Config | undefined;
   const x402Middleware = x402Cfg ? createX402Middleware(x402Cfg) : null;
 
   // Validate x402 client private key at startup — fail fast before bind.
@@ -392,12 +392,8 @@ export async function gateway(args: string[]): Promise<void> {
 
   // Create LogChannel for cron/webhook responses (logs to observer).
   const logChannel = new LogChannel({
-    onResponse: (_to, msg) => {
-      observer.onEvent?.({
-        type: 'cron_response',
-        timestamp: new Date(),
-        data: { text: msg.text },
-      });
+    onResponse: () => {
+      // Cron/webhook responses are handled by the channel itself.
     },
   });
 
@@ -584,7 +580,7 @@ export async function gateway(args: string[]): Promise<void> {
       tunnel = createTunnelProvider(tunnelProvider);
       const tunnelCfg = {
         ...config.tunnel,
-        localPort: port,
+        port,
         localHost: host,
       };
       const tunnelInfo = await tunnel.start(tunnelCfg);
@@ -606,7 +602,7 @@ export async function gateway(args: string[]): Promise<void> {
 
   // ----- Start cron scheduler (optional) -----
   let scheduler: Scheduler | undefined;
-  const schedulerCfg = (config as Record<string, unknown>).scheduler as Record<string, unknown> | undefined;
+  const schedulerCfg = (config as unknown as Record<string, unknown>).scheduler as Record<string, unknown> | undefined;
   if (schedulerCfg?.enabled) {
     const jobs = (schedulerCfg.jobs ?? []) as Array<{ name: string; schedule: string; message: string; enabled?: boolean; userId?: string }>;
     if (jobs.length > 0) {
@@ -731,7 +727,7 @@ export async function gateway(args: string[]): Promise<void> {
     process.on('unhandledRejection', (reason) => {
       const msg = reason instanceof Error ? reason.message : String(reason);
       console.error(`  ${RED}✗ Unhandled rejection:${RESET} ${msg}`);
-      observer.log?.('error', `Unhandled rejection: ${msg}`);
+      observer.onError(new Error(`Unhandled rejection: ${msg}`), { source: 'gateway' });
     });
   });
 }
@@ -917,7 +913,7 @@ function handleInboundMessage(
       }
 
       // Register x402_pay tool when x402 plugin is enabled.
-      const x402PluginCfg = (config as Record<string, unknown>).x402 as X402Config | undefined;
+      const x402PluginCfg = (config as unknown as Record<string, unknown>).x402 as X402Config | undefined;
       if (x402PluginCfg?.enabled) {
         tools.register(new X402PayTool());
       }
@@ -959,13 +955,13 @@ function handleInboundMessage(
       // x402 key format is validated at startup; safe to use directly here.
       if (x402PluginCfg?.enabled && x402PluginCfg.client?.privateKey) {
         const cc = x402PluginCfg.client;
-        toolContextExtensions.x402Signer = createEIP712Signer(cc.privateKey, {
+        toolContextExtensions.x402Signer = createEIP712Signer(cc.privateKey!, {
           chainId:      cc.chainId,
           tokenAddress: cc.tokenAddress,
           tokenName:    cc.tokenName,
           tokenVersion: cc.tokenVersion,
         });
-        toolContextExtensions.agentWalletAddress = walletAddress(cc.privateKey);
+        toolContextExtensions.agentWalletAddress = walletAddress(cc.privateKey!);
       }
 
       // Provide resolveEngine so the DelegateTool can spawn sub-agent loops.

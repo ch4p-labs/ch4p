@@ -8,7 +8,7 @@
 import { existsSync } from 'node:fs';
 import type { Ch4pConfig } from '@ch4p/core';
 import { loadConfig, getConfigPath, getCh4pDir } from '../config.js';
-import { TEAL, RESET, BOLD, DIM, GREEN, YELLOW, RED, box, kvRow, separator } from '../ui.js';
+import { TEAL, RESET, BOLD, DIM, GREEN, YELLOW, RED, separator } from '../ui.js';
 
 // ---------------------------------------------------------------------------
 // Status display

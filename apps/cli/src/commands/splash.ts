@@ -18,7 +18,6 @@ import {
   WHITE,
   centerPad,
   termWidth,
-  visibleLength,
 } from '../ui.js';
 
 // ---------------------------------------------------------------------------

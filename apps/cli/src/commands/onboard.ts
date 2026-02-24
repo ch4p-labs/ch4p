@@ -28,20 +28,15 @@ import { runAudit } from './audit.js';
 import { playFullAnimation } from './splash.js';
 import {
   TEAL,
-  TEAL_DIM,
   RESET,
   BOLD,
   DIM,
   GREEN,
   YELLOW,
-  RED,
-  MAGENTA,
   WHITE,
-  BOX,
   CHAPPIE_SMALL,
   box,
   sectionHeader,
-  kvRow,
 } from '../ui.js';
 
 // ---------------------------------------------------------------------------
@@ -506,7 +501,7 @@ async function configureSearch(
   console.log(`  ${DIM}Get a key at https://api.search.brave.com${RESET}`);
   const key = await askSecret(rl, `  ${TEAL}> Brave API key: ${RESET}`);
   if (key) {
-    (config as Record<string, unknown>).search = {
+    (config as unknown as Record<string, unknown>).search = {
       enabled: true,
       provider: 'brave',
       apiKey: key,
@@ -520,7 +515,7 @@ async function configureSearch(
 
 async function configureBrowser(
   rl: readline.Interface,
-  config: ReturnType<typeof getDefaultConfig>,
+  _config: ReturnType<typeof getDefaultConfig>,
 ): Promise<void> {
   if (!(await askYesNo(rl, 'Enable browser tool (Playwright)?'))) return;
 
@@ -561,7 +556,7 @@ async function configureVoice(
     ttsVoiceId = await ask(rl, `  ${TEAL}> Voice ID (Enter for default): ${RESET}`) || undefined;
   }
 
-  (config as Record<string, unknown>).voice = {
+  (config as unknown as Record<string, unknown>).voice = {
     enabled: true,
     stt: { provider: sttProvider, apiKey: sttApiKey },
     tts: { provider: ttsProvider, apiKey: ttsApiKey, voiceId: ttsVoiceId },
@@ -639,7 +634,7 @@ async function configureX402(
     x402.client = client;
   }
 
-  (config as Record<string, unknown>).x402 = x402;
+  (config as unknown as Record<string, unknown>).x402 = x402;
   console.log(`  ${GREEN}x402 configured.${RESET}\n`);
 }
 
@@ -661,7 +656,7 @@ async function configureVoiceWake(
   const energyThreshold = thresholdStr ? parseInt(thresholdStr, 10) : undefined;
 
   // Merge wake config into existing voice config.
-  const voiceConfig = (config as Record<string, unknown>).voice as Record<string, unknown> | undefined;
+  const voiceConfig = (config as unknown as Record<string, unknown>).voice as Record<string, unknown> | undefined;
   const wake: Record<string, unknown> = { enabled: true };
   if (wakeWord) wake.wakeWord = wakeWord;
   if (energyThreshold && !isNaN(energyThreshold)) wake.energyThreshold = energyThreshold;
@@ -669,7 +664,7 @@ async function configureVoiceWake(
   if (voiceConfig) {
     voiceConfig.wake = wake;
   } else {
-    (config as Record<string, unknown>).voice = { enabled: false, wake };
+    (config as unknown as Record<string, unknown>).voice = { enabled: false, wake };
   }
   console.log(`  ${GREEN}Voice wake enabled${wakeWord ? ` (wake word: "${wakeWord}")` : ' (push-to-talk style)'}.${RESET}\n`);
 }
@@ -683,7 +678,7 @@ async function configureMesh(
   const concurrencyStr = await ask(rl, `  ${TEAL}> Max concurrent sub-agents [3]: ${RESET}`);
   const maxConcurrency = concurrencyStr ? parseInt(concurrencyStr, 10) : 3;
 
-  (config as Record<string, unknown>).mesh = {
+  (config as unknown as Record<string, unknown>).mesh = {
     enabled: true,
     maxConcurrency: (!isNaN(maxConcurrency) && maxConcurrency >= 1 && maxConcurrency <= 10)
       ? maxConcurrency : 3,
@@ -725,7 +720,7 @@ async function configureVerification(
   if (enabled) {
     semantic = await askYesNo(rl, 'Enable semantic (LLM) verification?', true);
   }
-  (config as Record<string, unknown>).verification = { enabled, semantic };
+  (config as unknown as Record<string, unknown>).verification = { enabled, semantic };
   console.log(`  ${GREEN}Verification: ${enabled ? 'on' : 'off'}${semantic ? ' (semantic)' : ''}${RESET}\n`);
 }
 
@@ -811,11 +806,11 @@ async function configureCanvas(
   const portStr = await ask(rl, `  ${TEAL}> Canvas port [4800]: ${RESET}`);
   const port = portStr ? parseInt(portStr, 10) : 4800;
 
-  (config as Record<string, unknown>).canvas = {
+  (config as unknown as Record<string, unknown>).canvas = {
     enabled: true,
     port: (!isNaN(port) && port > 0 && port <= 65535) ? port : 4800,
   };
-  console.log(`  ${GREEN}Canvas enabled on port ${(config as Record<string, unknown> & { canvas: { port: number } }).canvas.port}.${RESET}\n`);
+  console.log(`  ${GREEN}Canvas enabled on port ${(config as unknown as { canvas: { port: number } }).canvas.port}.${RESET}\n`);
 }
 
 async function configureObservability(

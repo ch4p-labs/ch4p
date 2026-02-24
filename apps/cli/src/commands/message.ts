@@ -22,7 +22,7 @@ import {
   IMessageChannel,
 } from '@ch4p/channels';
 import type { IChannel, OutboundMessage, Recipient } from '@ch4p/core';
-import { TEAL, RESET, BOLD, DIM, GREEN, YELLOW, RED, separator } from '../ui.js';
+import { TEAL, RESET, BOLD, DIM, GREEN, RED, separator } from '../ui.js';
 
 // ---------------------------------------------------------------------------
 // Channel factory

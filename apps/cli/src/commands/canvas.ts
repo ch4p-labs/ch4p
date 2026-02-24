@@ -11,12 +11,12 @@
  *   ch4p canvas --no-open    — don't auto-open browser
  */
 
-import type { Ch4pConfig, IEngine, ISecurityPolicy, InboundMessage } from '@ch4p/core';
+import type { Ch4pConfig, IEngine, IMemoryBackend, InboundMessage, SessionConfig } from '@ch4p/core';
 import { generateId } from '@ch4p/core';
 import { loadConfig, getLogsDir } from '../config.js';
 import { SessionManager, GatewayServer, PairingManager, CanvasSessionManager, type WebSocketBridge } from '@ch4p/gateway';
-import { CanvasTool, CanvasChannel, type CanvasToolContext } from '@ch4p/canvas';
-import { Session, AgentLoop } from '@ch4p/agent';
+import { CanvasTool } from '@ch4p/canvas';
+import { AgentLoop } from '@ch4p/agent';
 import { NativeEngine, createClaudeCliEngine, createCodexCliEngine } from '@ch4p/engines';
 import { ProviderRegistry } from '@ch4p/providers';
 import { ToolRegistry, LoadSkillTool } from '@ch4p/tools';
@@ -29,7 +29,7 @@ import { DefaultSecurityPolicy } from '@ch4p/security';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
-import { TEAL, RESET, BOLD, DIM, GREEN, YELLOW, RED, separator } from '../ui.js';
+import { TEAL, RESET, BOLD, DIM, GREEN, RED, separator } from '../ui.js';
 
 // ---------------------------------------------------------------------------
 // CLI entry point
@@ -75,7 +75,7 @@ export async function canvas(args: string[]): Promise<void> {
   // is for external channel access, not the local workspace.
   const sessionManager = new SessionManager();
   const pairingManager = config.canvas?.requirePairing ? new PairingManager() : undefined;
-  const canvasSessionManager = new CanvasSessionManager(config.canvas?.maxComponents);
+  const canvasSessionManager = new CanvasSessionManager();
 
   // Create the engine.
   const engine = createCanvasEngine(config);
@@ -95,7 +95,7 @@ export async function canvas(args: string[]): Promise<void> {
   const observer = createObserver(obsCfg);
 
   // Create memory backend (optional).
-  let memoryBackend;
+  let memoryBackend: IMemoryBackend | undefined;
   try {
     const memCfg: MemoryConfig = {
       backend: config.memory.backend,
@@ -309,7 +309,7 @@ function wireCanvasSession(
   observer: ReturnType<typeof createObserver>,
   memoryBackend?: ReturnType<typeof createMemoryBackend>,
   skillRegistry?: SkillRegistry,
-  defaultSessionConfig?: Record<string, unknown>,
+  defaultSessionConfig?: { engineId: string; model: string; provider: string; systemPrompt?: string },
 ): void {
   const entry = canvasSessionManager.getSession(sessionId);
   if (!entry) return;
@@ -332,7 +332,7 @@ function wireCanvasSession(
         const session = new (await import('@ch4p/agent')).Session({
           sessionId,
           ...defaultSessionConfig,
-        });
+        } as SessionConfig);
 
         // Create tool registry with the CanvasTool.
         const exclude = config.autonomy.level === 'readonly'
