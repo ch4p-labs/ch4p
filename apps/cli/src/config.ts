@@ -272,6 +272,7 @@ interface ValidationError {
 function validateConfig(config: Ch4pConfig): ValidationError[] {
   const errors: ValidationError[] = [];
 
+  // --- agent ---
   if (!config.agent?.model) {
     errors.push({ field: 'agent.model', message: 'Model is required' });
   }
@@ -280,16 +281,55 @@ function validateConfig(config: Ch4pConfig): ValidationError[] {
     errors.push({ field: 'agent.provider', message: 'Provider is required' });
   }
 
+  // --- gateway ---
   if (typeof config.gateway?.port !== 'number' || config.gateway.port < 1 || config.gateway.port > 65535) {
     errors.push({ field: 'gateway.port', message: 'Port must be a number between 1 and 65535' });
   }
 
+  // --- autonomy ---
   if (config.autonomy?.level && !['readonly', 'supervised', 'full'].includes(config.autonomy.level)) {
     errors.push({ field: 'autonomy.level', message: 'Must be one of: readonly, supervised, full' });
   }
 
+  // --- observability ---
   if (config.observability?.logLevel && !['debug', 'info', 'warn', 'error'].includes(config.observability.logLevel)) {
     errors.push({ field: 'observability.logLevel', message: 'Must be one of: debug, info, warn, error' });
+  }
+
+  // --- memory ---
+  if (config.memory?.backend && !['sqlite', 'markdown', 'noop'].includes(config.memory.backend)) {
+    errors.push({ field: 'memory.backend', message: 'Must be one of: sqlite, markdown, noop' });
+  }
+
+  // --- tunnel ---
+  if (config.tunnel?.provider && !['none', 'cloudflare', 'tailscale', 'ngrok'].includes(config.tunnel.provider)) {
+    errors.push({ field: 'tunnel.provider', message: 'Must be one of: none, cloudflare, tailscale, ngrok' });
+  }
+
+  // --- engines ---
+  if (config.engines?.default && config.engines.available &&
+      !Object.keys(config.engines.available).includes(config.engines.default)) {
+    errors.push({
+      field: 'engines.default',
+      message: `Engine "${config.engines.default}" is not defined in engines.available`,
+    });
+  }
+
+  // --- skills ---
+  if (config.skills?.contextBudget != null &&
+      (typeof config.skills.contextBudget !== 'number' || config.skills.contextBudget < 0)) {
+    errors.push({ field: 'skills.contextBudget', message: 'Must be a non-negative number' });
+  }
+
+  // --- mesh ---
+  if (config.mesh?.maxConcurrency != null &&
+      (typeof config.mesh.maxConcurrency !== 'number' || config.mesh.maxConcurrency < 1)) {
+    errors.push({ field: 'mesh.maxConcurrency', message: 'Must be a positive number' });
+  }
+
+  if (config.mesh?.defaultTimeout != null &&
+      (typeof config.mesh.defaultTimeout !== 'number' || config.mesh.defaultTimeout < 1000)) {
+    errors.push({ field: 'mesh.defaultTimeout', message: 'Must be at least 1000ms' });
   }
 
   return errors;

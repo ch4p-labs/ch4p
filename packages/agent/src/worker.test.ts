@@ -162,8 +162,16 @@ import { dirname, resolve } from 'node:path';
 // Resolve dist/worker.js relative to this test file (src/worker.test.ts → ../dist/worker.js).
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const realWorkerPath = resolve(__dirname, '../dist/worker.js');
+const hasRealWorker = !!realWorkerPath && existsSync(realWorkerPath);
 
-describe.skipIf(!realWorkerPath || !existsSync(realWorkerPath!))(
+if (!hasRealWorker) {
+  console.warn(
+    '\n⚠  Skipping worker integration tests: dist/worker.js not found.\n' +
+    '   Run "corepack pnpm -r build" first to build the worker script.\n',
+  );
+}
+
+describe.skipIf(!hasRealWorker)(
   'ToolWorkerPool — real worker.js (integration)',
   () => {
     let pool: ToolWorkerPool;
