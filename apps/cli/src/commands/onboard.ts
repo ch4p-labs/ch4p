@@ -590,6 +590,59 @@ async function configureCron(
   console.log(`  ${DIM}See docs/how-to/use-cron-webhooks.md for details.${RESET}\n`);
 }
 
+async function configureX402(
+  rl: readline.Interface,
+  config: ReturnType<typeof getDefaultConfig>,
+): Promise<void> {
+  if (!(await askYesNo(rl, 'Configure x402 micropayments?'))) return;
+
+  console.log('');
+  console.log(`  ${DIM}x402 enables HTTP micropayments on Base/USDC.${RESET}`);
+  console.log(`  ${DIM}Server: require payment to access gateway endpoints.${RESET}`);
+  console.log(`  ${DIM}Client: sign payments when the agent hits 402 responses.${RESET}`);
+  console.log('');
+
+  const enableServer = await askYesNo(rl, '  Enable server-side payment enforcement?');
+  const enableClient = await askYesNo(rl, '  Enable client-side payment signing?');
+
+  if (!enableServer && !enableClient) {
+    console.log(`  ${DIM}Skipped.${RESET}\n`);
+    return;
+  }
+
+  const x402: Record<string, unknown> = { enabled: true };
+
+  if (enableServer) {
+    const payTo  = await ask(rl, `  ${TEAL}> Receiving wallet address (0x...): ${RESET}`);
+    const amount = await ask(rl, `  ${TEAL}> Amount in USDC smallest unit [1000000]: ${RESET}`);
+    const net    = await ask(rl, `  ${TEAL}> Network [base]: ${RESET}`);
+    x402.server = {
+      payTo:   payTo.trim()  || '0x0000000000000000000000000000000000000000',
+      amount:  amount.trim() || '1000000',
+      network: net.trim()    || 'base',
+    };
+  }
+
+  if (enableClient) {
+    console.log(`  ${DIM}Tip: store key as X402_PRIVATE_KEY env var — leave blank to use it.${RESET}`);
+    const pk  = await askSecret(rl, `  ${TEAL}> Private key (blank = use \${X402_PRIVATE_KEY}): ${RESET}`);
+    const net = await ask(rl, `  ${TEAL}> Network [base]: ${RESET}`);
+    const network = net.trim() || 'base';
+
+    const client: Record<string, unknown> = {
+      privateKey: pk || '${X402_PRIVATE_KEY}',
+    };
+    if (network === 'base-sepolia') {
+      client.chainId      = 84532;
+      client.tokenAddress = '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
+    }
+    x402.client = client;
+  }
+
+  (config as Record<string, unknown>).x402 = x402;
+  console.log(`  ${GREEN}x402 configured.${RESET}\n`);
+}
+
 async function configureVoiceWake(
   rl: readline.Interface,
   config: ReturnType<typeof getDefaultConfig>,
@@ -1012,6 +1065,7 @@ export async function onboard(): Promise<void> {
       await configureMesh(rl, config);
       await configureMcp(rl, config);
       await configureCron(rl, config);
+      await configureX402(rl, config);
 
       // --- Group 4: System ---
       console.log('');

@@ -294,5 +294,22 @@ export interface Ch4pConfig {
       /** Seconds before a payment authorization expires. Default: 300. */
       maxTimeoutSeconds?: number;
     };
+    /** Client-side wallet for signing EIP-712 payment authorizations. */
+    client?: {
+      /**
+       * 0x-prefixed hex private key (32 bytes).
+       * Env-var substitution supported: `"${X402_PRIVATE_KEY}"`.
+       * ⚠️  Never commit a real key to source control.
+       */
+      privateKey?: string;
+      /** ERC-20 token contract address. Default: USDC on Base mainnet. */
+      tokenAddress?: string;
+      /** EIP-712 domain chain ID. Default: 8453 (Base). Use 84532 for Base Sepolia. */
+      chainId?: number;
+      /** EIP-712 domain token name. Default: "USD Coin". */
+      tokenName?: string;
+      /** EIP-712 domain token version. Default: "2". */
+      tokenVersion?: string;
+    };
   };
 }
