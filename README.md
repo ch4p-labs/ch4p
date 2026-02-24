@@ -35,21 +35,17 @@ Built on four pillars:
 ## Quick Start
 
 ```bash
+npm install -g ch4p
+ch4p onboard
+ch4p agent
+```
+
+Or clone and build from source:
+
+```bash
 git clone https://github.com/ch4p-labs/ch4p.git && cd ch4p
 corepack pnpm install
 corepack pnpm -r build
-
-# Run the onboarding wizard
-node apps/cli/dist/index.js onboard
-
-# Start the agent
-node apps/cli/dist/index.js agent
-```
-
-Or set your API key directly:
-
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...
 node apps/cli/dist/index.js agent
 ```
 

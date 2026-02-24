@@ -38,6 +38,16 @@ importers:
 
   apps/cli:
     dependencies:
+      better-sqlite3:
+        specifier: ^11.0.0
+        version: 11.10.0
+      ethers:
+        specifier: ^6.14.0
+        version: 6.16.0
+      ws:
+        specifier: ^8.0.0
+        version: 8.19.0
+    devDependencies:
       '@ch4p/agent':
         specifier: workspace:*
         version: link:../../packages/agent
@@ -86,6 +96,10 @@ importers:
       '@ch4p/voice':
         specifier: workspace:*
         version: link:../../packages/voice
+    optionalDependencies:
+      playwright-core:
+        specifier: ^1.50.0
+        version: 1.58.2
 
   apps/web:
     dependencies:
