@@ -203,6 +203,8 @@ export class AgentLoop {
   private stateRecords: ToolStateRecord[] = [];
   /** Accumulated tool results for verification (AWM). */
   private allToolResults: ToolResult[] = [];
+  /** Cumulative token usage across all iterations. */
+  private cumulativeTokens = { inputTokens: 0, outputTokens: 0 };
 
   constructor(
     session: Session,
@@ -218,10 +220,18 @@ export class AgentLoop {
     this.tools = new Map(tools.map((t) => [t.name, t]));
     this.toolDefs = toolDefinitionsFrom(tools);
 
+    if (opts.workerPool) {
+      this.workerPool = opts.workerPool;
+      this.ownsWorkerPool = false;
+    } else {
+      this.workerPool = new ToolWorkerPool();
+      this.ownsWorkerPool = true;
+    }
+
     this.opts = {
       maxIterations: opts.maxIterations ?? 50,
       maxRetries: opts.maxRetries ?? 3,
-      workerPool: opts.workerPool ?? new ToolWorkerPool(),
+      workerPool: this.workerPool,
       verifier: opts.verifier,
       enableStateSnapshots: opts.enableStateSnapshots ?? true,
       memoryBackend: opts.memoryBackend,
@@ -230,19 +240,16 @@ export class AgentLoop {
       onBeforeFirstRun: opts.onBeforeFirstRun,
       onAfterComplete: opts.onAfterComplete,
     };
-
-    if (opts.workerPool) {
-      this.workerPool = opts.workerPool;
-      this.ownsWorkerPool = false;
-    } else {
-      this.workerPool = new ToolWorkerPool();
-      this.ownsWorkerPool = true;
-    }
   }
 
   // -----------------------------------------------------------------------
   // Public API
   // -----------------------------------------------------------------------
+
+  /** Return the session ID for this agent loop. */
+  getSessionId(): string {
+    return this.session.getId();
+  }
 
   /**
    * Run the agent loop, returning an async iterable of AgentEvents.
@@ -383,6 +390,10 @@ export class AgentLoop {
             if (event.type === 'completed') {
               completionAnswer = event.answer;
               completionUsage = event.usage;
+              if (completionUsage) {
+                this.cumulativeTokens.inputTokens += completionUsage.inputTokens;
+                this.cumulativeTokens.outputTokens += completionUsage.outputTokens;
+              }
             }
 
             if (event.type === 'error') {
@@ -613,11 +624,8 @@ export class AgentLoop {
           toolInvocations: this.session.getMetadata().toolInvocations,
           llmCalls: this.session.getMetadata().llmCalls,
           tokensUsed: {
-            inputTokens: 0,
-            outputTokens: 0,
-            ...(this.session.getContext().getTokenEstimate()
-              ? { totalCost: undefined }
-              : {}),
+            inputTokens: this.cumulativeTokens.inputTokens,
+            outputTokens: this.cumulativeTokens.outputTokens,
           },
           errors: this.session.getMetadata().errors.length,
         },

@@ -53,6 +53,14 @@ export interface GatewayServerOptions {
   /** Called when a webhook message is received at POST /webhooks/:name. */
   onWebhook?: (name: string, payload: { message: string; userId?: string }) => void;
   /**
+   * Called when a raw webhook is received. Return true if the handler consumed the
+   * request; false to fall through to the generic onWebhook handler.
+   * Used by channels (Teams, Google Chat) that need the raw body for parsing.
+   */
+  onRawWebhook?: (name: string, body: string) => boolean;
+  /** Called when POST /sessions/:id/steer is invoked. */
+  onSteer?: (sessionId: string, message: string) => void;
+  /**
    * Optional pre-handler invoked before pairing auth and route dispatch.
    * Called for every request after CORS/OPTIONS handling and public routes
    * (/health, /.well-known/agent.json, /pair).
@@ -80,6 +88,8 @@ export class GatewayServer {
   private readonly onCanvasConnection: ((sessionId: string, bridge: WebSocketBridge) => void) | null;
   private readonly agentRegistration: Record<string, unknown> | null;
   private readonly onWebhook: GatewayServerOptions['onWebhook'] | null;
+  private readonly onRawWebhook: GatewayServerOptions['onRawWebhook'] | null;
+  private readonly onSteer: GatewayServerOptions['onSteer'] | null;
   private readonly preHandler:
     | ((req: IncomingMessage, res: ServerResponse) => boolean | Promise<boolean>)
     | null;
@@ -100,6 +110,8 @@ export class GatewayServer {
     this.onCanvasConnection = options.onCanvasConnection ?? null;
     this.agentRegistration = options.agentRegistration ?? null;
     this.onWebhook = options.onWebhook ?? null;
+    this.onRawWebhook = options.onRawWebhook ?? null;
+    this.onSteer = options.onSteer ?? null;
     this.preHandler = options.preHandler ?? null;
   }
 
@@ -419,6 +431,9 @@ export class GatewayServer {
         }
 
         this.sessionManager.touchSession(sessionId);
+        if (this.onSteer) {
+          this.onSteer(sessionId, payload.message);
+        }
         this.sendJson(res, 200, {
           sessionId,
           steered: true,
@@ -447,12 +462,34 @@ export class GatewayServer {
     if (method === 'POST' && webhookMatch) {
       const webhookName = webhookMatch[1]!;
 
-      if (!this.onWebhook) {
+      if (!this.onWebhook && !this.onRawWebhook) {
         this.sendJson(res, 404, { error: 'Webhooks are not enabled on this gateway.' });
         return;
       }
 
       const body = await this.readBody(req);
+
+      // Try channel-specific raw webhook handler first (Teams, Google Chat, etc.).
+      if (this.onRawWebhook) {
+        try {
+          const handled = this.onRawWebhook(webhookName, body);
+          if (handled) {
+            this.sendJson(res, 200, { webhook: webhookName, accepted: true });
+            return;
+          }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          this.sendJson(res, 500, { error: `Webhook handler failed: ${errMsg}` });
+          return;
+        }
+      }
+
+      // Fall through to generic webhook handler.
+      if (!this.onWebhook) {
+        this.sendJson(res, 404, { error: 'Webhooks are not enabled on this gateway.' });
+        return;
+      }
+
       let payload: { message?: string; userId?: string } = {};
       try {
         payload = JSON.parse(body) as { message?: string; userId?: string };

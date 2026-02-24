@@ -375,6 +375,11 @@ export class SlackChannel implements IChannel {
       this.ws.on('open', () => {
         connected = true;
         this.reconnectAttempts = 0;
+        // Clear any previous ping timer before creating a new one.
+        if (this.pingTimer) {
+          clearInterval(this.pingTimer);
+          this.pingTimer = null;
+        }
         // Keep-alive pings every 30 seconds.
         this.pingTimer = setInterval(() => {
           if (this.ws?.readyState === 1) {

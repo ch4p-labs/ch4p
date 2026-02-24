@@ -128,6 +128,7 @@ export class ToolWorkerPool extends EventEmitter {
   private completedTasks = 0;
   private failedTasks = 0;
   private totalDurationMs = 0;
+  private stubWarned = false;
 
   constructor(opts: WorkerPoolOpts = {}) {
     super();
@@ -243,7 +244,12 @@ export class ToolWorkerPool extends EventEmitter {
     if (this.workerScript) {
       worker = new Worker(this.workerScript);
     } else {
-      // Inline eval worker as fallback.
+      // Inline eval worker as fallback — logs a warning because heavyweight
+      // tools dispatched to this stub will always fail.
+      if (!this.stubWarned) {
+        this.stubWarned = true;
+        this.emit('worker_stub', 'Using default worker stub — heavyweight tools will fail. Build the worker script or provide workerScript option.');
+      }
       worker = new Worker(DEFAULT_WORKER_SCRIPT, { eval: true });
     }
 
@@ -288,7 +294,8 @@ export class ToolWorkerPool extends EventEmitter {
       if (managed.currentTimer) clearTimeout(managed.currentTimer);
       managed.currentTimer = undefined;
 
-      // Terminate the hung worker and replace it.
+      // Signal the worker to abort the in-flight tool, then terminate.
+      try { managed.worker.postMessage({ type: 'abort' }); } catch { /* already dead */ }
       managed.worker.terminate().catch(() => {});
       this.removeWorker(managed);
 
@@ -305,7 +312,8 @@ export class ToolWorkerPool extends EventEmitter {
         managed.busy = false;
         this.failedTasks++;
 
-        // Terminate the worker running the aborted task.
+        // Signal the worker to abort, then terminate.
+        try { managed.worker.postMessage({ type: 'abort' }); } catch { /* already dead */ }
         managed.worker.terminate().catch(() => {});
         this.removeWorker(managed);
 

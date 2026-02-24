@@ -277,15 +277,28 @@ export class WebFetchTool implements ITool {
           };
         }
         // Single retry with payment header — no recursive 402 loop.
+        // Use redirect: 'manual' to prevent SSRF bypass via post-payment redirect.
         context.onProgress('Paying x402 fee and retrying...');
         const retryResponse = await fetch(fetchUrl, {
           signal: this.abortController!.signal,
+          redirect: 'manual',
           headers: {
             'User-Agent': 'ch4p/0.1.0',
             Accept: 'text/html, application/json, text/plain, */*',
             'X-PAYMENT': payResult.headerValue,
           },
         });
+        // Reject redirect responses on the post-payment retry — the server
+        // should return the paid content directly. Following redirects here
+        // would bypass SSRF checks on the redirect target.
+        if (retryResponse.status >= 300 && retryResponse.status < 400) {
+          return {
+            success: false,
+            output: '',
+            error: `Unexpected redirect (${retryResponse.status}) after x402 payment. Blocked for SSRF safety.`,
+            metadata: { url: fetchUrl, status: retryResponse.status, x402Paid: true },
+          };
+        }
         if (!retryResponse.ok) {
           return {
             success: false,

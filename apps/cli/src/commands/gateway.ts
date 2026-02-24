@@ -122,8 +122,10 @@ function createGatewayEngine(config: Ch4pConfig) {
         cwd: (engineConfig?.cwd as string) ?? undefined,
         timeout: (engineConfig?.timeout as number) ?? undefined,
       });
-    } catch {
-      // Fall through to native.
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`  ${YELLOW}⚠ ${engineId} engine failed to initialize: ${msg}${RESET}`);
+      console.warn(`  ${DIM}Falling back to native SDK engine.${RESET}`);
     }
   }
 
@@ -134,8 +136,10 @@ function createGatewayEngine(config: Ch4pConfig) {
         cwd: (engineConfig?.cwd as string) ?? undefined,
         timeout: (engineConfig?.timeout as number) ?? undefined,
       });
-    } catch {
-      // Fall through to native.
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`  ${YELLOW}⚠ ${engineId} engine failed to initialize: ${msg}${RESET}`);
+      console.warn(`  ${DIM}Falling back to native SDK engine.${RESET}`);
     }
   }
 
@@ -282,6 +286,16 @@ export async function gateway(args: string[]): Promise<void> {
   const x402Cfg = (config as Record<string, unknown>).x402 as X402Config | undefined;
   const x402Middleware = x402Cfg ? createX402Middleware(x402Cfg) : null;
 
+  // Validate x402 client private key at startup — fail fast before bind.
+  if (x402Cfg?.enabled && x402Cfg.client?.privateKey) {
+    if (!/^0x[a-fA-F0-9]{64}$/.test(x402Cfg.client.privateKey)) {
+      console.error(`\n  ${RED}x402.client.privateKey is invalid:${RESET} expected a 0x-prefixed 64-character hex string.`);
+      console.error(`  ${DIM}Set it via the X402_PRIVATE_KEY env var: ${TEAL}"privateKey": "\${X402_PRIVATE_KEY}"${RESET}\n`);
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   // Create MessageRouter for channel → session routing.
   const messageRouter = new MessageRouter(sessionManager, defaultSessionConfig);
 
@@ -371,6 +385,11 @@ export async function gateway(args: string[]): Promise<void> {
   // channel can be forwarded to the subprocess stdin instead of spawning a new loop.
   const inFlightLoops = new Map<string, { loop: AgentLoop; permissionPending: boolean }>();
 
+  // Map of channel names to their raw webhook handlers (Teams, Google Chat).
+  // Populated during channel startup; the server's onRawWebhook callback
+  // routes to these when the webhook name matches a registered channel.
+  const rawWebhookHandlers = new Map<string, (body: string) => void>();
+
   // Create LogChannel for cron/webhook responses (logs to observer).
   const logChannel = new LogChannel({
     onResponse: (_to, msg) => {
@@ -403,6 +422,21 @@ export async function gateway(args: string[]): Promise<void> {
         conversationContexts, agentRouter, defaultSystemPrompt,
         memoryBackend, skillRegistry, voiceProcessor, trackInflight, workerPool, inFlightLoops,
       );
+    },
+    onRawWebhook: (name, body) => {
+      const handler = rawWebhookHandlers.get(name);
+      if (!handler) return false;
+      handler(body);
+      return true;
+    },
+    onSteer: (sessionId, message) => {
+      // Route steer messages to in-flight agent loops matching the session.
+      for (const entry of inFlightLoops.values()) {
+        if (entry.loop.getSessionId() === sessionId) {
+          entry.loop.steerEngine(message);
+          return;
+        }
+      }
     },
   });
 
@@ -485,6 +519,25 @@ export async function gateway(args: string[]): Promise<void> {
             memoryBackend, skillRegistry, voiceProcessor, trackInflight, workerPool, inFlightLoops,
           );
         });
+
+        // Register raw webhook handlers for channels that receive structured
+        // webhook payloads (Teams Bot Framework activities, Google Chat events).
+        if (channelName === 'teams' && 'handleIncomingActivity' in channel) {
+          rawWebhookHandlers.set('teams', (body: string) => {
+            try {
+              const activity = JSON.parse(body);
+              (channel as TeamsChannel).handleIncomingActivity(activity);
+            } catch { /* malformed payload — silently drop */ }
+          });
+        }
+        if (channelName === 'googlechat' && 'handleIncomingEvent' in channel) {
+          rawWebhookHandlers.set('googlechat', (body: string) => {
+            try {
+              const event = JSON.parse(body);
+              (channel as GoogleChatChannel).handleIncomingEvent(event);
+            } catch { /* malformed payload — silently drop */ }
+          });
+        }
 
         // Register with supervisor for crash recovery. The channel is already
         // started, so start() is a no-op reconnect and shutdown() calls stop().
@@ -569,7 +622,7 @@ export async function gateway(args: string[]): Promise<void> {
           handleInboundMessage(
             syntheticMsg, logChannel as unknown as IChannel, messageRouter, engine, config, observer,
             conversationContexts, agentRouter, defaultSystemPrompt,
-            memoryBackend, skillRegistry, voiceProcessor, trackInflight, workerPool,
+            memoryBackend, skillRegistry, voiceProcessor, trackInflight, workerPool, inFlightLoops,
           );
         },
       });
@@ -603,9 +656,18 @@ export async function gateway(args: string[]): Promise<void> {
 
   console.log(`  ${DIM}Press Ctrl+C to stop.${RESET}\n`);
 
+  // Periodic eviction of stale entries from unbounded maps (every 5 minutes).
+  const evictionTimer = setInterval(() => {
+    gatewayRateLimiter.evictStale();
+    // Evict conversation contexts inactive for more than 1 hour.
+    // (ContextManager doesn't track lastActive, so we skip for now —
+    //  the rate limiter is the main leak vector.)
+  }, 5 * 60_000);
+
   // Keep the process alive until interrupted.
   await new Promise<void>((resolve) => {
     const shutdown = async () => {
+      clearInterval(evictionTimer);
       console.log(`\n  ${DIM}Shutting down gateway...${RESET}`);
 
       // Stop scheduler so no new cron triggers fire.
@@ -661,8 +723,9 @@ export async function gateway(args: string[]): Promise<void> {
       resolve();
     };
 
-    process.on('SIGINT', () => void shutdown());
-    process.on('SIGTERM', () => void shutdown());
+    const onSignal = () => void shutdown();
+    process.once('SIGINT', onSignal);
+    process.once('SIGTERM', onSignal);
 
     // Catch unhandled rejections so the gateway never silently dies.
     process.on('unhandledRejection', (reason) => {
@@ -702,6 +765,17 @@ class RateLimiter {
     timestamps.push(now);
     this.windows.set(key, timestamps);
     return true;
+  }
+
+  /** Remove keys whose timestamps have all expired. */
+  evictStale(): void {
+    const now = Date.now();
+    const cutoff = now - this.windowMs;
+    for (const [key, timestamps] of this.windows) {
+      if (timestamps.every((t) => t <= cutoff)) {
+        this.windows.delete(key);
+      }
+    }
   }
 }
 
@@ -882,15 +956,9 @@ function handleInboundMessage(
       // Wire x402 EIP-712 signer when client private key is configured.
       // This enables the X402PayTool to produce real on-chain payment signatures
       // instead of the zero-filled placeholder used when no signer is provided.
+      // x402 key format is validated at startup; safe to use directly here.
       if (x402PluginCfg?.enabled && x402PluginCfg.client?.privateKey) {
         const cc = x402PluginCfg.client;
-        if (!/^0x[a-fA-F0-9]{64}$/.test(cc.privateKey)) {
-          throw new Error(
-            'x402.client.privateKey is invalid: expected a 0x-prefixed 64-character hex string. ' +
-            'Set it via the X402_PRIVATE_KEY environment variable: ' +
-            '"privateKey": "${X402_PRIVATE_KEY}"',
-          );
-        }
         toolContextExtensions.x402Signer = createEIP712Signer(cc.privateKey, {
           chainId:      cc.chainId,
           tokenAddress: cc.tokenAddress,
@@ -899,6 +967,10 @@ function handleInboundMessage(
         });
         toolContextExtensions.agentWalletAddress = walletAddress(cc.privateKey);
       }
+
+      // Provide resolveEngine so the DelegateTool can spawn sub-agent loops.
+      // For now, resolve always returns the shared gateway engine (single-engine).
+      toolContextExtensions.resolveEngine = (_engineId?: string) => engine;
 
       // AWM verifier — runs task-level verification after each agent response.
       const vCfg = config.verification;

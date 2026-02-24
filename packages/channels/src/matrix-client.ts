@@ -81,7 +81,9 @@ export class MinimalMatrixClient extends EventEmitter {
     await this.sync(0);
 
     // Start the long-poll loop in the background.
-    void this.syncLoop();
+    void this.syncLoop().catch((err) => {
+      this.emit('error', err);
+    });
   }
 
   /** Stop the sync loop. */

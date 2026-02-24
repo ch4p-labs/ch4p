@@ -192,8 +192,14 @@ class StdioConnection {
   async disconnect(): Promise<void> {
     this.rejectAll(new ToolError('Connection closed.', 'mcp_client'));
     if (this.process) {
-      this.process.kill('SIGTERM');
+      const proc = this.process;
       this.process = null;
+      proc.kill('SIGTERM');
+      // SIGKILL fallback if the server ignores SIGTERM after 5 seconds.
+      const killTimer = setTimeout(() => {
+        try { proc.kill('SIGKILL'); } catch { /* already dead */ }
+      }, 5_000);
+      proc.once('exit', () => clearTimeout(killTimer));
     }
   }
 

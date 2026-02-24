@@ -43,6 +43,9 @@ const registry = ToolRegistry.createDefault();
 // Message loop
 // ---------------------------------------------------------------------------
 
+// Active abort controller for the current task, so the parent can cancel it.
+let currentAbort: AbortController | null = null;
+
 parentPort.on('message', async (msg: unknown) => {
   const message = msg as {
     type: string;
@@ -50,6 +53,12 @@ parentPort.on('message', async (msg: unknown) => {
     args?: unknown;
     context?: WorkerTaskContext;
   };
+
+  // Handle abort messages from the parent (ToolWorkerPool timeout/terminate).
+  if (message.type === 'abort') {
+    currentAbort?.abort();
+    return;
+  }
 
   if (message.type !== 'execute' || !message.tool || !message.context) {
     // Silently ignore unrecognised messages.
@@ -73,6 +82,7 @@ parentPort.on('message', async (msg: unknown) => {
   // NOTE: x402Signer is deliberately omitted — functions cannot serialise
   // across worker thread boundaries. If web_fetch hits a 402, it returns
   // x402Required: true and the model falls back to the x402_pay tool.
+  currentAbort = new AbortController();
   const toolContext: ToolContext = {
     sessionId: context.sessionId,
     cwd: context.cwd,
@@ -80,7 +90,7 @@ parentPort.on('message', async (msg: unknown) => {
       workspace: context.cwd,
       autonomyLevel: 'full', // parent already validated the call
     }),
-    abortSignal: new AbortController().signal,
+    abortSignal: currentAbort.signal,
     onProgress: (update: string) => {
       parentPort!.postMessage({ type: 'progress', update });
     },
@@ -94,5 +104,7 @@ parentPort.on('message', async (msg: unknown) => {
       type: 'error',
       message: err instanceof Error ? err.message : String(err),
     });
+  } finally {
+    currentAbort = null;
   }
 });
