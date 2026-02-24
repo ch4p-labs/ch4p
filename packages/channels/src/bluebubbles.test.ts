@@ -380,4 +380,305 @@ describe('BlueBubblesChannel', () => {
       expect(second).toHaveLength(1);
     });
   });
+
+  // ---- Timeouts ----
+
+  describe('timeouts', () => {
+    it('should return timeout error when send exceeds API_TIMEOUT_MS', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      // Simulate AbortError from the AbortController timeout.
+      const abortErr = new DOMException('The operation was aborted', 'AbortError');
+      fetchMock.mockRejectedValueOnce(abortErr);
+
+      const result = await channel.send(
+        { channelId: 'iMessage;-;+15551234567' },
+        { text: 'Hello' },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('timed out');
+      expect(result.error).toContain('15000');
+    });
+
+    it('should return false from isHealthy when health check times out', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      // Simulate AbortError from the health timeout.
+      const abortErr = new DOMException('The operation was aborted', 'AbortError');
+      fetchMock.mockRejectedValueOnce(abortErr);
+
+      expect(await channel.isHealthy()).toBe(false);
+    });
+
+    it('should return false from isHealthy when response.ok is false', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: async () => ({}),
+        text: async () => '',
+      });
+
+      expect(await channel.isHealthy()).toBe(false);
+    });
+  });
+
+  // ---- Malformed webhook payloads ----
+
+  describe('malformed webhook payloads', () => {
+    it('should silently skip event with missing data object', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      const received: InboundMessage[] = [];
+      channel.onMessage((msg) => received.push(msg));
+
+      // data is undefined.
+      channel.handleIncomingEvent({ type: 'new-message', data: undefined } as unknown as BlueBubblesEvent);
+      expect(received).toHaveLength(0);
+    });
+
+    it('should silently skip event with null data', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      const received: InboundMessage[] = [];
+      channel.onMessage((msg) => received.push(msg));
+
+      channel.handleIncomingEvent({ type: 'new-message', data: null } as unknown as BlueBubblesEvent);
+      expect(received).toHaveLength(0);
+    });
+
+    it('should skip event with empty text string', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      const received: InboundMessage[] = [];
+      channel.onMessage((msg) => received.push(msg));
+
+      channel.handleIncomingEvent(createEvent({ text: '' }));
+      expect(received).toHaveLength(0);
+    });
+
+    it('should skip event with missing handle object entirely', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      const received: InboundMessage[] = [];
+      channel.onMessage((msg) => received.push(msg));
+
+      channel.handleIncomingEvent({
+        type: 'new-message',
+        data: {
+          guid: 'test-guid',
+          text: 'No handle here',
+          isFromMe: false,
+          dateCreated: 1700000000000,
+        },
+      } as BlueBubblesEvent);
+      expect(received).toHaveLength(0);
+    });
+
+    it('should skip when no message handler is registered', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      // Don't register a handler — handleIncomingEvent should bail silently.
+      expect(() => channel.handleIncomingEvent(createEvent())).not.toThrow();
+    });
+  });
+
+  // ---- Group chat identifier edge cases ----
+
+  describe('group chat identifier parsing', () => {
+    it('should not set groupId when chatIdentifier does not start with "chat"', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      const received: InboundMessage[] = [];
+      channel.onMessage((msg) => received.push(msg));
+
+      channel.handleIncomingEvent(createEvent({
+        chats: [{ guid: 'iMessage;-;+15551234567', chatIdentifier: '+15551234567' }],
+      }));
+
+      expect(received).toHaveLength(1);
+      expect(received[0]!.from.groupId).toBeUndefined();
+    });
+
+    it('should set groupId when chatIdentifier is exactly "chat"', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      const received: InboundMessage[] = [];
+      channel.onMessage((msg) => received.push(msg));
+
+      channel.handleIncomingEvent(createEvent({
+        chats: [{ guid: 'chat-only-guid', chatIdentifier: 'chat' }],
+      }));
+
+      expect(received).toHaveLength(1);
+      expect(received[0]!.from.groupId).toBe('chat-only-guid');
+    });
+
+    it('should use senderAddress as channelId when chats array is empty', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      const received: InboundMessage[] = [];
+      channel.onMessage((msg) => received.push(msg));
+
+      channel.handleIncomingEvent(createEvent({ chats: [] }));
+
+      expect(received).toHaveLength(1);
+      expect(received[0]!.channelId).toBe('+15551234567');
+      expect(received[0]!.from.groupId).toBeUndefined();
+    });
+
+    it('should use senderAddress as channelId when chats is undefined', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      const received: InboundMessage[] = [];
+      channel.onMessage((msg) => received.push(msg));
+
+      channel.handleIncomingEvent(createEvent({ chats: undefined }));
+
+      expect(received).toHaveLength(1);
+      expect(received[0]!.channelId).toBe('+15551234567');
+      expect(received[0]!.from.groupId).toBeUndefined();
+    });
+
+    it('should handle chat with undefined chatIdentifier (no groupId)', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      const received: InboundMessage[] = [];
+      channel.onMessage((msg) => received.push(msg));
+
+      channel.handleIncomingEvent(createEvent({
+        chats: [{ guid: 'some-guid', chatIdentifier: undefined }],
+      }));
+
+      expect(received).toHaveLength(1);
+      expect(received[0]!.channelId).toBe('some-guid');
+      expect(received[0]!.from.groupId).toBeUndefined();
+    });
+  });
+
+  // ---- GUID fallback and misc edge cases ----
+
+  describe('GUID fallback and edge cases', () => {
+    it('should generate fallback ID when event guid is missing', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      const received: InboundMessage[] = [];
+      channel.onMessage((msg) => received.push(msg));
+
+      channel.handleIncomingEvent(createEvent({ guid: undefined }));
+
+      expect(received).toHaveLength(1);
+      expect(received[0]!.id).toMatch(/^bb-\d+-[a-z0-9]+$/);
+    });
+
+    it('should fall back to handle.id when handle.address is missing', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      const received: InboundMessage[] = [];
+      channel.onMessage((msg) => received.push(msg));
+
+      channel.handleIncomingEvent(createEvent({
+        handle: { id: 'user@example.com' },
+      }));
+
+      expect(received).toHaveLength(1);
+      expect(received[0]!.from.userId).toBe('user@example.com');
+    });
+
+    it('should use current time when dateCreated is missing', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      const received: InboundMessage[] = [];
+      channel.onMessage((msg) => received.push(msg));
+
+      const before = Date.now();
+      channel.handleIncomingEvent(createEvent({ dateCreated: undefined }));
+      const after = Date.now();
+
+      expect(received).toHaveLength(1);
+      const ts = received[0]!.timestamp.getTime();
+      expect(ts).toBeGreaterThanOrEqual(before);
+      expect(ts).toBeLessThanOrEqual(after);
+    });
+
+    it('should prefer groupId over channelId for send', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      fetchMock.mockResolvedValueOnce(sendMessageResponse());
+
+      await channel.send(
+        { channelId: 'fallback-guid', userId: 'u', groupId: 'group-guid' },
+        { text: 'Hi group' },
+      );
+
+      const body = JSON.parse(fetchMock.mock.calls[1][1].body);
+      expect(body.chatGuid).toBe('group-guid');
+    });
+
+    it('should include raw event in inbound message', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      const received: InboundMessage[] = [];
+      channel.onMessage((msg) => received.push(msg));
+
+      const event = createEvent();
+      channel.handleIncomingEvent(event);
+
+      expect(received[0]!.raw).toBe(event);
+    });
+
+    it('should handle send when response text() throws', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        text: async () => { throw new Error('Body stream already consumed'); },
+      });
+
+      const result = await channel.send(
+        { channelId: 'chat-guid' },
+        { text: 'Hello' },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('502');
+    });
+
+    it('should handle network error on send', async () => {
+      fetchMock.mockResolvedValueOnce(serverInfoResponse());
+      await channel.start(baseConfig);
+
+      fetchMock.mockRejectedValueOnce(new Error('ECONNRESET'));
+
+      const result = await channel.send(
+        { channelId: 'chat-guid' },
+        { text: 'Hello' },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('ECONNRESET');
+    });
+  });
 });
