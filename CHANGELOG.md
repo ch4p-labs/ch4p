@@ -29,4 +29,4 @@ Initial public release.
 - **Daemon installer** — `ch4p install` for zero-sudo systemd (Linux) or launchd (macOS) with auto-restart
 - **Standalone binary** — `pnpm bundle` via bun compile
 
-[0.1.0]: https://github.com/vxcozy/ch4p/releases/tag/v0.1.0
+[0.1.0]: https://github.com/ch4p-labs/ch4p/releases/tag/v0.1.0

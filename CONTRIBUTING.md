@@ -11,7 +11,7 @@ Thanks for your interest in contributing! This guide covers everything you need 
 ## Setup
 
 ```bash
-git clone https://github.com/vxcozy/ch4p.git
+git clone https://github.com/ch4p-labs/ch4p.git
 cd ch4p
 corepack pnpm install
 corepack pnpm -r build
@@ -86,7 +86,7 @@ See the how-to guides in [`docs/how-to/`](docs/how-to/):
 
 ## Reporting issues
 
-- Use [GitHub Issues](https://github.com/vxcozy/ch4p/issues) for bugs and feature requests.
+- Use [GitHub Issues](https://github.com/ch4p-labs/ch4p/issues) for bugs and feature requests.
 - For **security vulnerabilities**, see [SECURITY.md](SECURITY.md) — do not open a public issue.
 
 ## License

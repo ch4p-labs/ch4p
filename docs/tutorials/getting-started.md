@@ -13,7 +13,7 @@ This tutorial takes you from zero to a working ch4p agent. By the end you will h
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/vxcozy/ch4p.git && cd ch4p
+git clone https://github.com/ch4p-labs/ch4p.git && cd ch4p
 corepack pnpm install
 corepack pnpm -r build
 ```

@@ -10,7 +10,7 @@
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Please use [GitHub's private vulnerability reporting](https://github.com/vxcozy/ch4p/security/advisories/new) to disclose security issues responsibly. This keeps the report confidential until a fix is available.
+Please use [GitHub's private vulnerability reporting](https://github.com/ch4p-labs/ch4p/security/advisories/new) to disclose security issues responsibly. This keeps the report confidential until a fix is available.
 
 ### What to include
 

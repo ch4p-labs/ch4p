@@ -5,11 +5,11 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vxcozy/ch4p.git"
+    "url": "https://github.com/ch4p-labs/ch4p.git"
   },
-  "homepage": "https://github.com/vxcozy/ch4p#readme",
+  "homepage": "https://github.com/ch4p-labs/ch4p#readme",
   "bugs": {
-    "url": "https://github.com/vxcozy/ch4p/issues"
+    "url": "https://github.com/ch4p-labs/ch4p/issues"
   },
   "private": true,
   "type": "module",

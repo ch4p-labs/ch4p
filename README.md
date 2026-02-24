@@ -35,7 +35,7 @@ Built on four pillars:
 ## Quick Start
 
 ```bash
-git clone https://github.com/vxcozy/ch4p.git && cd ch4p
+git clone https://github.com/ch4p-labs/ch4p.git && cd ch4p
 corepack pnpm install
 corepack pnpm -r build
 
@@ -240,7 +240,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code standards, an
 
 ## Security
 
-For vulnerability reporting, see [SECURITY.md](SECURITY.md). Do not open public issues for security concerns — use [GitHub's private reporting](https://github.com/vxcozy/ch4p/security/advisories/new).
+For vulnerability reporting, see [SECURITY.md](SECURITY.md). Do not open public issues for security concerns — use [GitHub's private reporting](https://github.com/ch4p-labs/ch4p/security/advisories/new).
 
 ## License
 
