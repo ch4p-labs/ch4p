@@ -422,11 +422,11 @@ export async function gateway(args: string[]): Promise<void> {
   // channel can be forwarded to the subprocess stdin instead of spawning a new loop.
   const inFlightLoops = new Map<string, { loop: AgentLoop; permissionPending: boolean }>();
 
-  // Per-user pending message queue (depth 1). When a user sends a follow-up while
-  // an agent run is active, the latest message is stored here and processed after
-  // the current run finishes. Only the most recent message is kept — earlier ones
-  // are acknowledged but superseded.
-  const pendingMessages = new Map<string, { msg: InboundMessage; channel: IChannel }>();
+  // Per-user pending message queue (max depth 2). When a user sends follow-ups
+  // while an agent run is active, up to 2 messages are queued and processed in
+  // order after the current run finishes. Messages beyond 2 replace the last entry.
+  const MAX_PENDING_PER_USER = 2;
+  const pendingMessages = new Map<string, Array<{ msg: InboundMessage; channel: IChannel }>>();
 
   // Map of channel names to their raw webhook handlers (Teams, Google Chat).
   // Populated during channel startup; the server's onRawWebhook callback
@@ -868,7 +868,7 @@ interface InboundMessageOpts {
   onInflightChange?: (delta: 1 | -1) => void;
   workerPool?: ToolWorkerPool;
   inFlightLoops?: Map<string, { loop: AgentLoop; permissionPending: boolean }>;
-  pendingMessages?: Map<string, { msg: InboundMessage; channel: IChannel }>;
+  pendingMessages?: Map<string, Array<{ msg: InboundMessage; channel: IChannel }>>;
   sharedVerifier?: FormatVerifier | LLMVerifier;
 }
 
@@ -927,11 +927,17 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
         inflight.loop.steerEngine(msg.text ?? '');
         inflight.permissionPending = false;
       } else if (pendingMessages) {
-        // Queue the latest follow-up message (depth 1 — replaces any previous).
-        const alreadyQueued = pendingMessages.get(userKey);
-        pendingMessages.set(userKey, { msg, channel });
-        // Only acknowledge the first queued message; don't spam on repeated follow-ups.
-        if (!alreadyQueued) {
+        // Queue follow-up messages (max depth 2). Beyond the cap, replace the last entry.
+        const queue = pendingMessages.get(userKey) ?? [];
+        if (queue.length < MAX_PENDING_PER_USER) {
+          queue.push({ msg, channel });
+        } else {
+          // Cap reached — replace the last entry with the newest message.
+          queue[queue.length - 1] = { msg, channel };
+        }
+        pendingMessages.set(userKey, queue);
+        // Acknowledge the first queued message; don't spam on repeated follow-ups.
+        if (queue.length === 1) {
           channel.send(msg.from, {
             text: "Got it — I'll get to your message once I finish what I'm working on.",
             replyTo: msg.id,
@@ -1165,13 +1171,14 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
       clearTimeout(runTimer);
 
       // Process the next queued message for this user, if any.
-      const queued = pendingMessages?.get(userKey);
-      if (queued) {
-        pendingMessages.delete(userKey);
+      const queue = pendingMessages?.get(userKey);
+      const next = queue?.shift();
+      if (queue && queue.length === 0) pendingMessages.delete(userKey);
+      if (next) {
         // Remove the in-flight entry so the recursive call doesn't hit the guard.
         inFlightLoops?.delete(userKey);
         // Don't decrement inflight count — the next run continues the work.
-        handleInboundMessage({ ...opts, msg: queued.msg, channel: queued.channel });
+        handleInboundMessage({ ...opts, msg: next.msg, channel: next.channel });
       } else {
         inFlightLoops?.delete(userKey);
         onInflightChange?.(-1);
