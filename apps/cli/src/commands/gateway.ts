@@ -165,6 +165,17 @@ function createGatewayEngine(config: Ch4pConfig) {
 }
 
 // ---------------------------------------------------------------------------
+// Gateway constants — module scope so both gateway() and handleInboundMessage()
+// can access them.
+// ---------------------------------------------------------------------------
+
+/** Hard cap on simultaneous conversation contexts to prevent OOM. LRU eviction. */
+const MAX_CONTEXTS = 500;
+
+/** Reduced token budget for gateway contexts (vs full 128K default). */
+const GATEWAY_CONTEXT_MAX_TOKENS = 32_000;
+
+// ---------------------------------------------------------------------------
 // CLI entry point
 // ---------------------------------------------------------------------------
 
@@ -405,8 +416,6 @@ export async function gateway(args: string[]): Promise<void> {
   // share history (like the REPL's sharedContext).
   // Each entry tracks lastActiveAt for idle eviction.
   // Hard cap prevents unbounded growth when many users are simultaneously active.
-  const MAX_CONTEXTS = 500;
-  const GATEWAY_CONTEXT_MAX_TOKENS = 32_000;
   const conversationContexts = new Map<string, { ctx: ContextManager; lastActiveAt: number }>();
 
   // Track in-flight agent loops per user so permission-prompt replies from the
@@ -846,7 +855,7 @@ function handleInboundMessage(
   engine: ReturnType<typeof createGatewayEngine>,
   config: Ch4pConfig,
   observer: ReturnType<typeof createObserver>,
-  conversationContexts: Map<string, ContextManager>,
+  conversationContexts: Map<string, { ctx: ContextManager; lastActiveAt: number }>,
   agentRouter: AgentRouter,
   defaultSystemPrompt: string,
   memoryBackend?: ReturnType<typeof createMemoryBackend>,

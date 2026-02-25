@@ -510,10 +510,10 @@ describe('TeamsChannel', () => {
       // We can't easily access the private map, but we can verify that after filling
       // past the cap, send() still works for recent conversations.
       for (let i = 0; i < 5; i++) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         channel.handleIncomingActivity(createMessageActivity({
           conversation: { id: `conv-${i}`, tenantId: 'tenant-1', isGroup: false },
           serviceUrl: `https://service-${i}.example.com/`,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         }) as any);
       }
 
