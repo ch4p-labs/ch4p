@@ -527,7 +527,10 @@ function createAgentLoop(
   skillRegistry?: SkillRegistry,
   extras?: CreateAgentLoopExtras,
 ): AgentLoop {
-  const session = new Session(sessionConfig, extras?.sessionOpts);
+  const session = new Session(sessionConfig, {
+    ...extras?.sessionOpts,
+    maxErrors: config.agent.maxSessionErrors,
+  });
   const tools = createToolRegistry(config, skillRegistry);
   const observer = createConfiguredObserver(config);
   const securityPolicy = createSecurityPolicy(config, sessionConfig.cwd ?? process.cwd());
@@ -558,6 +561,9 @@ function createAgentLoop(
     toolContextExtensions: Object.keys(toolContextExtensions).length > 0
       ? toolContextExtensions
       : undefined,
+    maxToolResults: config.agent.maxToolResults,
+    maxToolOutputLen: config.agent.maxToolOutputLen,
+    maxStateRecords: config.agent.maxStateRecords,
   });
 }
 

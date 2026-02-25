@@ -40,6 +40,10 @@ Agent identity and behavior.
 | `verifier` | `string` | `null` | Task-level verifier ID: `null` (disabled) or a verifier ID. |
 | `enableStateSnapshots` | `boolean` | `true` | Capture state snapshots before/after tool execution for verification. |
 | `contextStrategy` | `string\|object` | `"sliding"` | Context compaction strategy. See [Named Strategies](#named-context-strategies). |
+| `maxToolResults` | `number` | `30` | Max tool result records kept per run for verification. Oldest evicted first. Increase for long autonomous runs. |
+| `maxToolOutputLen` | `number` | `65536` | Max tool output/error length (bytes) per result. Must be at least 1024. |
+| `maxStateRecords` | `number` | `20` | Max state snapshot records per run for verification. Oldest evicted first. |
+| `maxSessionErrors` | `number` | `20` | Max session error records before FIFO eviction. |
 
 ### Named Context Strategies
 

@@ -992,7 +992,10 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
         systemPrompt: routing.systemPrompt ?? routeResult.config.systemPrompt,
       };
 
-      const session = new Session(routedSessionConfig, { sharedContext });
+      const session = new Session(routedSessionConfig, {
+        sharedContext,
+        maxErrors: config.agent.maxSessionErrors,
+      });
       // Build exclusion list based on autonomy level and feature flags.
       const toolExclude = config.autonomy.level === 'readonly'
         ? ['bash', 'file_write', 'file_edit', 'delegate', 'browser']
@@ -1082,6 +1085,9 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
           ? toolContextExtensions
           : undefined,
         workerPool,
+        maxToolResults: config.agent.maxToolResults,
+        maxToolOutputLen: config.agent.maxToolOutputLen,
+        maxStateRecords: config.agent.maxStateRecords,
       });
 
       // Register loop so permission-prompt replies can be routed to subprocess stdin.

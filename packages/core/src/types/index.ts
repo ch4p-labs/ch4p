@@ -69,6 +69,14 @@ export interface Ch4pConfig {
     model: string;
     provider: string;
     thinkingLevel?: 'low' | 'medium' | 'high';
+    /** Max tool result records kept per run for verification. Default: 30. */
+    maxToolResults?: number;
+    /** Max tool output/error length (bytes) stored per result. Default: 65536. */
+    maxToolOutputLen?: number;
+    /** Max state snapshot records kept per run for verification. Default: 20. */
+    maxStateRecords?: number;
+    /** Max session error records kept before FIFO eviction. Default: 20. */
+    maxSessionErrors?: number;
   };
   providers: Record<string, Record<string, unknown>>;
   channels: Record<string, Record<string, unknown>>;

@@ -40,6 +40,8 @@ export interface SessionOpts {
   /** Inject an existing ContextManager for conversation continuity (e.g. REPL).
    *  When provided, the session shares this context instead of creating a new one. */
   sharedContext?: ContextManager;
+  /** Max error records before FIFO eviction. Default: 20. */
+  maxErrors?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -51,11 +53,13 @@ export class Session {
   private readonly context: ContextManager;
   private readonly steering: SteeringQueue;
   private readonly metadata: SessionMetadata;
+  private readonly maxErrors: number;
   private state: SessionState;
 
   constructor(config: SessionConfig, opts: SessionOpts = {}) {
     this.config = config;
     this.state = 'created';
+    this.maxErrors = opts.maxErrors ?? 20;
 
     this.context = opts.sharedContext ?? new ContextManager(opts.contextOpts);
     this.steering = new SteeringQueue();
@@ -152,7 +156,7 @@ export class Session {
   /** Mark the session as failed with an error. */
   fail(error: Error): void {
     this.metadata.errors.push(error);
-    if (this.metadata.errors.length > 20) {
+    if (this.metadata.errors.length > this.maxErrors) {
       this.metadata.errors.shift();
     }
     this.state = 'failed';
@@ -183,7 +187,7 @@ export class Session {
   /** Record an error without failing the session (capped to prevent unbounded growth). */
   recordError(error: Error): void {
     this.metadata.errors.push(error);
-    if (this.metadata.errors.length > 20) {
+    if (this.metadata.errors.length > this.maxErrors) {
       this.metadata.errors.shift();
     }
   }

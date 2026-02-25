@@ -295,6 +295,24 @@ function validateConfig(config: Ch4pConfig): ValidationError[] {
     errors.push({ field: 'agent.provider', message: 'Provider is required' });
   }
 
+  // --- agent memory safety caps ---
+  if (config.agent?.maxToolResults != null &&
+      (typeof config.agent.maxToolResults !== 'number' || config.agent.maxToolResults < 1)) {
+    errors.push({ field: 'agent.maxToolResults', message: 'Must be a positive number' });
+  }
+  if (config.agent?.maxToolOutputLen != null &&
+      (typeof config.agent.maxToolOutputLen !== 'number' || config.agent.maxToolOutputLen < 1024)) {
+    errors.push({ field: 'agent.maxToolOutputLen', message: 'Must be at least 1024 bytes' });
+  }
+  if (config.agent?.maxStateRecords != null &&
+      (typeof config.agent.maxStateRecords !== 'number' || config.agent.maxStateRecords < 1)) {
+    errors.push({ field: 'agent.maxStateRecords', message: 'Must be a positive number' });
+  }
+  if (config.agent?.maxSessionErrors != null &&
+      (typeof config.agent.maxSessionErrors !== 'number' || config.agent.maxSessionErrors < 1)) {
+    errors.push({ field: 'agent.maxSessionErrors', message: 'Must be a positive number' });
+  }
+
   // --- gateway ---
   if (typeof config.gateway?.port !== 'number' || config.gateway.port < 1 || config.gateway.port > 65535) {
     errors.push({ field: 'gateway.port', message: 'Port must be a number between 1 and 65535' });

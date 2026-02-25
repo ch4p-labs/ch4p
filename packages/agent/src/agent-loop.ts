@@ -84,17 +84,18 @@ function sanitizeWorkspacePath(cwd: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Memory safety caps — prevent unbounded accumulation during agent runs.
+// Memory safety caps — defaults for unbounded accumulation prevention.
+// All configurable via AgentLoopOpts / Ch4pConfig.agent.
 // ---------------------------------------------------------------------------
 
-/** Max tool result records kept for verification. Oldest evicted first. */
-const MAX_TOOL_RESULTS = 30;
+/** Default max tool result records kept for verification. Oldest evicted first. */
+const DEFAULT_MAX_TOOL_RESULTS = 30;
 
-/** Max tool output/error string length (bytes) stored per result. */
-const MAX_TOOL_OUTPUT_LEN = 65_536; // 64 KiB
+/** Default max tool output/error string length (bytes) stored per result. */
+const DEFAULT_MAX_TOOL_OUTPUT_LEN = 65_536; // 64 KiB
 
-/** Max state records (before/after snapshots) kept for verification. */
-const MAX_STATE_RECORDS = 20;
+/** Default max state records (before/after snapshots) kept for verification. */
+const DEFAULT_MAX_STATE_RECORDS = 20;
 
 // ---------------------------------------------------------------------------
 // AgentEvent — the public event stream type
@@ -144,6 +145,12 @@ export interface AgentLoopOpts {
   /** Called after the run completes successfully. Receives the full context
    *  and final answer for summarization (e.g. auto-store to memory backend). */
   onAfterComplete?: (ctx: ContextManager, answer: string) => Promise<void>;
+  /** Max tool result records kept per run. Default: 30. */
+  maxToolResults?: number;
+  /** Max tool output/error length (bytes) per result. Default: 65536. */
+  maxToolOutputLen?: number;
+  /** Max state snapshot records per run. Default: 20. */
+  maxStateRecords?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -197,7 +204,7 @@ export class AgentLoop {
   private readonly tools: Map<string, ITool>;
   private readonly toolDefs: ToolDefinition[];
   private readonly observer: IObserver;
-  private readonly opts: Required<Omit<AgentLoopOpts, 'verifier' | 'enableStateSnapshots' | 'memoryBackend' | 'securityPolicy' | 'toolContextExtensions' | 'onBeforeFirstRun' | 'onAfterComplete'>> & {
+  private readonly opts: Required<Omit<AgentLoopOpts, 'verifier' | 'enableStateSnapshots' | 'memoryBackend' | 'securityPolicy' | 'toolContextExtensions' | 'onBeforeFirstRun' | 'onAfterComplete' | 'maxToolResults' | 'maxToolOutputLen' | 'maxStateRecords'>> & {
     verifier?: IVerifier;
     enableStateSnapshots: boolean;
     memoryBackend?: IMemoryBackend;
@@ -218,6 +225,11 @@ export class AgentLoop {
   private allToolResults: ToolResult[] = [];
   /** Cumulative token usage across all iterations. */
   private cumulativeTokens = { inputTokens: 0, outputTokens: 0 };
+
+  // Resolved memory safety caps (configurable via opts / Ch4pConfig.agent).
+  private readonly maxToolResults: number;
+  private readonly maxToolOutputLen: number;
+  private readonly maxStateRecords: number;
 
   constructor(
     session: Session,
@@ -253,6 +265,12 @@ export class AgentLoop {
       onBeforeFirstRun: opts.onBeforeFirstRun,
       onAfterComplete: opts.onAfterComplete,
     };
+
+    // Resolve memory safety caps — config overrides fall back to defaults.
+    // Note: maxSessionErrors is not stored here — it's passed to Session directly.
+    this.maxToolResults = opts.maxToolResults ?? DEFAULT_MAX_TOOL_RESULTS;
+    this.maxToolOutputLen = opts.maxToolOutputLen ?? DEFAULT_MAX_TOOL_OUTPUT_LEN;
+    this.maxStateRecords = opts.maxStateRecords ?? DEFAULT_MAX_STATE_RECORDS;
   }
 
   // -----------------------------------------------------------------------
@@ -508,14 +526,14 @@ export class AgentLoop {
 
             // Track for verification (capped to prevent unbounded growth).
             const cappedResult = { ...result };
-            if (cappedResult.output && cappedResult.output.length > MAX_TOOL_OUTPUT_LEN) {
-              cappedResult.output = cappedResult.output.slice(0, MAX_TOOL_OUTPUT_LEN) + '\n[truncated]';
+            if (cappedResult.output && cappedResult.output.length > this.maxToolOutputLen) {
+              cappedResult.output = cappedResult.output.slice(0, this.maxToolOutputLen) + '\n[truncated]';
             }
-            if (cappedResult.error && cappedResult.error.length > MAX_TOOL_OUTPUT_LEN) {
-              cappedResult.error = cappedResult.error.slice(0, MAX_TOOL_OUTPUT_LEN) + '\n[truncated]';
+            if (cappedResult.error && cappedResult.error.length > this.maxToolOutputLen) {
+              cappedResult.error = cappedResult.error.slice(0, this.maxToolOutputLen) + '\n[truncated]';
             }
             this.allToolResults.push(cappedResult);
-            if (this.allToolResults.length > MAX_TOOL_RESULTS) {
+            if (this.allToolResults.length > this.maxToolResults) {
               this.allToolResults.shift();
             }
 
@@ -885,7 +903,7 @@ export class AgentLoop {
         before: beforeSnapshot,
         after: afterSnapshot,
       });
-      if (this.stateRecords.length > MAX_STATE_RECORDS) {
+      if (this.stateRecords.length > this.maxStateRecords) {
         this.stateRecords.shift();
       }
     }
