@@ -84,6 +84,19 @@ function sanitizeWorkspacePath(cwd: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Memory safety caps — prevent unbounded accumulation during agent runs.
+// ---------------------------------------------------------------------------
+
+/** Max tool result records kept for verification. Oldest evicted first. */
+const MAX_TOOL_RESULTS = 30;
+
+/** Max tool output/error string length (bytes) stored per result. */
+const MAX_TOOL_OUTPUT_LEN = 65_536; // 64 KiB
+
+/** Max state records (before/after snapshots) kept for verification. */
+const MAX_STATE_RECORDS = 20;
+
+// ---------------------------------------------------------------------------
 // AgentEvent — the public event stream type
 // ---------------------------------------------------------------------------
 
@@ -493,8 +506,18 @@ export class AgentLoop {
 
             const result = await this.executeTool(toolCall, signal);
 
-            // Track for verification.
-            this.allToolResults.push(result);
+            // Track for verification (capped to prevent unbounded growth).
+            const cappedResult = { ...result };
+            if (cappedResult.output && cappedResult.output.length > MAX_TOOL_OUTPUT_LEN) {
+              cappedResult.output = cappedResult.output.slice(0, MAX_TOOL_OUTPUT_LEN) + '\n[truncated]';
+            }
+            if (cappedResult.error && cappedResult.error.length > MAX_TOOL_OUTPUT_LEN) {
+              cappedResult.error = cappedResult.error.slice(0, MAX_TOOL_OUTPUT_LEN) + '\n[truncated]';
+            }
+            this.allToolResults.push(cappedResult);
+            if (this.allToolResults.length > MAX_TOOL_RESULTS) {
+              this.allToolResults.shift();
+            }
 
             // Yield tool_end and add result to context.
             yield { type: 'tool_end', tool: toolCall.name, result };
@@ -854,7 +877,7 @@ export class AgentLoop {
       }
     }
 
-    // Record state diffs for verification.
+    // Record state diffs for verification (capped to prevent unbounded growth).
     if (beforeSnapshot || afterSnapshot) {
       this.stateRecords.push({
         tool: toolCall.name,
@@ -862,6 +885,9 @@ export class AgentLoop {
         before: beforeSnapshot,
         after: afterSnapshot,
       });
+      if (this.stateRecords.length > MAX_STATE_RECORDS) {
+        this.stateRecords.shift();
+      }
     }
 
     const duration = Date.now() - startTime;

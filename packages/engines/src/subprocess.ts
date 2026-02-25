@@ -281,11 +281,20 @@ export class SubprocessEngine implements IEngine {
 
       // Collect stderr concurrently to prevent pipe-buffer deadlock.
       // Relay stderr as text_delta so permission prompts appear in the channel.
+      // Capped at 1 MiB to prevent OOM from verbose subprocess error output.
+      const MAX_STDERR = 1_048_576;
       let stderr = '';
+      let stderrCapped = false;
       if (child.stderr) {
         child.stderr.on('data', (chunk: Buffer | string) => {
           const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-          stderr += text;
+          if (!stderrCapped) {
+            stderr += text;
+            if (stderr.length > MAX_STDERR) {
+              stderr = stderr.slice(0, MAX_STDERR) + '\n[stderr truncated]';
+              stderrCapped = true;
+            }
+          }
           emit({ type: 'text_delta', delta: text });
         });
       }

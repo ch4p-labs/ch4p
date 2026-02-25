@@ -152,6 +152,9 @@ export class Session {
   /** Mark the session as failed with an error. */
   fail(error: Error): void {
     this.metadata.errors.push(error);
+    if (this.metadata.errors.length > 20) {
+      this.metadata.errors.shift();
+    }
     this.state = 'failed';
     this.metadata.state = this.state;
     this.metadata.endedAt = new Date();
@@ -177,9 +180,12 @@ export class Session {
     this.metadata.llmCalls++;
   }
 
-  /** Record an error without failing the session. */
+  /** Record an error without failing the session (capped to prevent unbounded growth). */
   recordError(error: Error): void {
     this.metadata.errors.push(error);
+    if (this.metadata.errors.length > 20) {
+      this.metadata.errors.shift();
+    }
   }
 
   // -----------------------------------------------------------------------

@@ -908,14 +908,24 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
     return;
   }
 
-  // If this user has an in-flight loop waiting for a permission response,
-  // forward the message to the subprocess stdin instead of creating a new loop.
+  // Per-user concurrency guard — only one active agent run per user.
+  // Without this, rapid messages spawn parallel AgentLoops that each hold
+  // Session + ToolRegistry + engine connections, causing O(N) memory growth.
   const userKey = `${msg.channelId ?? 'unknown'}:${msg.from.userId ?? 'anonymous'}`;
   if (inFlightLoops) {
     const inflight = inFlightLoops.get(userKey);
-    if (inflight?.permissionPending) {
-      inflight.loop.steerEngine(msg.text ?? '');
-      inflight.permissionPending = false;
+    if (inflight) {
+      if (inflight.permissionPending) {
+        // Forward to subprocess stdin for permission-prompt responses.
+        inflight.loop.steerEngine(msg.text ?? '');
+        inflight.permissionPending = false;
+      } else {
+        // Already processing — reject to prevent concurrent memory pressure.
+        channel.send(msg.from, {
+          text: "I'm still working on your previous message. Please wait for me to finish.",
+          replyTo: msg.id,
+        }).catch(() => {});
+      }
       return;
     }
   }
