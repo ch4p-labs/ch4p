@@ -961,6 +961,7 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
   // Run the agent asynchronously — don't block the channel handler.
   onInflightChange?.(1);
   void (async () => {
+    let runTimer: ReturnType<typeof setTimeout> | undefined;
     try {
       // Process voice attachments (STT) if voice is enabled.
       const processedMsg = voiceProcessor
@@ -1123,7 +1124,7 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
       // Prevents stuck subprocess/engine calls from locking out users indefinitely.
       const DEFAULT_RUN_TIMEOUT_MS = 300_000; // 5 minutes
       const runTimeoutMs = config.agent.runTimeout ?? DEFAULT_RUN_TIMEOUT_MS;
-      const runTimer = setTimeout(() => {
+      runTimer = setTimeout(() => {
         loop.abort('Gateway run timeout exceeded');
       }, runTimeoutMs);
 
