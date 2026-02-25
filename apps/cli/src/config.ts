@@ -312,6 +312,10 @@ function validateConfig(config: Ch4pConfig): ValidationError[] {
       (typeof config.agent.maxSessionErrors !== 'number' || config.agent.maxSessionErrors < 1)) {
     errors.push({ field: 'agent.maxSessionErrors', message: 'Must be a positive number' });
   }
+  if (config.agent?.runTimeout != null &&
+      (typeof config.agent.runTimeout !== 'number' || config.agent.runTimeout < 30_000)) {
+    errors.push({ field: 'agent.runTimeout', message: 'Must be at least 30000 (30 seconds)' });
+  }
 
   // --- gateway ---
   if (typeof config.gateway?.port !== 'number' || config.gateway.port < 1 || config.gateway.port > 65535) {

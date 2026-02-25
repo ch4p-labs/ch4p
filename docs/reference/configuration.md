@@ -44,6 +44,7 @@ Agent identity and behavior.
 | `maxToolOutputLen` | `number` | `65536` | Max tool output/error length (bytes) per result. Must be at least 1024. |
 | `maxStateRecords` | `number` | `20` | Max state snapshot records per run for verification. Oldest evicted first. |
 | `maxSessionErrors` | `number` | `20` | Max session error records before FIFO eviction. |
+| `runTimeout` | `number` | `300000` | Max duration (ms) for a single gateway agent run before abort. Must be at least 30000 (30s). |
 
 ### Named Context Strategies
 

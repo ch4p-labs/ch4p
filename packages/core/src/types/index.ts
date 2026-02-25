@@ -77,6 +77,8 @@ export interface Ch4pConfig {
     maxStateRecords?: number;
     /** Max session error records kept before FIFO eviction. Default: 20. */
     maxSessionErrors?: number;
+    /** Max duration (ms) for a single gateway agent run before abort. Default: 300000 (5 min). */
+    runTimeout?: number;
   };
   providers: Record<string, Record<string, unknown>>;
   channels: Record<string, Record<string, unknown>>;

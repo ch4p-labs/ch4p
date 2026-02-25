@@ -422,6 +422,12 @@ export async function gateway(args: string[]): Promise<void> {
   // channel can be forwarded to the subprocess stdin instead of spawning a new loop.
   const inFlightLoops = new Map<string, { loop: AgentLoop; permissionPending: boolean }>();
 
+  // Per-user pending message queue (depth 1). When a user sends a follow-up while
+  // an agent run is active, the latest message is stored here and processed after
+  // the current run finishes. Only the most recent message is kept — earlier ones
+  // are acknowledged but superseded.
+  const pendingMessages = new Map<string, { msg: InboundMessage; channel: IChannel }>();
+
   // Map of channel names to their raw webhook handlers (Teams, Google Chat).
   // Populated during channel startup; the server's onRawWebhook callback
   // routes to these when the webhook name matches a registered channel.
@@ -454,7 +460,7 @@ export async function gateway(args: string[]): Promise<void> {
         msg: syntheticMsg, channel: logChannel as unknown as IChannel, router: messageRouter,
         engine, config, observer, conversationContexts, agentRouter, defaultSystemPrompt,
         memoryBackend, skillRegistry, voiceProcessor, onInflightChange: trackInflight,
-        workerPool, inFlightLoops, sharedVerifier,
+        workerPool, inFlightLoops, pendingMessages, sharedVerifier,
       });
     },
     onRawWebhook: (name, body) => {
@@ -551,7 +557,7 @@ export async function gateway(args: string[]): Promise<void> {
             msg, channel, router: messageRouter, engine, config, observer,
             conversationContexts, agentRouter, defaultSystemPrompt,
             memoryBackend, skillRegistry, voiceProcessor, onInflightChange: trackInflight,
-            workerPool, inFlightLoops, sharedVerifier,
+            workerPool, inFlightLoops, pendingMessages, sharedVerifier,
           });
         });
 
@@ -658,7 +664,7 @@ export async function gateway(args: string[]): Promise<void> {
             msg: syntheticMsg, channel: logChannel as unknown as IChannel, router: messageRouter,
             engine, config, observer, conversationContexts, agentRouter, defaultSystemPrompt,
             memoryBackend, skillRegistry, voiceProcessor, onInflightChange: trackInflight,
-            workerPool, inFlightLoops, sharedVerifier,
+            workerPool, inFlightLoops, pendingMessages, sharedVerifier,
           });
         },
       });
@@ -862,6 +868,7 @@ interface InboundMessageOpts {
   onInflightChange?: (delta: 1 | -1) => void;
   workerPool?: ToolWorkerPool;
   inFlightLoops?: Map<string, { loop: AgentLoop; permissionPending: boolean }>;
+  pendingMessages?: Map<string, { msg: InboundMessage; channel: IChannel }>;
   sharedVerifier?: FormatVerifier | LLMVerifier;
 }
 
@@ -881,7 +888,7 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
     msg, channel, router, engine, config, observer,
     conversationContexts, agentRouter, defaultSystemPrompt,
     memoryBackend, skillRegistry, voiceProcessor,
-    onInflightChange, workerPool, inFlightLoops, sharedVerifier,
+    onInflightChange, workerPool, inFlightLoops, pendingMessages, sharedVerifier,
   } = opts;
   if (!engine) {
     // No engine available — send a polite error back.
@@ -919,8 +926,19 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
         // Forward to subprocess stdin for permission-prompt responses.
         inflight.loop.steerEngine(msg.text ?? '');
         inflight.permissionPending = false;
+      } else if (pendingMessages) {
+        // Queue the latest follow-up message (depth 1 — replaces any previous).
+        const alreadyQueued = pendingMessages.get(userKey);
+        pendingMessages.set(userKey, { msg, channel });
+        // Only acknowledge the first queued message; don't spam on repeated follow-ups.
+        if (!alreadyQueued) {
+          channel.send(msg.from, {
+            text: "Got it — I'll get to your message once I finish what I'm working on.",
+            replyTo: msg.id,
+          }).catch(() => {});
+        }
       } else {
-        // Already processing — reject to prevent concurrent memory pressure.
+        // No queue available — reject to prevent concurrent memory pressure.
         channel.send(msg.from, {
           text: "I'm still working on your previous message. Please wait for me to finish.",
           replyTo: msg.id,
@@ -1095,6 +1113,14 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
         inFlightLoops.set(userKey, { loop, permissionPending: false });
       }
 
+      // Per-run timeout — abort the loop if it exceeds the configured duration.
+      // Prevents stuck subprocess/engine calls from locking out users indefinitely.
+      const DEFAULT_RUN_TIMEOUT_MS = 300_000; // 5 minutes
+      const runTimeoutMs = config.agent.runTimeout ?? DEFAULT_RUN_TIMEOUT_MS;
+      const runTimer = setTimeout(() => {
+        loop.abort('Gateway run timeout exceeded');
+      }, runTimeoutMs);
+
       let responseText = '';
 
       // Pattern that indicates the subprocess is waiting for user permission input.
@@ -1136,8 +1162,20 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
         replyTo: msg.id,
       }).catch(() => {});
     } finally {
-      inFlightLoops?.delete(userKey);
-      onInflightChange?.(-1);
+      clearTimeout(runTimer);
+
+      // Process the next queued message for this user, if any.
+      const queued = pendingMessages?.get(userKey);
+      if (queued) {
+        pendingMessages.delete(userKey);
+        // Remove the in-flight entry so the recursive call doesn't hit the guard.
+        inFlightLoops?.delete(userKey);
+        // Don't decrement inflight count — the next run continues the work.
+        handleInboundMessage({ ...opts, msg: queued.msg, channel: queued.channel });
+      } else {
+        inFlightLoops?.delete(userKey);
+        onInflightChange?.(-1);
+      }
     }
   })();
 }
