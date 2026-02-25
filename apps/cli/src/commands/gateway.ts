@@ -450,11 +450,12 @@ export async function gateway(args: string[]): Promise<void> {
         text: payload.message,
         timestamp: new Date(),
       };
-      handleInboundMessage(
-        syntheticMsg, logChannel as unknown as IChannel, messageRouter, engine, config, observer,
-        conversationContexts, agentRouter, defaultSystemPrompt,
-        memoryBackend, skillRegistry, voiceProcessor, trackInflight, workerPool, inFlightLoops, sharedVerifier,
-      );
+      handleInboundMessage({
+        msg: syntheticMsg, channel: logChannel as unknown as IChannel, router: messageRouter,
+        engine, config, observer, conversationContexts, agentRouter, defaultSystemPrompt,
+        memoryBackend, skillRegistry, voiceProcessor, onInflightChange: trackInflight,
+        workerPool, inFlightLoops, sharedVerifier,
+      });
     },
     onRawWebhook: (name, body) => {
       const handler = rawWebhookHandlers.get(name);
@@ -546,11 +547,12 @@ export async function gateway(args: string[]): Promise<void> {
 
         // Wire inbound messages: channel → voice → messageRouter → AgentLoop → channel.send()
         channel.onMessage((msg: InboundMessage) => {
-          handleInboundMessage(
-            msg, channel, messageRouter, engine, config, observer,
+          handleInboundMessage({
+            msg, channel, router: messageRouter, engine, config, observer,
             conversationContexts, agentRouter, defaultSystemPrompt,
-            memoryBackend, skillRegistry, voiceProcessor, trackInflight, workerPool, inFlightLoops, sharedVerifier,
-          );
+            memoryBackend, skillRegistry, voiceProcessor, onInflightChange: trackInflight,
+            workerPool, inFlightLoops, sharedVerifier,
+          });
         });
 
         // Register raw webhook handlers for channels that receive structured
@@ -652,11 +654,12 @@ export async function gateway(args: string[]): Promise<void> {
             text: job.message,
             timestamp: new Date(),
           };
-          handleInboundMessage(
-            syntheticMsg, logChannel as unknown as IChannel, messageRouter, engine, config, observer,
-            conversationContexts, agentRouter, defaultSystemPrompt,
-            memoryBackend, skillRegistry, voiceProcessor, trackInflight, workerPool, inFlightLoops, sharedVerifier,
-          );
+          handleInboundMessage({
+            msg: syntheticMsg, channel: logChannel as unknown as IChannel, router: messageRouter,
+            engine, config, observer, conversationContexts, agentRouter, defaultSystemPrompt,
+            memoryBackend, skillRegistry, voiceProcessor, onInflightChange: trackInflight,
+            workerPool, inFlightLoops, sharedVerifier,
+          });
         },
       });
 
@@ -838,6 +841,31 @@ const gatewayRateLimiter = new RateLimiter(20, 60_000);
 // ---------------------------------------------------------------------------
 
 /**
+ * All dependencies required by handleInboundMessage, passed as a single
+ * typed object so TypeScript catches missing fields at compile time.
+ * (Replaces the previous 17-parameter positional signature that allowed
+ * closure-scoped variables to slip through as runtime ReferenceErrors.)
+ */
+interface InboundMessageOpts {
+  msg: InboundMessage;
+  channel: IChannel;
+  router: MessageRouter;
+  engine: ReturnType<typeof createGatewayEngine>;
+  config: Ch4pConfig;
+  observer: ReturnType<typeof createObserver>;
+  conversationContexts: Map<string, { ctx: ContextManager; lastActiveAt: number }>;
+  agentRouter: AgentRouter;
+  defaultSystemPrompt: string;
+  memoryBackend?: ReturnType<typeof createMemoryBackend>;
+  skillRegistry?: SkillRegistry;
+  voiceProcessor?: VoiceProcessor;
+  onInflightChange?: (delta: 1 | -1) => void;
+  workerPool?: ToolWorkerPool;
+  inFlightLoops?: Map<string, { loop: AgentLoop; permissionPending: boolean }>;
+  sharedVerifier?: FormatVerifier | LLMVerifier;
+}
+
+/**
  * Handle an inbound message from a channel:
  *   1. Process voice attachments via VoiceProcessor (STT)
  *   2. Route via MessageRouter to find/create a session
@@ -848,24 +876,13 @@ const gatewayRateLimiter = new RateLimiter(20, 60_000);
  * onInflightChange is called with +1 when processing starts and -1 when done,
  * enabling the gateway to drain in-flight work before exiting.
  */
-function handleInboundMessage(
-  msg: InboundMessage,
-  channel: IChannel,
-  router: MessageRouter,
-  engine: ReturnType<typeof createGatewayEngine>,
-  config: Ch4pConfig,
-  observer: ReturnType<typeof createObserver>,
-  conversationContexts: Map<string, { ctx: ContextManager; lastActiveAt: number }>,
-  agentRouter: AgentRouter,
-  defaultSystemPrompt: string,
-  memoryBackend?: ReturnType<typeof createMemoryBackend>,
-  skillRegistry?: SkillRegistry,
-  voiceProcessor?: VoiceProcessor,
-  onInflightChange?: (delta: 1 | -1) => void,
-  workerPool?: ToolWorkerPool,
-  inFlightLoops?: Map<string, { loop: AgentLoop; permissionPending: boolean }>,
-  sharedVerifier?: FormatVerifier | LLMVerifier,
-): void {
+function handleInboundMessage(opts: InboundMessageOpts): void {
+  const {
+    msg, channel, router, engine, config, observer,
+    conversationContexts, agentRouter, defaultSystemPrompt,
+    memoryBackend, skillRegistry, voiceProcessor,
+    onInflightChange, workerPool, inFlightLoops, sharedVerifier,
+  } = opts;
   if (!engine) {
     // No engine available — send a polite error back.
     channel.send(msg.from, {
