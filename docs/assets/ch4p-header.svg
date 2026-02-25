@@ -72,7 +72,7 @@
   <rect width="800" height="280" fill="url(#glow)"/>
   <rect width="800" height="280" fill="url(#scanlines)" opacity="0.4"/>
 
-  <!-- ===== ROBOT — child-sized Chappie ===== -->
+  <!-- ===== ROBOT — ch4p mascot ===== -->
   <g transform="translate(165, 18)">
 
     <!-- ── LEFT ANTENNA (orange, rabbit-ear style) ── -->
@@ -293,7 +293,7 @@
     </g>
 
     <!-- Version hint -->
-    <text y="108" font-family="monospace" font-size="11" fill="#3a4048" letter-spacing="0.5">v0.1.2</text>
+    <text y="108" font-family="monospace" font-size="11" fill="#3a4048" letter-spacing="0.5">v0.1.3</text>
   </g>
 
   <!-- Subtle divider line -->

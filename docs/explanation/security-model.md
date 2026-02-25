@@ -62,17 +62,17 @@ This is the last line of defense. If all other layers fail and the agent somehow
 
 ## The ZeroClaw Discipline
 
-ZeroClaw, one of ch4p's predecessor projects, established the principle that security is not a feature you add -- it is a property of the architecture.
+Research on ZeroClaw established the principle that security is not a feature you add -- it is a property of the architecture.
 
 In ZeroClaw, every I/O operation passed through a security boundary. There was no way to read a file without the path being checked. There was no way to run a command without the command being evaluated. This was enforced structurally: the tool implementations did not have direct access to the filesystem or shell. They could only act through the security-mediated API.
 
-ch4p preserves this discipline. The `ToolContext` object that tools receive does not include raw `fs` or `child_process` access. It includes `context.security`, which provides mediated access. A tool author who wants to bypass security must deliberately circumvent the interface, which is visible in code review.
+ch4p was built from scratch with this discipline at its core. The `ToolContext` object that tools receive does not include raw `fs` or `child_process` access. It includes `context.security`, which provides mediated access. A tool author who wants to bypass security must deliberately circumvent the interface, which is visible in code review.
 
 ---
 
 ## The Bagman I/O Boundary
 
-Bagman, another predecessor, contributed the concept of explicit I/O boundaries. The principle: every point where data crosses a trust boundary must be identified and guarded.
+Research on Bagman introduced the concept of explicit I/O boundaries. The principle: every point where data crosses a trust boundary must be identified and guarded.
 
 ch4p has five trust boundaries, each with a specific guard:
 

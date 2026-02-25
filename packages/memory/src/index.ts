@@ -2,7 +2,7 @@
  * @ch4p/memory — zero-dependency hybrid search using SQLite.
  *
  * Combines FTS5 (BM25 keyword search) with vector embeddings (cosine similarity)
- * in a single SQLite database. Ported from ZeroClaw.
+ * in a single SQLite database. Informed by research on hybrid search architectures.
  */
 
 // Backends

@@ -6,7 +6,7 @@
  * all subsystems behind the ISecurityPolicy interface.
  */
 
-// Filesystem scoping (ZeroClaw-inspired)
+// Filesystem scoping
 export { FilesystemScope, SecurityError } from './filesystem-scope.js';
 export type { FilesystemScopeConfig } from './filesystem-scope.js';
 
@@ -18,10 +18,10 @@ export type { CommandAllowlistConfig } from './command-allowlist.js';
 export { SecretStore } from './secrets.js';
 export type { SecretStoreConfig } from './secrets.js';
 
-// Output sanitization (Bagman-inspired)
+// Output sanitization
 export { OutputSanitizer } from './output-sanitizer.js';
 
-// Input validation & prompt injection defense (Bagman-inspired)
+// Input validation & prompt injection defense
 export { InputValidator } from './input-validator.js';
 
 // Autonomy level guard

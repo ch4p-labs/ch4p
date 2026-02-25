@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] - 2026-02-25
+
+### Fixed
+
+- **Gateway OOM under sustained load** — capped active contexts at 500 with LRU eviction, reduced per-context token budget to 32K in gateway mode, and hoisted the verifier provider to a shared singleton to eliminate per-message object churn
+
+### Changed
+
+- **Documentation language** — rewrote predecessor/lineage references to accurately reflect that ch4p was built from scratch, informed by research on OpenClaw, Lemon, ZeroClaw, Bagman, and the Agent World Model
+- **Wake word examples** — updated "hey chappie" → "hey ch4p" across docs, config reference, and type comments
+- **README pillar description** — clarified OpenClaw-compatible skill format scope
+
+### Added
+
+- **Heap monitoring** — eviction timer now logs heap usage, RSS, context count, and session count every 5 minutes
+- **SessionManager.size getter** — exposes active session count for monitoring
+
 ## [0.1.2] - 2026-02-25
 
 ### Fixed
@@ -43,6 +60,7 @@ Initial public release.
 - **Daemon installer** — `ch4p install` for zero-sudo systemd (Linux) or launchd (macOS) with auto-restart
 - **Standalone binary** — `pnpm bundle` via bun compile
 
+[0.1.3]: https://github.com/ch4p-labs/ch4p/releases/tag/v0.1.3
 [0.1.2]: https://github.com/ch4p-labs/ch4p/releases/tag/v0.1.2
 [0.1.1]: https://github.com/ch4p-labs/ch4p/releases/tag/v0.1.1
 [0.1.0]: https://github.com/ch4p-labs/ch4p/releases/tag/v0.1.0

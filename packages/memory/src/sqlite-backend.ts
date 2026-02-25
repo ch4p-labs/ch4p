@@ -1,5 +1,5 @@
 /**
- * SQLite hybrid search memory backend -- ported from ZeroClaw.
+ * SQLite hybrid search memory backend.
  *
  * Combines FTS5 (BM25 keyword search) with vector embeddings (cosine similarity)
  * in a single SQLite database. Zero external dependencies beyond better-sqlite3.

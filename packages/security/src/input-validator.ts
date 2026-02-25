@@ -1,7 +1,7 @@
 /**
  * InputValidator -- Prompt injection & adversarial input detection
  *
- * Bagman-inspired input boundary defense. Detects prompt injection,
+ * Input boundary defense. Detects prompt injection,
  * jailbreak attempts, role manipulation, data exfiltration patterns,
  * and Unicode-based obfuscation (homoglyphs, invisible characters).
  *

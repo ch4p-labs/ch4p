@@ -1,7 +1,7 @@
 /**
  * SteeringQueue — Per-session message queue for live steering.
  *
- * Inspired by Lemon's BEAM mailbox pattern. The agent loop checks this queue
+ * Inspired by the BEAM mailbox pattern. The agent loop checks this queue
  * at defined yield points:
  *
  *   1. After each LLM stream chunk batch

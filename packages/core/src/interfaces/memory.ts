@@ -2,7 +2,7 @@
  * IMemoryBackend — persistent memory contract
  *
  * Zero-dependency hybrid search: SQLite FTS5 for keywords + vector embeddings
- * for semantic search, merged with configurable weights. From ZeroClaw's design.
+ * for semantic search, merged with configurable weights.
  */
 
 export interface RecallOpts {

@@ -299,7 +299,7 @@ Always-on voice wake configuration. Opt-in only — disabled by default.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | `boolean` | `false` | Enable always-on microphone listening. |
-| `wakeWord` | `string` | `null` | Optional wake word (e.g., `"hey chappie"`). Omit for push-to-talk style. |
+| `wakeWord` | `string` | `null` | Optional wake word (e.g., `"hey ch4p"`). Omit for push-to-talk style. |
 | `energyThreshold` | `number` | `500` | VAD energy threshold — lower values = more sensitive. |
 | `silenceDurationMs` | `number` | `800` | Silence duration in ms before end-of-speech detection. |
 

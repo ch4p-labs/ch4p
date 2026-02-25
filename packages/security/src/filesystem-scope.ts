@@ -1,7 +1,7 @@
 /**
  * FilesystemScope -- Path blocking, symlink detection, null byte guard
  *
- * ZeroClaw-inspired filesystem scoping. Everything is blocked by default.
+ * Filesystem scoping. Everything is blocked by default.
  * The agent operates within a workspace boundary; any escape attempt
  * (symlinks, traversal, null bytes) is caught and rejected.
  */

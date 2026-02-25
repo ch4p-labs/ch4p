@@ -1,6 +1,6 @@
 # Explanation: Architecture
 
-This document explains why ch4p is structured the way it is. It covers the Gateway + Agent + Engine pattern, the choice of TypeScript, and the lineage from three prior projects.
+This document explains why ch4p is structured the way it is. It covers the Gateway + Agent + Engine pattern, the choice of TypeScript, and the research that informed its design.
 
 ---
 
@@ -56,27 +56,27 @@ The tradeoff is that CPU-intensive work (embedding generation, large-scale text 
 
 ---
 
-## Lineage: What We Took and Why
+## Research Foundations
 
-ch4p draws from three prior projects, each of which solved one part of the problem well but had limitations that ch4p addresses.
+ch4p was built from scratch, but its architecture was informed by studying several existing projects and research papers. Each of these shaped a specific design decision.
 
-### From OpenClaw: The Multi-Engine Approach
+### Multi-Engine Approach (studied: OpenClaw)
 
-OpenClaw demonstrated that an AI assistant should not be locked to a single LLM provider. It introduced the idea of a provider abstraction layer where multiple engines could be used interchangeably.
+Research on OpenClaw showed that an AI assistant should not be locked to a single LLM provider. OpenClaw introduced the idea of a provider abstraction layer where multiple engines could be used interchangeably.
 
-ch4p adopted this through the IProvider interface. But where OpenClaw treated providers as nearly identical, ch4p acknowledges that providers have different capabilities (tool calling support, streaming behavior, context window sizes) and surfaces these differences through the ModelInfo type. The agent can make routing decisions based on what a provider actually supports.
+ch4p implements this idea through the IProvider interface. Where OpenClaw treated providers as nearly identical, ch4p acknowledges that providers have different capabilities (tool calling support, streaming behavior, context window sizes) and surfaces these differences through the ModelInfo type. The agent can make routing decisions based on what a provider actually supports.
 
-### From Lemon: The Channel Mesh
+### Channel Mesh (studied: Lemon)
 
-Lemon pioneered connecting a single AI agent to multiple messaging channels simultaneously. Its insight was that the agent should not care where a message comes from -- the channel layer should normalize everything.
+Research on Lemon showed that connecting a single AI agent to multiple messaging channels simultaneously requires a normalization layer. Lemon's insight was that the agent should not care where a message comes from -- the channel layer should handle the differences.
 
-ch4p adopted the channel abstraction and the gateway pattern from Lemon. The key difference is that ch4p's gateway is a separate process from the agent. In Lemon, channels ran in the same process as the AI logic, which meant a crash in a channel adapter could take down the entire system. ch4p's process separation provides fault isolation.
+ch4p builds on this insight with its own channel abstraction and gateway pattern, designed from scratch. A key difference: ch4p's gateway is a separate process from the agent. In Lemon, channels ran in the same process as the AI logic, meaning a crash in a channel adapter could take down the entire system. ch4p's process separation provides fault isolation.
 
-### From ZeroClaw: Security Discipline
+### Security-First Defaults (studied: ZeroClaw)
 
-ZeroClaw was built around the principle that an AI agent connected to the internet is an attack surface, and every capability it has is a potential vulnerability. ZeroClaw's contribution was the idea that security should be on by default, not opt-in.
+Research on ZeroClaw showed that an AI agent connected to the internet is an attack surface, and every capability it has is a potential vulnerability. ZeroClaw established the principle that security should be on by default, not opt-in.
 
-ch4p adopted ZeroClaw's filesystem scoping, command allowlisting, and output sanitization. But ch4p went further by adding the autonomy level system (locked/supervised/autonomous) and the formal audit command. ZeroClaw's security was effective but opaque -- you could not easily verify that the configuration was correct. ch4p's audit system makes security posture visible and verifiable.
+ch4p's security subsystem was built from scratch with this principle at its core. It implements filesystem scoping, command allowlisting, and output sanitization, and goes further by adding the autonomy level system (locked/supervised/autonomous) and a formal audit command that makes security posture visible and verifiable.
 
 ---
 
@@ -112,7 +112,7 @@ This design means the canvas adds zero special cases to the agent runtime. The a
 
 ## The I/O Boundary Principle
 
-A concept that runs through ch4p's architecture is the I/O boundary principle, which came from a project called Bagman. The principle states: every point where data crosses a trust boundary must be explicitly guarded.
+A concept that runs through ch4p's architecture is the I/O boundary principle, informed by research on a project called Bagman. The principle states: every point where data crosses a trust boundary must be explicitly guarded.
 
 In ch4p, the trust boundaries are:
 

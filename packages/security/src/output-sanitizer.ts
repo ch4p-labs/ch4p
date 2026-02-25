@@ -1,7 +1,7 @@
 /**
  * OutputSanitizer -- Detects and redacts sensitive data from output text
  *
- * Bagman-inspired output boundary defense. Scans text for API keys, tokens,
+ * Output boundary defense. Scans text for API keys, tokens,
  * credentials, credit card numbers, SSNs, AWS keys, and other sensitive
  * patterns. Replaces them with redaction markers so secrets never leak
  * through agent responses.

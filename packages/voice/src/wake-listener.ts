@@ -6,7 +6,7 @@
  * emits a `wake` event with the transcribed text.
  *
  * Optional wake word filtering: if configured, only passes through utterances
- * that start with the specified wake word (e.g. "hey chappie").
+ * that start with the specified wake word (e.g. "hey ch4p").
  *
  * Architecture:
  *   MicCapture → VoiceActivityDetector → STT → wake event
@@ -27,7 +27,7 @@ import type { STTProvider, TTSProvider } from './types.js';
 export interface WakeListenerConfig {
   /** Whether wake listening is active. */
   enabled: boolean;
-  /** Optional wake word (e.g. "hey chappie"). Omit for push-to-talk style. */
+  /** Optional wake word (e.g. "hey ch4p"). Omit for push-to-talk style. */
   wakeWord?: string;
   /** VAD energy threshold (default: 500). */
   energyThreshold?: number;

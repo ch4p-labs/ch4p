@@ -250,6 +250,30 @@ export async function gateway(args: string[]): Promise<void> {
     systemPrompt: defaultSystemPrompt,
   };
 
+  // Create the shared verifier once at startup — avoids creating a new
+  // provider + verifier per inbound message (was 72K throwaway objects/hour).
+  let sharedVerifier: FormatVerifier | LLMVerifier | undefined;
+  const vCfg = config.verification;
+  if (vCfg?.enabled) {
+    const formatOpts = { maxToolErrorRatio: vCfg.maxToolErrorRatio ?? 0.5 };
+    if (vCfg.semantic && engine) {
+      try {
+        const providerName = config.agent.provider;
+        const providerConfig = config.providers?.[providerName] as Record<string, unknown> | undefined;
+        const verifierProvider = ProviderRegistry.createProvider({
+          id: `${providerName}-verifier`,
+          type: providerName,
+          ...providerConfig,
+        });
+        sharedVerifier = new LLMVerifier({ provider: verifierProvider, model: config.agent.model, formatOpts });
+      } catch {
+        sharedVerifier = new FormatVerifier(formatOpts);
+      }
+    } else {
+      sharedVerifier = new FormatVerifier(formatOpts);
+    }
+  }
+
   // Create agent router — evaluates config.routing rules per inbound message.
   const agentRouter = new AgentRouter(config);
 
@@ -380,6 +404,9 @@ export async function gateway(args: string[]): Promise<void> {
   // Per-user conversation context so messages within the same channel+user
   // share history (like the REPL's sharedContext).
   // Each entry tracks lastActiveAt for idle eviction.
+  // Hard cap prevents unbounded growth when many users are simultaneously active.
+  const MAX_CONTEXTS = 500;
+  const GATEWAY_CONTEXT_MAX_TOKENS = 32_000;
   const conversationContexts = new Map<string, { ctx: ContextManager; lastActiveAt: number }>();
 
   // Track in-flight agent loops per user so permission-prompt replies from the
@@ -669,6 +696,14 @@ export async function gateway(args: string[]): Promise<void> {
     // Evict idle sessions and stale routes.
     sessionManager.evictIdle(CONTEXT_IDLE_MS);
     messageRouter.evictStale();
+
+    // Log heap usage and context count for diagnostics.
+    const heap = process.memoryUsage();
+    const heapMB = Math.round(heap.heapUsed / 1024 / 1024);
+    const rssMB = Math.round(heap.rss / 1024 / 1024);
+    console.log(
+      `  ${DIM}[eviction] heap=${heapMB}MB rss=${rssMB}MB contexts=${conversationContexts.size} sessions=${sessionManager.size}${RESET}`,
+    );
   }, 5 * 60_000);
 
   // Keep the process alive until interrupted.
@@ -888,7 +923,19 @@ function handleInboundMessage(
           : `${msg.channelId ?? ''}:${userId ?? 'anonymous'}`;
       let contextEntry = conversationContexts.get(contextKey);
       if (!contextEntry) {
-        const ctx = new ContextManager();
+        // Evict least-recently-used context when at capacity.
+        if (conversationContexts.size >= MAX_CONTEXTS) {
+          let oldestKey: string | undefined;
+          let oldestTime = Infinity;
+          for (const [k, v] of conversationContexts) {
+            if (v.lastActiveAt < oldestTime) {
+              oldestTime = v.lastActiveAt;
+              oldestKey = k;
+            }
+          }
+          if (oldestKey) conversationContexts.delete(oldestKey);
+        }
+        const ctx = new ContextManager({ maxTokens: GATEWAY_CONTEXT_MAX_TOKENS });
         // Use the routed system prompt (may be agent-specific or the default).
         const initPrompt = routing.systemPrompt
           ?? routeResult.config.systemPrompt
@@ -983,34 +1030,13 @@ function handleInboundMessage(
       // For now, resolve always returns the shared gateway engine (single-engine).
       toolContextExtensions.resolveEngine = (_engineId?: string) => engine;
 
-      // AWM verifier — runs task-level verification after each agent response.
-      const vCfg = config.verification;
-      let verifier;
-      if (vCfg?.enabled) {
-        const formatOpts = { maxToolErrorRatio: vCfg.maxToolErrorRatio ?? 0.5 };
-        if (vCfg.semantic && engine) {
-          try {
-            const providerName = config.agent.provider;
-            const providerConfig = config.providers?.[providerName] as Record<string, unknown> | undefined;
-            const provider = ProviderRegistry.createProvider({
-              id: `${providerName}-verifier`,
-              type: providerName,
-              ...providerConfig,
-            });
-            verifier = new LLMVerifier({ provider, model: config.agent.model, formatOpts });
-          } catch {
-            verifier = new FormatVerifier(formatOpts);
-          }
-        } else {
-          verifier = new FormatVerifier(formatOpts);
-        }
-      }
+      // AWM verifier — shared instance created at gateway startup.
 
       const loop = new AgentLoop(session, engine, tools.list(), observer, {
         maxIterations: routing.maxIterations, // Per-agent routing override.
         maxRetries: 2,
         enableStateSnapshots: true,
-        verifier,
+        verifier: sharedVerifier,
         memoryBackend,
         securityPolicy,
         onBeforeFirstRun,

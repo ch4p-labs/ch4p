@@ -46,6 +46,11 @@ export class SessionManager {
     }
   }
 
+  /** Return the number of active sessions. */
+  get size(): number {
+    return this.sessions.size;
+  }
+
   /** Return all currently tracked sessions (not ended). */
   listSessions(): SessionState[] {
     return [...this.sessions.values()];

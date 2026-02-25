@@ -1,7 +1,7 @@
 /**
  * @ch4p/supervisor — OTP-inspired supervision trees.
  *
- * Ported from Lemon's BEAM patterns to Node.js.
+ * Informed by research on BEAM/Erlang patterns.
  * Provides restart strategies, health monitoring, and supervisors
  * for worker threads and child processes.
  */

@@ -647,7 +647,7 @@ async function configureVoiceWake(
   console.log(`  ${DIM}Requires SoX (rec) — macOS: brew install sox, Linux: apt install sox${RESET}`);
 
   let wakeWord: string | undefined;
-  const useWakeWord = await askYesNo(rl, 'Use a wake word (e.g. "hey chappie")?');
+  const useWakeWord = await askYesNo(rl, 'Use a wake word (e.g. "hey ch4p")?');
   if (useWakeWord) {
     wakeWord = await ask(rl, `  ${TEAL}> Wake word: ${RESET}`) || undefined;
   }

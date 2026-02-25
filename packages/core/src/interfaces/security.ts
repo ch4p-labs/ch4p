@@ -1,7 +1,7 @@
 /**
  * ISecurityPolicy — scoping and permissions contract
  *
- * Security-first defaults from ZeroClaw + Bagman-inspired I/O boundary defense.
+ * Security-first defaults with I/O boundary defense.
  * Everything is ON by default. Users opt out, never opt in.
  */
 
@@ -55,13 +55,13 @@ export interface ThreatDetection {
 export interface ISecurityPolicy {
   readonly autonomyLevel: AutonomyLevel;
 
-  // ZeroClaw filesystem scoping
+  // Filesystem scoping
   validatePath(path: string, operation: PathOperation): PathValidation;
   validateCommand(command: string, args: string[]): CommandValidation;
   requiresConfirmation(action: ActionDescriptor): boolean;
   audit(): AuditResult[];
 
-  // Bagman-inspired I/O boundary defense
+  // I/O boundary defense
   sanitizeOutput(text: string): SanitizationResult;
   validateInput(text: string, conversationContext?: ConversationContext): InputValidationResult;
 

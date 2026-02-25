@@ -3,7 +3,7 @@
  *
  * Checks the security posture of the current configuration and prints
  * a numbered checklist with pass/warn/fail status for each item.
- * Modeled after ZeroClaw's audit command.
+ * Informed by research on security audit patterns.
  */
 
 import type { Ch4pConfig, AuditResult, AuditSeverity } from '@ch4p/core';

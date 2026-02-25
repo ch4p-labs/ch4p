@@ -28,7 +28,7 @@
 
 Built on four pillars:
 
-- **Broad connectivity** — 16 messaging channels, tunnel exposure, and a skills system. Compatible with OpenClaw channel adapters, skills, and plugins.
+- **Broad connectivity** — 16 messaging channels, tunnel exposure, and a skills system with OpenClaw-compatible skill format.
 - **Resilient concurrency** — OTP-style supervision trees, process isolation, backpressure, and live steering for long-running agent sessions.
 - **Security-first defaults** — trait-based architecture where every defense layer is on by default, hybrid memory search, and encrypted secrets at rest.
 - **Agent reliability** — mandatory tool call validation, state snapshots with diff-based verification, and LLM-as-a-judge outcome assessment. Inspired by the [Agent World Model](https://arxiv.org/abs/2602.10090) research.

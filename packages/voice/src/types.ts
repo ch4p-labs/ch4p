@@ -32,7 +32,7 @@ export interface VoiceConfig {
   wake?: {
     /** Enable always-on voice wake listening. Default: false. */
     enabled: boolean;
-    /** Optional wake word (e.g. "hey chappie"). Omit for push-to-talk style. */
+    /** Optional wake word (e.g. "hey ch4p"). Omit for push-to-talk style. */
     wakeWord?: string;
     /** VAD energy threshold for speech detection (default: 500). */
     energyThreshold?: number;

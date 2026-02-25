@@ -29,7 +29,7 @@ node apps/cli/dist/index.js --version
 You should see output like:
 
 ```
-ch4p v0.1.0
+ch4p v0.1.3
 ```
 
 ---
@@ -87,7 +87,7 @@ You'll see the ch4p welcome banner, then the wizard walks you through setup. The
 
 Every category defaults to skip — pressing Enter through everything produces the same default config as declining. You can always edit `~/.ch4p/config.json` later.
 
-When the wizard finishes, it runs a security audit and then plays a Chappie boot-up animation — your robot assistant waking up for the first time.
+When the wizard finishes, it runs a security audit and then plays a ch4p boot-up animation — your robot assistant waking up for the first time.
 
 ---
 
@@ -99,10 +99,10 @@ Launch the agent in interactive mode:
 node apps/cli/dist/index.js agent
 ```
 
-You'll see the Chappie splash followed by the REPL status:
+You'll see the ch4p splash followed by the REPL status:
 
 ```
-  ch4p v0.1.0 ready.
+  ch4p v0.1.3 ready.
 
   Interactive mode. Type /help for commands, /exit to quit.
   Engine: Native Engine | Model: claude-sonnet-4-20250514 | Autonomy: supervised
@@ -164,7 +164,7 @@ Type `/exit` or press `Ctrl+C`:
 
 1. **Install** — ch4p is a pnpm monorepo built with `corepack pnpm -r build`.
 2. **Onboard** — The wizard creates `~/.ch4p/config.json` with ~20 configurable categories, all defaulting to sensible values.
-3. **Agent** — `ch4p agent` starts an interactive agent session with the Chappie splash.
+3. **Agent** — `ch4p agent` starts an interactive agent session with the ch4p splash.
 4. **Messaging** — You send messages at the `>` prompt and get LLM-powered responses.
 5. **Tools** — The agent can use tools (like file read) to interact with your system.
 

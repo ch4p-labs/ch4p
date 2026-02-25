@@ -123,7 +123,7 @@ Voice wake enables always-on microphone listening with automatic speech detectio
     "tts": { "provider": "elevenlabs", "apiKey": "${ELEVENLABS_API_KEY}" },
     "wake": {
       "enabled": true,
-      "wakeWord": "hey chappie",
+      "wakeWord": "hey ch4p",
       "energyThreshold": 500,
       "silenceDurationMs": 800
     }

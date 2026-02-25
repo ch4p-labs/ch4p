@@ -1,5 +1,5 @@
 /**
- * OTP-inspired restart strategies, ported from Lemon's BEAM patterns.
+ * OTP-inspired restart strategies, informed by research on BEAM/Erlang patterns.
  *
  * - one-for-one: restart only the failed child
  * - rest-for-one: restart failed child + all children started after it

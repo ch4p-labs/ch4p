@@ -190,7 +190,7 @@ describe('WakeListener', () => {
       stt: mockSTT,
       config: {
         enabled: true,
-        wakeWord: 'hey chappie',
+        wakeWord: 'hey ch4p',
       },
     });
 

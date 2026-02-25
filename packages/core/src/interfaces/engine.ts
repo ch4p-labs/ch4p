@@ -1,7 +1,7 @@
 /**
  * IEngine — execution engine contract
  *
- * From Lemon's multi-engine architecture. The native engine uses IProvider directly.
+ * Multi-engine architecture. The native engine uses IProvider directly.
  * CLI engines wrap subprocess calls. All engines share this interface.
  */
 
