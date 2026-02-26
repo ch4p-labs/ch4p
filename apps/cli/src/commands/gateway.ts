@@ -188,7 +188,7 @@ const MAX_PENDING_PER_USER = 2;
  * API keys, private keys, provider credentials, and channel configs are
  * intentionally omitted — they are never returned or accepted via the API.
  */
-function buildSafeConfig(cfg: Ch4pConfig): Record<string, unknown> {
+export function buildSafeConfig(cfg: Ch4pConfig): Record<string, unknown> {
   return {
     agent: {
       model: cfg.agent.model,
@@ -209,7 +209,7 @@ function buildSafeConfig(cfg: Ch4pConfig): Record<string, unknown> {
  * Only the fields exposed by buildSafeConfig can be modified.
  * Returns a new config object (does not mutate the original).
  */
-function applySafeUpdates(current: Ch4pConfig, updates: Record<string, unknown>): Ch4pConfig {
+export function applySafeUpdates(current: Ch4pConfig, updates: Record<string, unknown>): Ch4pConfig {
   const result: Ch4pConfig = { ...current };
   if (updates.agent && typeof updates.agent === 'object') {
     const u = updates.agent as Record<string, unknown>;

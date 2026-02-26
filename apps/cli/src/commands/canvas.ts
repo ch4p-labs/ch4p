@@ -13,7 +13,8 @@
 
 import type { Ch4pConfig, IEngine, IMemoryBackend, InboundMessage, SessionConfig } from '@ch4p/core';
 import { generateId } from '@ch4p/core';
-import { loadConfig, getLogsDir } from '../config.js';
+import { loadConfig, saveConfig, getLogsDir } from '../config.js';
+import { buildSafeConfig, applySafeUpdates } from './gateway.js';
 import { SessionManager, GatewayServer, PairingManager, CanvasSessionManager, type WebSocketBridge } from '@ch4p/gateway';
 import { CanvasTool } from '@ch4p/canvas';
 import { AgentLoop } from '@ch4p/agent';
@@ -150,6 +151,11 @@ export async function canvas(args: string[]): Promise<void> {
         connSessionId, bridge, canvasSessionManager, engine, config,
         observer, memoryBackend, skillRegistry, defaultSessionConfig,
       );
+    },
+    onGetConfig: () => buildSafeConfig(config),
+    onSaveConfig: async (updates) => {
+      config = applySafeUpdates(config, updates);
+      saveConfig(config);
     },
   });
 
