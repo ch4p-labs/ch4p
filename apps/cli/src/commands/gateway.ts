@@ -20,7 +20,8 @@ import type { Ch4pConfig, IChannel, IMemoryBackend, InboundMessage, ITunnelProvi
 import { createX402Middleware, X402PayTool, createEIP712Signer, walletAddress } from '@ch4p/plugin-x402';
 import type { X402Config } from '@ch4p/plugin-x402';
 import { generateId } from '@ch4p/core';
-import { loadConfig, saveConfig, getLogsDir } from '../config.js';
+import { loadConfig, saveConfig, getLogsDir, getCh4pDir } from '../config.js';
+import { SessionNotes } from '../session-notes.js';
 import { SessionManager, GatewayServer, MessageRouter, PairingManager, Scheduler, LogChannel } from '@ch4p/gateway';
 import type { CronJob } from '@ch4p/gateway';
 import {
@@ -507,6 +508,11 @@ export async function gateway(args: string[]): Promise<void> {
   // Hard cap prevents unbounded growth when many users are simultaneously active.
   const conversationContexts = new Map<string, { ctx: ContextManager; lastActiveAt: number }>();
 
+  // Session notes — lightweight JSON files written before each agent run so the
+  // gateway can resume in-flight work after a crash or OOM restart.
+  // Files live at ~/.ch4p/sessions/{hash}.json; deleted on successful completion.
+  const sessionNotes = new SessionNotes(getCh4pDir());
+
   // Track in-flight agent loops per user so permission-prompt replies from the
   // channel can be forwarded to the subprocess stdin instead of spawning a new loop.
   const inFlightLoops = new Map<string, { loop: AgentLoop; permissionPending: boolean }>();
@@ -650,7 +656,7 @@ export async function gateway(args: string[]): Promise<void> {
             msg, channel, router: messageRouter, engine, config, observer,
             conversationContexts, agentRouter, defaultSystemPrompt,
             memoryBackend, skillRegistry, voiceProcessor, onInflightChange: trackInflight,
-            workerPool, inFlightLoops, pendingMessages, sharedVerifier,
+            workerPool, inFlightLoops, pendingMessages, sharedVerifier, sessionNotes,
           });
         });
 
@@ -791,6 +797,47 @@ export async function gateway(args: string[]): Promise<void> {
 
   console.log(`  ${DIM}Press Ctrl+C to stop.${RESET}\n`);
 
+  // Crash recovery: re-inject any in-flight sessions that were active when the
+  // gateway last crashed or was killed.  Wait 5 s to give channels time to finish
+  // connecting before we attempt to look them up in the registry.
+  const RESUME_MAX_AGE_MS = 10 * 60_000; // 10 minutes
+  void (async () => {
+    await new Promise<void>((r) => setTimeout(r, 5_000));
+    const staleNotes = sessionNotes.loadRecent(RESUME_MAX_AGE_MS);
+    if (staleNotes.length === 0) return;
+    let resumed = 0;
+    for (const note of staleNotes) {
+      const ch = channelRegistry.get(note.channelId);
+      if (!ch) continue; // channel not available — skip
+      const preamble = note.recentActivity.length > 0
+        ? `[Resuming after gateway restart. Recent progress: ${note.recentActivity.join(' ')}]\n`
+        : '[Resuming after gateway restart.]\n';
+      const syntheticMsg: InboundMessage = {
+        id: `resume:${note.contextKey}:${Date.now()}`,
+        channelId: note.channelId,
+        from: {
+          channelId: note.channelId,
+          userId: note.userId || undefined,
+          groupId: note.groupId || undefined,
+          threadId: note.threadId || undefined,
+        },
+        text: preamble + note.request,
+        timestamp: new Date(),
+      };
+      handleInboundMessage({
+        msg: syntheticMsg, channel: ch, router: messageRouter, engine, config, observer,
+        conversationContexts, agentRouter, defaultSystemPrompt,
+        memoryBackend, skillRegistry, voiceProcessor, onInflightChange: trackInflight,
+        workerPool, inFlightLoops, pendingMessages, sharedVerifier, sessionNotes,
+      });
+      resumed++;
+      await new Promise<void>((r) => setTimeout(r, 500));
+    }
+    if (resumed > 0) {
+      console.log(`  ${GREEN}[recovery]${RESET} Resumed ${resumed} in-flight session(s) from notes.`);
+    }
+  })();
+
   // Periodic eviction of stale entries from unbounded maps (every 5 minutes).
   const CONTEXT_IDLE_MS = 60 * 60_000; // 1 hour
   const evictionTimer = setInterval(() => {
@@ -811,6 +858,7 @@ export async function gateway(args: string[]): Promise<void> {
     for (const [key, entry] of conversationContexts) {
       if (now - entry.lastActiveAt > contextIdleMs) {
         conversationContexts.delete(key);
+        sessionNotes.delete(key); // clean up any associated session note
       }
     }
 
@@ -991,6 +1039,7 @@ interface InboundMessageOpts {
   inFlightLoops?: Map<string, { loop: AgentLoop; permissionPending: boolean }>;
   pendingMessages?: Map<string, Array<{ msg: InboundMessage; channel: IChannel }>>;
   sharedVerifier?: FormatVerifier | LLMVerifier;
+  sessionNotes?: SessionNotes;
 }
 
 /**
@@ -1010,6 +1059,7 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
     conversationContexts, agentRouter, defaultSystemPrompt,
     memoryBackend, skillRegistry, voiceProcessor,
     onInflightChange, workerPool, inFlightLoops, pendingMessages, sharedVerifier,
+    sessionNotes,
   } = opts;
   if (!engine) {
     // No engine available — send a polite error back.
@@ -1130,6 +1180,20 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
         contextEntry.lastActiveAt = Date.now();
       }
       const sharedContext = contextEntry.ctx;
+
+      // Write a session note before the run starts so a crash mid-run leaves
+      // enough information to resume.  The note is deleted in the finally block
+      // on successful (or error) completion.
+      sessionNotes?.upsert({
+        contextKey,
+        channelId: msg.channelId,
+        userId: userId ?? 'anonymous',
+        groupId: msg.from.groupId,
+        threadId: msg.from.threadId,
+        request: processedMsg.text,
+        requestAt: Date.now(),
+        recentActivity: [],
+      });
 
       // Build routed session config.
       const routedSessionConfig = {
@@ -1264,6 +1328,9 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
           }
         } else if (event.type === 'complete') {
           responseText = event.answer;
+          // Update the session note with a brief progress snippet so a subsequent
+          // crash still has recent context.
+          if (event.answer) sessionNotes?.appendActivity(contextKey, event.answer);
         } else if (event.type === 'error') {
           responseText = `Error: ${event.error.message}`;
         }
@@ -1291,6 +1358,10 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
       }).catch(() => {});
     } finally {
       clearTimeout(runTimer);
+
+      // Remove the session note — the run completed (successfully or with an error),
+      // so there is nothing left to resume on next startup.
+      sessionNotes?.delete(contextKey);
 
       // Process the next queued message for this user, if any.
       const queue = pendingMessages?.get(userKey);
