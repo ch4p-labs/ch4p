@@ -46,6 +46,14 @@ export class SQLiteMemoryBackend implements IMemoryBackend {
     // Enable WAL mode for better concurrent read performance
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('synchronous = NORMAL');
+    // Cap SQLite's page cache at 2 MB (default is ~8 MB but can grow under
+    // heavy auto-recall traffic as SQLite warms its cache).  Negative value =
+    // kibibytes; positive = page count.
+    this.db.pragma('cache_size = -2000');
+    // Disable memory-mapped I/O so all file access goes through SQLite's page
+    // cache rather than mapping file pages directly into the process address
+    // space, which inflates RSS without appearing in V8 heap stats.
+    this.db.pragma('mmap_size = 0');
 
     // Initialize schema
     this.initSchema();

@@ -16,7 +16,6 @@
  */
 
 import { createRequire } from 'node:module';
-import { writeHeapSnapshot } from 'node:v8';
 import type { Ch4pConfig, IChannel, IMemoryBackend, InboundMessage, ITunnelProvider } from '@ch4p/core';
 import { createX402Middleware, X402PayTool, createEIP712Signer, walletAddress } from '@ch4p/plugin-x402';
 import type { X402Config } from '@ch4p/plugin-x402';
@@ -794,42 +793,55 @@ export async function gateway(args: string[]): Promise<void> {
 
   // Periodic eviction of stale entries from unbounded maps (every 5 minutes).
   const CONTEXT_IDLE_MS = 60 * 60_000; // 1 hour
-  // Write at most one heap snapshot per process lifetime (at the 2 GB threshold).
-  let heapSnapshotTaken = false;
   const evictionTimer = setInterval(() => {
     gatewayRateLimiter.evictStale();
 
-    // Evict conversation contexts inactive for more than 1 hour.
+    // Measure heap before eviction so we can apply pressure-sensitive idle windows.
+    const heap = process.memoryUsage();
+    const heapMB = Math.round(heap.heapUsed / 1024 / 1024);
+    const rssMB = Math.round(heap.rss / 1024 / 1024);
+
+    // Under memory pressure shrink the idle window so contexts evict much sooner
+    // rather than waiting a full hour.  This frees V8 strings / closures held by
+    // ContextManager entries and lets the GC reclaim pages.
+    const contextIdleMs = heapMB > 500 ? 5 * 60_000 : CONTEXT_IDLE_MS;
+
+    // Evict conversation contexts that have been inactive too long.
     const now = Date.now();
     for (const [key, entry] of conversationContexts) {
-      if (now - entry.lastActiveAt > CONTEXT_IDLE_MS) {
+      if (now - entry.lastActiveAt > contextIdleMs) {
         conversationContexts.delete(key);
       }
     }
 
     // Evict idle sessions, stale routes, and idle canvas sessions.
-    sessionManager.evictIdle(CONTEXT_IDLE_MS);
+    sessionManager.evictIdle(contextIdleMs);
     messageRouter.evictStale();
-    server.evictIdleCanvas(CONTEXT_IDLE_MS);
+    server.evictIdleCanvas(contextIdleMs);
+
+    // Nudge the GC when heap is elevated so freed contexts are collected promptly
+    // rather than waiting for allocation pressure to trigger a major GC.
+    // Only available when Node is started with --expose-gc.
+    if (heapMB > 500 && typeof (globalThis as { gc?: () => void }).gc === 'function') {
+      (globalThis as { gc?: () => void }).gc!();
+    }
 
     // Log heap usage and context count for diagnostics.
-    const heap = process.memoryUsage();
-    const heapMB = Math.round(heap.heapUsed / 1024 / 1024);
-    const rssMB = Math.round(heap.rss / 1024 / 1024);
     console.log(
       `  ${DIM}[eviction] heap=${heapMB}MB rss=${rssMB}MB contexts=${conversationContexts.size} sessions=${sessionManager.size}${RESET}`,
     );
 
-    // Write a heap snapshot once if we cross 2 GB — gives a dump to analyze
-    // before the process OOMs rather than having nothing to inspect afterward.
-    if (heapMB > 2000 && !heapSnapshotTaken) {
-      heapSnapshotTaken = true;
-      try {
-        const snapshotPath = writeHeapSnapshot();
-        console.log(`  ${YELLOW}[OOM warning]${RESET} Heap at ${heapMB}MB — snapshot: ${snapshotPath}`);
-      } catch {
-        // Best-effort; don't let snapshot failure take down the process.
-      }
+    // Warn at elevated heap levels.  Do NOT call v8.writeHeapSnapshot() here —
+    // serialising the heap allocates 2–4× its current size and will OOM a
+    // process that is already under pressure.  Use the Node flag
+    // --heapsnapshot-near-heap-limit=1 at startup instead; it writes a snapshot
+    // via a separate OOM handler that does not allocate on the main heap.
+    if (heapMB > 1500) {
+      console.log(
+        `  ${YELLOW}[OOM warning]${RESET} Heap at ${heapMB}MB — restart the gateway or set NODE_OPTIONS=--max-old-space-size=512`,
+      );
+    } else if (heapMB > 500) {
+      console.log(`  ${DIM}[mem pressure]${RESET} Heap at ${heapMB}MB — evicting with 5 min idle window${RESET}`);
     }
   }, 5 * 60_000);
 
