@@ -21,13 +21,13 @@ function makeMsg(overrides: Partial<InboundMessage['from']> & { channelId?: stri
   };
 }
 
-function makeRouter() {
+function makeRouter(maxRouteEntries?: number) {
   const sessionManager = new SessionManager();
   const router = new MessageRouter(sessionManager, {
     engineId: 'echo',
     model: 'test-model',
     provider: 'test',
-  });
+  }, maxRouteEntries);
   return { router, sessionManager };
 }
 
@@ -124,6 +124,46 @@ describe('MessageRouter', () => {
       sessionManager.endSession(r1!.sessionId);
       const r2 = router.route(makeMsg({ userId: 'user-1' }));
       expect(r2?.sessionId).not.toBe(r1?.sessionId);
+    });
+  });
+
+  describe('auto-eviction (maxRouteEntries cap)', () => {
+    it('evicts stale routes automatically when map exceeds the cap', () => {
+      // Use a tiny cap so the test stays fast.
+      const { router, sessionManager } = makeRouter(3);
+
+      // Fill the map to the cap with 3 routes.
+      const r1 = router.route(makeMsg({ userId: 'u1' }))!;
+      const r2 = router.route(makeMsg({ userId: 'u2' }))!;
+      const r3 = router.route(makeMsg({ userId: 'u3' }))!;
+
+      // End all three sessions so their route entries are now stale.
+      sessionManager.endSession(r1.sessionId);
+      sessionManager.endSession(r2.sessionId);
+      sessionManager.endSession(r3.sessionId);
+
+      // Routing a fourth user pushes size past the cap → triggers auto-eviction.
+      const r4 = router.route(makeMsg({ userId: 'u4' }))!;
+      expect(r4).not.toBeNull();
+
+      // The three stale entries should have been evicted; calling evictStale()
+      // now returns 0 because auto-eviction already cleaned them up.
+      expect(router.evictStale()).toBe(0);
+    });
+
+    it('does not evict live routes when cap is reached', () => {
+      const { router } = makeRouter(2);
+
+      // Two live routes — neither should be evicted when a third is added.
+      const r1 = router.route(makeMsg({ userId: 'u1' }))!;
+      const r2 = router.route(makeMsg({ userId: 'u2' }))!;
+      router.route(makeMsg({ userId: 'u3' }));
+
+      // Live sessions should still route to their original session IDs.
+      const recheck1 = router.route(makeMsg({ userId: 'u1' }))!;
+      const recheck2 = router.route(makeMsg({ userId: 'u2' }))!;
+      expect(recheck1.sessionId).toBe(r1.sessionId);
+      expect(recheck2.sessionId).toBe(r2.sessionId);
     });
   });
 

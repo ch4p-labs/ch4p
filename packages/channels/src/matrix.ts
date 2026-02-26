@@ -103,6 +103,16 @@ export class MatrixChannel implements IChannel {
     this.allowedRooms = new Set(cfg.allowedRooms ?? []);
     this.allowedUsers = new Set(cfg.allowedUsers ?? []);
 
+    // Defensive: clean up any client left behind by a previous failed start().
+    // Under normal operation this.client is null here, but if getUserId() or
+    // client.start() threw during a prior attempt the old reference (and its
+    // listeners) would otherwise leak.
+    if (this.client) {
+      this.client.removeAllListeners();
+      this.client.stop();
+      this.client = null;
+    }
+
     // Create the Matrix client.
     this.client = new MinimalMatrixClient(cfg.homeserverUrl, cfg.accessToken);
 
@@ -138,6 +148,9 @@ export class MatrixChannel implements IChannel {
     this.running = false;
 
     if (this.client) {
+      // Explicitly remove listeners first so they cannot fire after teardown,
+      // regardless of what MinimalMatrixClient.stop() does internally.
+      this.client.removeAllListeners();
       this.client.stop();
       this.client = null;
     }

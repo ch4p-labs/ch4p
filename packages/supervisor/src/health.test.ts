@@ -174,6 +174,20 @@ describe('HealthMonitor', () => {
       const history = monitor.getCrashHistory('child-1');
       expect(history).toHaveLength(2);
     });
+
+    it('caps crash history at 256 entries — oldest entries evicted', () => {
+      monitor.registerChild('child-1');
+      for (let i = 0; i < 260; i++) {
+        monitor.recordCrash('child-1', new Error(`crash-${i}`));
+      }
+
+      const history = monitor.getCrashHistory('child-1');
+      expect(history).toHaveLength(256);
+      // Oldest four entries (crash-0 … crash-3) were evicted; crash-4 is now first.
+      expect(history[0]!.error?.message).toBe('crash-4');
+      // Most recent entry is retained.
+      expect(history[255]!.error?.message).toBe('crash-259');
+    });
   });
 
   describe('getOverallHealth', () => {

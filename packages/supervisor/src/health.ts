@@ -47,6 +47,9 @@ export interface HealthMonitorEvents {
 
 // ── Defaults ─────────────────────────────────────────────────────────────
 
+/** Maximum crash records retained per child. Oldest entries are evicted. */
+const MAX_CRASH_HISTORY = 256;
+
 const DEFAULT_HEALTH_CONFIG: HealthConfig = {
   heartbeatIntervalMs: 5_000,
   missedThreshold: 3,
@@ -160,6 +163,10 @@ export class HealthMonitor extends EventEmitter<HealthMonitorEvents> {
       signal,
     };
     state.crashHistory.push(record);
+    // Keep history bounded — drop the oldest entry when the cap is exceeded.
+    if (state.crashHistory.length > MAX_CRASH_HISTORY) {
+      state.crashHistory.shift();
+    }
 
     this.emit('crashed', childId, error);
   }

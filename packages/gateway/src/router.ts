@@ -22,10 +22,20 @@ export class MessageRouter {
    */
   private routeMap = new Map<string, string>();
 
+  /**
+   * Safety-net cap: when the route map reaches this size, evictStale() is
+   * called automatically so expired entries cannot accumulate indefinitely
+   * even if the external eviction timer is slow or absent.
+   */
+  private readonly maxRouteEntries: number;
+
   constructor(
     private readonly sessionManager: SessionManager,
     private readonly defaultSessionConfig: Omit<SessionConfig, 'sessionId' | 'channelId' | 'userId'>,
-  ) {}
+    maxRouteEntries = 10_000,
+  ) {
+    this.maxRouteEntries = maxRouteEntries;
+  }
 
   /**
    * Route an inbound message to a session.
@@ -67,6 +77,12 @@ export class MessageRouter {
 
     const state = this.sessionManager.createSession(config);
     this.routeMap.set(routeKey, sessionId);
+
+    // Safety-net: auto-evict stale entries when the map is unusually large.
+    // This ensures bounded memory even if the external eviction timer is slow.
+    if (this.routeMap.size > this.maxRouteEntries) {
+      this.evictStale();
+    }
 
     return { sessionId, config: state.config };
   }

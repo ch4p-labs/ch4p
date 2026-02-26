@@ -41,6 +41,7 @@ const {
     getUserId: vi.fn(async () => '@bot:matrix.org'),
     start: vi.fn(async () => {}),
     stop: vi.fn(),
+    removeAllListeners: vi.fn(),
     sendMessage: vi.fn(async () => '$event_1'),
     joinRoom: vi.fn(async () => {}),
     on: vi.fn(),
@@ -1362,6 +1363,7 @@ describe('MatrixChannel', () => {
     matrixMockClient.getUserId.mockClear();
     matrixMockClient.start.mockClear();
     matrixMockClient.stop.mockClear();
+    matrixMockClient.removeAllListeners.mockClear();
     matrixMockClient.sendMessage.mockClear();
     matrixMockClient.joinRoom.mockClear();
     matrixMockClient.on.mockClear();
@@ -1506,6 +1508,41 @@ describe('MatrixChannel', () => {
     const ch = new MatrixChannel();
     await ch.start({ homeserverUrl: 'https://matrix.org', accessToken: 'test-tok' });
     await ch.start({ homeserverUrl: 'https://matrix.org', accessToken: 'test-tok' });
+    expect(await ch.isHealthy()).toBe(true);
+    await ch.stop();
+  });
+
+  it('stop() calls removeAllListeners before stop on the client', async () => {
+    const ch = new MatrixChannel();
+    await ch.start({ homeserverUrl: 'https://matrix.org', accessToken: 'test-tok' });
+
+    const stopOrder: string[] = [];
+    matrixMockClient.removeAllListeners.mockImplementation(() => { stopOrder.push('removeAllListeners'); });
+    matrixMockClient.stop.mockImplementation(() => { stopOrder.push('stop'); });
+
+    await ch.stop();
+
+    expect(matrixMockClient.removeAllListeners).toHaveBeenCalledOnce();
+    expect(matrixMockClient.stop).toHaveBeenCalledOnce();
+    // removeAllListeners must precede stop so listeners cannot fire during teardown.
+    expect(stopOrder).toEqual(['removeAllListeners', 'stop']);
+  });
+
+  it('start() cleans up a leaked client from a previous failed start', async () => {
+    const ch = new MatrixChannel();
+
+    // Simulate a failed first start: getUserId() rejects after listeners are registered.
+    matrixMockClient.getUserId.mockRejectedValueOnce(new Error('network error'));
+    await expect(
+      ch.start({ homeserverUrl: 'https://matrix.org', accessToken: 'test-tok' }),
+    ).rejects.toThrow('network error');
+
+    // Second start should clean up the leaked client before creating a new one.
+    matrixMockClient.getUserId.mockResolvedValue('@bot:matrix.org');
+    await ch.start({ homeserverUrl: 'https://matrix.org', accessToken: 'test-tok' });
+
+    // removeAllListeners was called during the defensive cleanup in the second start.
+    expect(matrixMockClient.removeAllListeners).toHaveBeenCalled();
     expect(await ch.isHealthy()).toBe(true);
     await ch.stop();
   });
