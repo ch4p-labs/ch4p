@@ -21,7 +21,7 @@ import type { Ch4pConfig, IChannel, IMemoryBackend, InboundMessage, ITunnelProvi
 import { createX402Middleware, X402PayTool, createEIP712Signer, walletAddress } from '@ch4p/plugin-x402';
 import type { X402Config } from '@ch4p/plugin-x402';
 import { generateId } from '@ch4p/core';
-import { loadConfig, getLogsDir } from '../config.js';
+import { loadConfig, saveConfig, getLogsDir } from '../config.js';
 import { SessionManager, GatewayServer, MessageRouter, PairingManager, Scheduler, LogChannel } from '@ch4p/gateway';
 import type { CronJob } from '@ch4p/gateway';
 import {
@@ -178,6 +178,92 @@ const GATEWAY_CONTEXT_MAX_TOKENS = 32_000;
 
 /** Max depth of per-user pending message queue before older messages are replaced. */
 const MAX_PENDING_PER_USER = 2;
+
+// ---------------------------------------------------------------------------
+// Settings panel helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a safe subset of Ch4pConfig for the settings panel.
+ * API keys, private keys, provider credentials, and channel configs are
+ * intentionally omitted — they are never returned or accepted via the API.
+ */
+function buildSafeConfig(cfg: Ch4pConfig): Record<string, unknown> {
+  return {
+    agent: {
+      model: cfg.agent.model,
+      provider: cfg.agent.provider,
+      thinkingLevel: cfg.agent.thinkingLevel,
+    },
+    gateway: { requirePairing: cfg.gateway.requirePairing },
+    memory: { autoSave: cfg.memory.autoSave },
+    autonomy: { level: cfg.autonomy.level },
+    observability: { logLevel: cfg.observability.logLevel },
+    skills: { enabled: cfg.skills.enabled },
+    tunnel: { provider: cfg.tunnel.provider },
+  };
+}
+
+/**
+ * Applies a safe-field update to the current config.
+ * Only the fields exposed by buildSafeConfig can be modified.
+ * Returns a new config object (does not mutate the original).
+ */
+function applySafeUpdates(current: Ch4pConfig, updates: Record<string, unknown>): Ch4pConfig {
+  const result: Ch4pConfig = { ...current };
+  if (updates.agent && typeof updates.agent === 'object') {
+    const u = updates.agent as Record<string, unknown>;
+    result.agent = {
+      ...current.agent,
+      ...(u.model !== undefined && { model: String(u.model) }),
+      ...(u.provider !== undefined && { provider: String(u.provider) }),
+      ...(u.thinkingLevel !== undefined && { thinkingLevel: u.thinkingLevel as 'low' | 'medium' | 'high' }),
+    };
+  }
+  if (updates.gateway && typeof updates.gateway === 'object') {
+    const u = updates.gateway as Record<string, unknown>;
+    result.gateway = {
+      ...current.gateway,
+      ...(u.requirePairing !== undefined && { requirePairing: Boolean(u.requirePairing) }),
+    };
+  }
+  if (updates.memory && typeof updates.memory === 'object') {
+    const u = updates.memory as Record<string, unknown>;
+    result.memory = {
+      ...current.memory,
+      ...(u.autoSave !== undefined && { autoSave: Boolean(u.autoSave) }),
+    };
+  }
+  if (updates.autonomy && typeof updates.autonomy === 'object') {
+    const u = updates.autonomy as Record<string, unknown>;
+    result.autonomy = {
+      ...current.autonomy,
+      ...(u.level !== undefined && { level: u.level as 'readonly' | 'supervised' | 'full' }),
+    };
+  }
+  if (updates.observability && typeof updates.observability === 'object') {
+    const u = updates.observability as Record<string, unknown>;
+    result.observability = {
+      ...current.observability,
+      ...(u.logLevel !== undefined && { logLevel: u.logLevel as 'debug' | 'info' | 'warn' | 'error' }),
+    };
+  }
+  if (updates.skills && typeof updates.skills === 'object') {
+    const u = updates.skills as Record<string, unknown>;
+    result.skills = {
+      ...current.skills,
+      ...(u.enabled !== undefined && { enabled: Boolean(u.enabled) }),
+    };
+  }
+  if (updates.tunnel && typeof updates.tunnel === 'object') {
+    const u = updates.tunnel as Record<string, unknown>;
+    result.tunnel = {
+      ...current.tunnel,
+      ...(u.provider !== undefined && { provider: String(u.provider) }),
+    };
+  }
+  return result;
+}
 
 // ---------------------------------------------------------------------------
 // CLI entry point
@@ -480,6 +566,11 @@ export async function gateway(args: string[]): Promise<void> {
           return;
         }
       }
+    },
+    onGetConfig: () => buildSafeConfig(config),
+    onSaveConfig: async (updates) => {
+      config = applySafeUpdates(config, updates);
+      saveConfig(config);
     },
   });
 

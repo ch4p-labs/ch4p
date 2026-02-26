@@ -219,3 +219,172 @@
   background: var(--danger);
   color: #fff;
 }
+
+/* ---- Settings gear button in header ---- */
+.settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.settings-btn:hover {
+  color: var(--text);
+  background: var(--border);
+}
+
+/* ---- Settings Panel ---- */
+.settings-panel {
+  border-top: 1px solid var(--border);
+  padding: 0;
+  background: #fafbfc;
+  flex-shrink: 0;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  background: #f1f3f5;
+}
+
+.settings-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.settings-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.settings-close-btn:hover {
+  color: var(--text);
+  background: var(--border);
+}
+
+.settings-loading {
+  padding: 16px 18px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.settings-error {
+  margin: 10px 18px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #ffebee;
+  color: #c62828;
+  font-size: 12px;
+}
+
+.settings-save-result {
+  margin: 10px 18px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.settings-form {
+  padding: 10px 18px 14px;
+}
+
+.settings-section {
+  margin-bottom: 14px;
+}
+
+.settings-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
+.settings-field-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-label {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.settings-input,
+.settings-select {
+  padding: 5px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  color: var(--text);
+  outline: none;
+}
+
+.settings-input:focus,
+.settings-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+.settings-actions {
+  margin-top: 12px;
+}
+
+.settings-save-btn {
+  padding: 8px 18px;
+  border-radius: var(--radius);
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.settings-save-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.settings-save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

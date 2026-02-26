@@ -751,6 +751,133 @@ describe('GatewayServer with pairing', () => {
 });
 
 // ===========================================================================
+// GatewayServer — config endpoints
+// ===========================================================================
+
+describe('GatewayServer — config endpoints', () => {
+  let server: GatewayServer;
+  let baseUrl: string;
+  const mockConfig = {
+    agent: { model: 'claude-opus-4-5', provider: 'anthropic', thinkingLevel: 'medium' },
+    gateway: { requirePairing: false },
+    memory: { autoSave: true },
+    autonomy: { level: 'supervised' },
+    observability: { logLevel: 'info' },
+    skills: { enabled: true },
+    tunnel: { provider: 'cloudflare' },
+  };
+
+  beforeEach(async () => {
+    server = new GatewayServer({
+      port: 0,
+      host: '127.0.0.1',
+      sessionManager: new SessionManager(),
+      onGetConfig: () => ({ ...mockConfig }),
+      onSaveConfig: async (_updates: Record<string, unknown>) => { /* no-op in tests */ },
+    });
+    await server.start();
+    const addr = server.getAddress()!;
+    baseUrl = `http://${addr.host}:${addr.port}`;
+  });
+
+  afterEach(async () => {
+    await server.stop();
+  });
+
+  it('GET /config returns the safe config subset', async () => {
+    const { status, body } = await fetchJson(baseUrl, '/config');
+    expect(status).toBe(200);
+    expect((body as Record<string, unknown>).agent).toBeDefined();
+    expect(((body as Record<string, unknown>).agent as Record<string, unknown>).model).toBe('claude-opus-4-5');
+    expect(((body as Record<string, unknown>).tunnel as Record<string, unknown>).provider).toBe('cloudflare');
+  });
+
+  it('GET /config returns 404 when onGetConfig is not configured', async () => {
+    const bare = new GatewayServer({
+      port: 0,
+      host: '127.0.0.1',
+      sessionManager: new SessionManager(),
+    });
+    await bare.start();
+    const addr = bare.getAddress()!;
+    const { status } = await fetchJson(`http://${addr.host}:${addr.port}`, '/config');
+    expect(status).toBe(404);
+    await bare.stop();
+  });
+
+  it('PATCH /config calls onSaveConfig and returns saved+restartRequired', async () => {
+    let captured: Record<string, unknown> = {};
+    const srv = new GatewayServer({
+      port: 0,
+      host: '127.0.0.1',
+      sessionManager: new SessionManager(),
+      onGetConfig: () => ({ ...mockConfig }),
+      onSaveConfig: async (updates: Record<string, unknown>) => { captured = updates; },
+    });
+    await srv.start();
+    const addr = srv.getAddress()!;
+    const url = `http://${addr.host}:${addr.port}`;
+
+    const { status, body } = await fetchJson(url, '/config', {
+      method: 'PATCH',
+      body: JSON.stringify({ agent: { model: 'claude-haiku-4-5' } }),
+    });
+
+    expect(status).toBe(200);
+    expect(body.saved).toBe(true);
+    expect(body.restartRequired).toBe(true);
+    expect((captured as Record<string, unknown>).agent).toBeDefined();
+    await srv.stop();
+  });
+
+  it('PATCH /config returns 400 on malformed JSON body', async () => {
+    const srv = new GatewayServer({
+      port: 0,
+      host: '127.0.0.1',
+      sessionManager: new SessionManager(),
+      onGetConfig: () => ({ ...mockConfig }),
+      onSaveConfig: async () => {},
+    });
+    await srv.start();
+    const addr = srv.getAddress()!;
+    const url = `http://${addr.host}:${addr.port}`;
+
+    const res = await fetch(`${url}/config`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: 'not valid json{{{',
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(typeof body.error).toBe('string');
+    await srv.stop();
+  });
+
+  it('PATCH /config returns 404 when onSaveConfig is not configured', async () => {
+    const { status } = await fetchJson(baseUrl, '/config', {
+      method: 'PATCH',
+      body: JSON.stringify({ agent: { model: 'test' } }),
+    });
+    // The server in beforeEach has onSaveConfig wired; spin up a bare one.
+    const bare = new GatewayServer({
+      port: 0,
+      host: '127.0.0.1',
+      sessionManager: new SessionManager(),
+    });
+    await bare.start();
+    const addr = bare.getAddress()!;
+    const bareRes = await fetchJson(`http://${addr.host}:${addr.port}`, '/config', {
+      method: 'PATCH',
+      body: JSON.stringify({ agent: { model: 'test' } }),
+    });
+    expect(bareRes.status).toBe(404);
+    await bare.stop();
+    // Also confirm the wired server returned 200.
+    expect(status).toBe(200);
+  });
+});
+
+// ===========================================================================
 // Multi-session routing (integration tests)
 // ===========================================================================
 

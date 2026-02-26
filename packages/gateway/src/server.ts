@@ -61,6 +61,17 @@ export interface GatewayServerOptions {
   /** Called when POST /sessions/:id/steer is invoked. */
   onSteer?: (sessionId: string, message: string) => void;
   /**
+   * Called for GET /config. Should return a safe (no API keys) config subset.
+   * If omitted, GET /config responds 404.
+   */
+  onGetConfig?: () => Record<string, unknown>;
+  /**
+   * Called for PATCH /config. Receives the parsed update body.
+   * If omitted, PATCH /config responds 404.
+   * Should write the merged config to disk; returns a promise.
+   */
+  onSaveConfig?: (updates: Record<string, unknown>) => Promise<void>;
+  /**
    * Optional pre-handler invoked before pairing auth and route dispatch.
    * Called for every request after CORS/OPTIONS handling and public routes
    * (/health, /.well-known/agent.json, /pair).
@@ -90,6 +101,8 @@ export class GatewayServer {
   private readonly onWebhook: GatewayServerOptions['onWebhook'] | null;
   private readonly onRawWebhook: GatewayServerOptions['onRawWebhook'] | null;
   private readonly onSteer: GatewayServerOptions['onSteer'] | null;
+  private readonly onGetConfig: GatewayServerOptions['onGetConfig'] | null;
+  private readonly onSaveConfig: GatewayServerOptions['onSaveConfig'] | null;
   private readonly preHandler:
     | ((req: IncomingMessage, res: ServerResponse) => boolean | Promise<boolean>)
     | null;
@@ -112,6 +125,8 @@ export class GatewayServer {
     this.onWebhook = options.onWebhook ?? null;
     this.onRawWebhook = options.onRawWebhook ?? null;
     this.onSteer = options.onSteer ?? null;
+    this.onGetConfig = options.onGetConfig ?? null;
+    this.onSaveConfig = options.onSaveConfig ?? null;
     this.preHandler = options.preHandler ?? null;
   }
 
@@ -255,7 +270,7 @@ export class GatewayServer {
 
     // CORS headers for browser clients.
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
     if (method === 'OPTIONS') {
@@ -517,6 +532,40 @@ export class GatewayServer {
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         this.sendJson(res, 500, { error: `Webhook handler failed: ${errMsg}` });
+      }
+      return;
+    }
+
+    // GET /config — returns a safe subset of the current config (no API keys).
+    if (method === 'GET' && url === '/config') {
+      if (!this.onGetConfig) {
+        this.sendJson(res, 404, { error: 'Config endpoint not configured.' });
+        return;
+      }
+      this.sendJson(res, 200, this.onGetConfig());
+      return;
+    }
+
+    // PATCH /config — writes safe field updates to disk (restart required to apply).
+    if (method === 'PATCH' && url === '/config') {
+      if (!this.onSaveConfig) {
+        this.sendJson(res, 404, { error: 'Config endpoint not configured.' });
+        return;
+      }
+      const body = await this.readBody(req);
+      let updates: Record<string, unknown>;
+      try {
+        updates = JSON.parse(body) as Record<string, unknown>;
+      } catch {
+        this.sendJson(res, 400, { error: 'Invalid JSON body.' });
+        return;
+      }
+      try {
+        await this.onSaveConfig(updates);
+        this.sendJson(res, 200, { saved: true, restartRequired: true });
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        this.sendJson(res, 500, { error: `Failed to save config: ${errMsg}` });
       }
       return;
     }

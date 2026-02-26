@@ -5,6 +5,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { AgentStatusBar } from './AgentStatusBar';
+import { SettingsPanel } from '../settings/SettingsPanel';
 import '../styles/chat.css';
 
 interface ChatPanelProps {
@@ -27,6 +28,7 @@ export function ChatPanel({
   onAbort,
 }: ChatPanelProps) {
   const [input, setInput] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -56,8 +58,20 @@ export function ChatPanel({
     <div className="chat-panel">
       <div className="chat-header">
         <div className="chat-title">ch4p</div>
-        <div className={`connection-dot ${connected ? 'connected' : 'disconnected'}`} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            className="settings-btn"
+            onClick={() => setShowSettings((s) => !s)}
+            aria-label="Settings"
+            title="Settings"
+          >
+            ⚙
+          </button>
+          <div className={`connection-dot ${connected ? 'connected' : 'disconnected'}`} />
+        </div>
       </div>
+
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
 
       <AgentStatusBar status={agentStatus} message={agentStatusMessage} />
 
