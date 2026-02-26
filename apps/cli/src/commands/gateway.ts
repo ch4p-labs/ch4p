@@ -1133,6 +1133,9 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
   onInflightChange?.(1);
   void (async () => {
     let runTimer: ReturnType<typeof setTimeout> | undefined;
+    // Declared here (not inside try) so the finally block can access it for
+    // session-note cleanup even when an exception fires before the assignment.
+    let contextKey = '';
     try {
       // Process voice attachments (STT) if voice is enabled.
       const processedMsg = voiceProcessor
@@ -1149,7 +1152,7 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
       // Get or create a shared context — key mirrors MessageRouter.buildRouteKey
       // so topic/thread conversations are isolated from each other.
       const { userId, groupId, threadId } = msg.from;
-      const contextKey = (groupId && threadId)
+      contextKey = (groupId && threadId)
         ? `${msg.channelId ?? ''}:group:${groupId}:thread:${threadId}`
         : groupId
           ? `${msg.channelId ?? ''}:group:${groupId}:user:${userId ?? 'anonymous'}`
