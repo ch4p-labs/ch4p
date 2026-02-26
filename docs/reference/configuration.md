@@ -412,29 +412,54 @@ Persistent memory configuration.
 | `autoSave` | `boolean` | `true` | Automatically recall memories before and summarize after each conversation. |
 | `vectorWeight` | `number` | `0.7` | Weight for vector (semantic) similarity in hybrid search (0–1). |
 | `keywordWeight` | `number` | `0.3` | Weight for FTS5 keyword (BM25) results in hybrid search (0–1). |
-| `embeddingProvider` | `string` | `undefined` | Embedding provider for semantic search: `"openai"` or `"noop"`. When omitted, only keyword search is used. |
-| `embeddingModel` | `string` | `"text-embedding-3-small"` | OpenAI embedding model (when `embeddingProvider` is `"openai"`). |
-| `embeddingDimensions` | `number` | `1536` | Embedding vector dimensions. Must match the model. |
+| `embeddingProvider` | `string` | `undefined` | Single embedding provider: `"openai"`, `"ollama"`, or `"noop"`. Use `embeddingProviders` (plural) for multi-provider fallback. |
+| `embeddingProviders` | `string[]` | `undefined` | Ordered list of providers tried in sequence with automatic fallback. Example: `["openai", "ollama"]`. A `"noop"` fallback is always appended automatically. |
+| `embeddingModel` | `string` | `"text-embedding-3-small"` | OpenAI embedding model (when `embeddingProvider` / `embeddingProviders` includes `"openai"`). |
+| `embeddingDimensions` | `number` | `768` | Embedding vector dimensions. All providers should use the same value so stored embeddings stay compatible. |
 | `openaiApiKey` | `string` | `$OPENAI_API_KEY` | OpenAI API key for embeddings. Defaults to the `OPENAI_API_KEY` environment variable. |
 | `openaiBaseUrl` | `string` | `undefined` | Override the OpenAI API base URL (useful for compatible providers). |
+| `ollama.baseUrl` | `string` | `"http://localhost:11434"` | Ollama server base URL. |
+| `ollama.embeddingModel` | `string` | `"nomic-embed-text"` | Ollama embedding model (768-dim native, no re-indexing when switching providers). |
 | `maxCacheEntries` | `number` | `10000` | Maximum number of embedding vectors to cache in memory. |
 
 ### Hybrid Memory (Vector + Keyword)
 
-ch4p uses **hybrid search** — combining FTS5 BM25 keyword ranking with OpenAI vector embeddings for semantic similarity. Results are merged using configurable weights.
+ch4p uses **hybrid search** — combining FTS5 BM25 keyword ranking with vector embeddings for semantic similarity. Results are merged using configurable weights.
 
-To enable full hybrid search with semantic recall, add to your config:
+#### Recommended: OpenAI + Ollama fallback chain
+
+Uses OpenAI when available, falls back to a local Ollama instance, then falls back to keyword-only (noop) automatically:
+
+```json
+"memory": {
+  "backend": "sqlite",
+  "embeddingProviders": ["openai", "ollama"],
+  "embeddingDimensions": 768,
+  "ollama": {
+    "baseUrl": "http://localhost:11434",
+    "embeddingModel": "nomic-embed-text"
+  }
+}
+```
+
+In `~/.ch4p/.env`:
+```
+OPENAI_API_KEY=sk-...
+```
+
+Start Ollama once: `ollama pull nomic-embed-text && ollama serve`
+
+#### Single provider (OpenAI only)
 
 ```json
 "memory": {
   "backend": "sqlite",
   "embeddingProvider": "openai",
-  "vectorWeight": 0.7,
-  "keywordWeight": 0.3
+  "embeddingDimensions": 768
 }
 ```
 
-Ensure `OPENAI_API_KEY` is set in your environment. Without `embeddingProvider`, ch4p falls back to keyword-only search (still effective for exact and BM25 recall).
+Without any embedding provider configured, ch4p falls back to keyword-only search (FTS5/BM25 — still effective for exact and phrase recall, but no semantic similarity).
 
 ### Per-User Memory Isolation (Gateway)
 

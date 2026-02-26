@@ -29,8 +29,17 @@ export type { ChunkResult, ChunkOpts } from './chunker.js';
 // Embedding
 export { EmbeddingCache } from './embedding-cache.js';
 export type { EmbeddingCacheOpts } from './embedding-cache.js';
-export { OpenAIEmbeddingProvider, NoopEmbeddingProvider } from './embedding-provider.js';
-export type { IEmbeddingProvider, OpenAIEmbeddingOpts } from './embedding-provider.js';
+export {
+  OpenAIEmbeddingProvider,
+  OllamaEmbeddingProvider,
+  ChainEmbeddingProvider,
+  NoopEmbeddingProvider,
+} from './embedding-provider.js';
+export type {
+  IEmbeddingProvider,
+  OpenAIEmbeddingOpts,
+  OllamaEmbeddingOpts,
+} from './embedding-provider.js';
 
 // Registry / factory
 export { createMemoryBackend, createEmbeddingProvider } from './registry.js';

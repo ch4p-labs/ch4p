@@ -2,7 +2,8 @@
  * Embedding provider interface + implementations.
  *
  * Defines the contract for computing vector embeddings from text,
- * plus two concrete implementations: OpenAI (via fetch) and Noop (fallback).
+ * plus concrete implementations: OpenAI (via fetch), Ollama (local),
+ * Chain (multi-provider fallback), and Noop (fallback).
  */
 
 export interface IEmbeddingProvider {
@@ -83,6 +84,85 @@ export class OpenAIEmbeddingProvider implements IEmbeddingProvider {
     // Sort by index to preserve input order
     const sorted = json.data.sort((a, b) => a.index - b.index);
     return sorted.map((d) => d.embedding);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Ollama embedding provider — uses the /api/embed batch endpoint
+// ---------------------------------------------------------------------------
+
+export interface OllamaEmbeddingOpts {
+  /** Embedding model to use. Default: 'nomic-embed-text' (768-dim). */
+  model?: string;
+  /** Ollama server base URL. Default: 'http://localhost:11434'. */
+  baseUrl?: string;
+  /** Expected output dimensions. Default: 768 (native for nomic-embed-text). */
+  dimensions?: number;
+}
+
+export class OllamaEmbeddingProvider implements IEmbeddingProvider {
+  readonly id = 'ollama';
+  readonly dimensions: number;
+  private readonly model: string;
+  private readonly baseUrl: string;
+
+  constructor(opts: OllamaEmbeddingOpts = {}) {
+    this.model = opts.model ?? 'nomic-embed-text';
+    this.baseUrl = (opts.baseUrl ?? 'http://localhost:11434').replace(/\/+$/, '');
+    this.dimensions = opts.dimensions ?? 768;
+  }
+
+  async embed(texts: string[]): Promise<number[][]> {
+    if (texts.length === 0) return [];
+
+    const response = await fetch(`${this.baseUrl}/api/embed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: this.model, input: texts }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Ollama embedding error: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    const json = (await response.json()) as { embeddings: number[][] };
+    return json.embeddings;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chain provider — tries providers in order, falls back on any error
+// ---------------------------------------------------------------------------
+
+export class ChainEmbeddingProvider implements IEmbeddingProvider {
+  readonly id: string;
+  readonly dimensions: number;
+
+  constructor(private readonly providers: IEmbeddingProvider[]) {
+    if (providers.length === 0) {
+      throw new Error('ChainEmbeddingProvider requires at least one provider');
+    }
+    this.id = `chain:${providers.map((p) => p.id).join('|')}`;
+    // Canonical dimension comes from the first (highest-priority) provider
+    this.dimensions = providers[0]!.dimensions;
+  }
+
+  async embed(texts: string[]): Promise<number[][]> {
+    let lastError: unknown;
+    for (const provider of this.providers) {
+      try {
+        return await provider.embed(texts);
+      } catch (err) {
+        console.warn(
+          `[memory] Embedding provider "${provider.id}" failed, trying next: ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+        );
+        lastError = err;
+      }
+    }
+    throw lastError ?? new Error('All embedding providers failed');
   }
 }
 

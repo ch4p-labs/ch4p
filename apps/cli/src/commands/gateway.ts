@@ -329,7 +329,11 @@ export async function gateway(args: string[]): Promise<void> {
       vectorWeight: config.memory.vectorWeight,
       keywordWeight: config.memory.keywordWeight,
       embeddingProvider: config.memory.embeddingProvider,
+      embeddingProviders: config.memory.embeddingProviders,
+      embeddingDimensions: config.memory.embeddingDimensions ?? 768,
       openaiApiKey: (config.providers?.openai?.apiKey as string) || undefined,
+      ollamaBaseUrl: config.memory.ollama?.baseUrl,
+      ollamaEmbeddingModel: config.memory.ollama?.embeddingModel,
     };
     memoryBackend = createMemoryBackend(memCfg);
   } catch {

@@ -12,6 +12,8 @@ import { MarkdownMemoryBackend } from './markdown-backend.js';
 import { NoopMemoryBackend } from './noop-backend.js';
 import {
   OpenAIEmbeddingProvider,
+  OllamaEmbeddingProvider,
+  ChainEmbeddingProvider,
   NoopEmbeddingProvider,
 } from './embedding-provider.js';
 import type { IEmbeddingProvider } from './embedding-provider.js';
@@ -21,16 +23,27 @@ export interface MemoryConfig {
   backend?: string;
   /** Path for SQLite database or markdown directory */
   path?: string;
-  /** Embedding provider: 'openai' | 'noop' | undefined */
+  /** Single embedding provider: 'openai' | 'ollama' | 'noop' | undefined */
   embeddingProvider?: string;
+  /**
+   * Ordered list of embedding providers to try in sequence.
+   * Takes precedence over `embeddingProvider` when set.
+   * Example: ['openai', 'ollama'] — tries OpenAI first, falls back to Ollama,
+   * then noop (always appended as final fallback).
+   */
+  embeddingProviders?: string[];
   /** OpenAI API key (for openai embedding provider) */
   openaiApiKey?: string;
   /** OpenAI embedding model (default: text-embedding-3-small) */
   embeddingModel?: string;
-  /** Embedding dimensions (default: 1536) */
+  /** Embedding dimensions (default: 768) */
   embeddingDimensions?: number;
   /** OpenAI base URL override */
   openaiBaseUrl?: string;
+  /** Ollama server base URL (default: http://localhost:11434) */
+  ollamaBaseUrl?: string;
+  /** Ollama embedding model (default: nomic-embed-text) */
+  ollamaEmbeddingModel?: string;
   /** Maximum embedding cache entries (default: 10,000) */
   maxCacheEntries?: number;
   /** Default vector weight for hybrid search (default: 0.7) */
@@ -70,36 +83,62 @@ export function createMemoryBackend(config: MemoryConfig = {}): IMemoryBackend {
 
 /**
  * Create the embedding provider from configuration.
+ *
+ * When `embeddingProviders` is set, builds a ChainEmbeddingProvider that tries
+ * each provider in order and falls back on error. A NoopEmbeddingProvider is
+ * always appended as the final fallback if not already present.
+ *
+ * When only `embeddingProvider` (singular) is set, wraps it in a chain with
+ * noop for backward compatibility.
  */
 export function createEmbeddingProvider(config: MemoryConfig = {}): IEmbeddingProvider {
-  const provider = config.embeddingProvider;
+  const dims = config.embeddingDimensions ?? 768;
 
-  if (!provider || provider === 'noop') {
-    return new NoopEmbeddingProvider(config.embeddingDimensions);
-  }
+  // Resolve the ordered provider list.
+  // `embeddingProviders` (plural) takes precedence; fall back to singular form.
+  const providerNames: string[] = config.embeddingProviders
+    ?? (config.embeddingProvider && config.embeddingProvider !== 'noop'
+      ? [config.embeddingProvider, 'noop']
+      : ['noop']);
 
-  if (provider === 'openai') {
-    const apiKey = config.openaiApiKey ?? process.env['OPENAI_API_KEY'];
-    if (!apiKey) {
-      console.warn(
-        '[memory] No OpenAI API key found. Falling back to noop embedding provider. ' +
-        'Set OPENAI_API_KEY or pass openaiApiKey in config.',
-      );
-      return new NoopEmbeddingProvider(config.embeddingDimensions);
+  const built: IEmbeddingProvider[] = [];
+
+  for (const name of providerNames) {
+    if (name === 'noop') {
+      built.push(new NoopEmbeddingProvider(dims));
+    } else if (name === 'openai') {
+      const apiKey = config.openaiApiKey ?? process.env['OPENAI_API_KEY'];
+      if (!apiKey) {
+        console.warn('[memory] OpenAI embedding: no API key found, skipping provider');
+        continue;
+      }
+      built.push(new OpenAIEmbeddingProvider({
+        apiKey,
+        model: config.embeddingModel ?? 'text-embedding-3-small',
+        dimensions: dims,
+        baseUrl: config.openaiBaseUrl,
+      }));
+    } else if (name === 'ollama') {
+      built.push(new OllamaEmbeddingProvider({
+        baseUrl: config.ollamaBaseUrl,
+        model: config.ollamaEmbeddingModel,
+        dimensions: dims,
+      }));
+    } else {
+      throw new MemoryError(`Unknown embedding provider "${name}". Options: openai, ollama, noop`, {
+        provider: name,
+        available: ['openai', 'ollama', 'noop'],
+      });
     }
-
-    return new OpenAIEmbeddingProvider({
-      apiKey,
-      model: config.embeddingModel,
-      dimensions: config.embeddingDimensions,
-      baseUrl: config.openaiBaseUrl,
-    });
   }
 
-  throw new MemoryError(`Unknown embedding provider: ${provider}`, {
-    provider,
-    available: ['openai', 'noop'],
-  });
+  // Always ensure noop is the final fallback so embed() never fully fails.
+  if (!built.some((p) => p.id === 'noop')) {
+    built.push(new NoopEmbeddingProvider(dims));
+  }
+
+  if (built.length === 1) return built[0]!; // no chain needed
+  return new ChainEmbeddingProvider(built);
 }
 
 // ---------------------------------------------------------------------------
@@ -108,7 +147,7 @@ export function createEmbeddingProvider(config: MemoryConfig = {}): IEmbeddingPr
 
 function createSQLiteBackend(config: MemoryConfig): SQLiteMemoryBackend {
   const dbPath = config.path ?? defaultSQLitePath();
-  const embeddingProvider = config.embeddingProvider
+  const embeddingProvider = (config.embeddingProvider || config.embeddingProviders?.length)
     ? createEmbeddingProvider(config)
     : undefined;
 

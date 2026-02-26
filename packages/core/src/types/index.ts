@@ -86,8 +86,19 @@ export interface Ch4pConfig {
     backend: string;
     autoSave: boolean;
     embeddingProvider?: string;
+    /** Ordered list of embedding providers for multi-provider fallback chain. */
+    embeddingProviders?: string[];
+    /** Embedding vector dimensions (default: 768). Must match stored embeddings. */
+    embeddingDimensions?: number;
     vectorWeight?: number;
     keywordWeight?: number;
+    /** Local Ollama embedding server configuration. */
+    ollama?: {
+      /** Ollama server base URL (default: http://localhost:11434). */
+      baseUrl?: string;
+      /** Embedding model to use (default: nomic-embed-text). */
+      embeddingModel?: string;
+    };
   };
   gateway: {
     port: number;
