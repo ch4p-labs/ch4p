@@ -18,7 +18,14 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
-  const { config, loading, saving, error, saveResult, save } = useSettings();
+  const { config, loading, saving, error, saveResult, clearSaveResult, save } = useSettings();
+
+  // Auto-clear the save result banner after 6 s so it doesn't linger.
+  useEffect(() => {
+    if (!saveResult) return;
+    const t = setTimeout(clearSaveResult, 6000);
+    return () => clearTimeout(t);
+  }, [saveResult, clearSaveResult]);
 
   // Local form state — initialised from fetched config.
   const [model, setModel] = useState('');
@@ -71,18 +78,6 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       </div>
 
       {loading && <div className="settings-loading">Loading…</div>}
-
-      {error && (
-        <div className="settings-error">
-          {error}
-        </div>
-      )}
-
-      {saveResult && (
-        <div className="settings-save-result">
-          {saveResult}
-        </div>
-      )}
 
       {!loading && config && (
         <form className="settings-form" onSubmit={handleSubmit}>
@@ -220,6 +215,18 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             >
               {saving ? 'Saving…' : 'Save settings'}
             </button>
+
+            {saveResult && (
+              <div className="settings-save-result">
+                ✓ {saveResult}
+              </div>
+            )}
+
+            {error && (
+              <div className="settings-error">
+                {error}
+              </div>
+            )}
           </div>
         </form>
       )}

@@ -28,6 +28,7 @@ export interface UseSettingsResult {
   saving: boolean;
   error: string | null;
   saveResult: string | null;
+  clearSaveResult: () => void;
   reload: () => void;
   save: (updates: Partial<SafeConfig>) => Promise<void>;
 }
@@ -99,5 +100,7 @@ export function useSettings(): UseSettingsResult {
     }
   }, []);
 
-  return { config, loading, saving, error, saveResult, reload, save };
+  const clearSaveResult = useCallback(() => setSaveResult(null), []);
+
+  return { config, loading, saving, error, saveResult, clearSaveResult, reload, save };
 }

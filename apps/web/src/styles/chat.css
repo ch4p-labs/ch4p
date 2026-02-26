@@ -293,7 +293,7 @@
 }
 
 .settings-error {
-  margin: 10px 18px;
+  margin-top: 10px;
   padding: 8px 12px;
   border-radius: 6px;
   background: #ffebee;
@@ -302,7 +302,7 @@
 }
 
 .settings-save-result {
-  margin: 10px 18px;
+  margin-top: 10px;
   padding: 8px 12px;
   border-radius: 6px;
   background: #e8f5e9;
