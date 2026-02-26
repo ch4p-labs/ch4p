@@ -164,9 +164,18 @@ export class MinimalMatrixClient extends EventEmitter {
       },
     }));
 
+    // Client-side deadline: 5 s longer than the server-side timeout so a
+    // stalled TLS connection is always released and doesn't hang the sync loop.
+    const deadline = AbortSignal.timeout(timeoutMs + 5_000);
+    const signal = this.abortController
+      ? AbortSignal.any([this.abortController.signal, deadline])
+      : deadline;
+
     const data = await this.api(
       'GET',
       `/_matrix/client/v3/sync?${params.toString()}`,
+      undefined,
+      signal,
     ) as unknown as SyncResponse;
 
     this.nextBatch = data.next_batch;
@@ -204,6 +213,7 @@ export class MinimalMatrixClient extends EventEmitter {
     method: string,
     path: string,
     body?: Record<string, unknown>,
+    signal?: AbortSignal,
   ): Promise<Record<string, unknown>> {
     const url = `${this.homeserverUrl}${path}`;
     const headers: Record<string, string> = {
@@ -213,7 +223,7 @@ export class MinimalMatrixClient extends EventEmitter {
     const init: RequestInit = {
       method,
       headers,
-      signal: this.abortController?.signal,
+      signal: signal ?? this.abortController?.signal,
     };
 
     if (body) {
