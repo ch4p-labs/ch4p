@@ -93,8 +93,8 @@ describe('WebSearchTool', () => {
       expect(tool.name).toBe('web_search');
     });
 
-    it('is classified as heavyweight', () => {
-      expect(tool.weight).toBe('heavyweight');
+    it('is classified as lightweight (needs full ToolContext for API key)', () => {
+      expect(tool.weight).toBe('lightweight');
     });
 
     it('has a description', () => {

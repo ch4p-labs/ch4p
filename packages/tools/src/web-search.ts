@@ -82,7 +82,11 @@ export class WebSearchTool implements ITool {
     'descriptions from web search results. Use this to find facts, research ' +
     'topics, or look up current events.';
 
-  readonly weight = 'heavyweight' as const;
+  // Lightweight: web_search is a single HTTP call to the Brave API.  It does
+  // not need worker-pool process isolation, and running inline ensures the
+  // full ToolContext (searchApiKey, searchConfig) is available — the worker
+  // context is stripped to sessionId+cwd and would lose the API key.
+  readonly weight = 'lightweight' as const;
 
   readonly parameters: JSONSchema7 = {
     type: 'object',
