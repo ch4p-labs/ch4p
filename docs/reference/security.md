@@ -265,6 +265,35 @@ The `PairingManager` stores an `expiresAt` timestamp with each paired client. On
 
 ---
 
+## Subprocess Engine Security
+
+When using the SubprocessEngine with Claude CLI (`engines.default: "claude-cli"`), ch4p passes `--dangerously-skip-permissions` to the `claude` subprocess.
+
+### Why the flag is needed
+
+Claude Code's interactive permission system requires a TTY to prompt the user before performing file writes, command execution, and other sensitive operations. The ch4p gateway runs headlessly — no terminal is attached — so interactive prompts cannot be displayed or answered. Without the flag, the subprocess hangs indefinitely waiting for TTY input.
+
+### Defense in depth
+
+ch4p's own security layers operate independently above the subprocess and provide equivalent protections:
+
+| ch4p Layer | What It Guards |
+|------------|----------------|
+| Filesystem scoping | Constrains file operations to declared paths with symlink detection |
+| Command allowlist | Only explicitly approved commands can execute |
+| SSRF protection | Blocks private IP ranges, DNS rebinding, and cloud metadata access |
+| Output sanitization | Strips API keys, tokens, and credentials from all responses |
+| Input validation | Rejects prompt injection and exfiltration attempts |
+| Autonomy gating | Write operations require user confirmation in supervised mode |
+
+These layers are enforced at the `ToolContext` boundary — subprocess output is subject to all ch4p security checks before reaching any channel.
+
+### When it applies
+
+The flag is auto-applied only by the `claude-cli` engine factory. If you create a custom `SubprocessEngine` configuration, you control the args array directly. For gateway (headless) deployments using Claude CLI, the flag is required and ch4p's security stack provides the necessary protections.
+
+---
+
 ## Audit Checklist
 
 The `ch4p audit` command evaluates these items:

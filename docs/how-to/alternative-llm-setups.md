@@ -149,6 +149,8 @@ ch4p ships with pre-configured engine IDs for popular CLI tools. Just set `engin
 
 This spawns `claude --print "<prompt>"` under the hood using your existing Claude Code authentication.
 
+> **Headless permissions:** The gateway passes `--dangerously-skip-permissions` to the `claude` subprocess because Claude Code's interactive permission prompts require a terminal. ch4p's own security layers (filesystem scoping, command allowlist, SSRF guards, output sanitization) provide defense-in-depth above the subprocess. See [Security Reference: Subprocess Engine Security](../reference/security.md#subprocess-engine-security) for details.
+
 **Codex CLI** (requires OpenAI subscription):
 
 ```json

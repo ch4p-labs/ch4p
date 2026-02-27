@@ -1,6 +1,6 @@
 {
   "name": "@ch4p/cli",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Personal AI assistant platform — security-first, multi-channel, programmable",
   "license": "Apache-2.0",
   "type": "module",
@@ -32,7 +32,7 @@
     "url": "https://github.com/ch4p-labs/ch4p/issues"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=20.0.0"
   },
   "keywords": [
     "ai",

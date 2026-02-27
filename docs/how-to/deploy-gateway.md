@@ -129,6 +129,10 @@ Gateway configuration in `~/.ch4p/config.json`:
 | `requirePairing` | `false` | Require pairing code for new connections |
 | `allowPublicBind` | `false` | Bind to `0.0.0.0` instead of `127.0.0.1` |
 
+### Engine-specific notes
+
+When the gateway uses the `claude-cli` engine (the default when Claude Code is installed), it passes `--dangerously-skip-permissions` to the subprocess because the gateway has no terminal for interactive prompts. ch4p's own security layers provide equivalent protections. See [Security Reference: Subprocess Engine Security](../reference/security.md#subprocess-engine-security) for the full explanation.
+
 ---
 
 ## Secrets Management

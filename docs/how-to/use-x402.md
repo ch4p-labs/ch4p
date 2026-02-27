@@ -11,7 +11,7 @@ The `@ch4p/plugin-x402` package adds [x402](https://www.x402.org) HTTP micropaym
 
 - ch4p installed and configured
 - An EVM-compatible wallet address to receive payments (server) or to make payments (client)
-- Optional: an `IIdentityProvider` implementation with a bound wallet for live signing
+- Optional: an `IIdentityProvider` implementation with a bound wallet for live signing (no implementation ships yet — `@ch4p/plugin-erc8004` is planned)
 
 ---
 
@@ -141,7 +141,7 @@ toolContextExtensions: {
 }
 ```
 
-This is typically wired up by an `IIdentityProvider` implementation (e.g., plugin-erc8004).
+This is typically wired up by an `IIdentityProvider` implementation (e.g., `@ch4p/plugin-erc8004`). This plugin is planned but not yet available. Without it, the x402_pay tool generates structurally valid but unsigned payment headers suitable for testing.
 
 ---
 

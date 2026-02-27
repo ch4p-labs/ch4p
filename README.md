@@ -18,7 +18,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="Apache 2.0" />
-  <img src="https://img.shields.io/badge/node-%E2%89%A522-brightgreen" alt="Node ≥22" />
+  <img src="https://img.shields.io/badge/node-%E2%89%A520-brightgreen" alt="Node ≥20" />
   <img src="https://img.shields.io/badge/TypeScript-strict-blue" alt="TypeScript" />
   <a href="https://www.npmjs.com/package/@ch4p/cli"><img src="https://img.shields.io/npm/v/@ch4p/cli" alt="npm version" /></a>
   <img src="https://img.shields.io/badge/tests-2524-brightgreen" alt="Tests" />
@@ -89,7 +89,7 @@ Every subsystem is a trait interface — swap any component via config, zero cod
 | `IObserver` | Observability (session, tool, LLM, security events) |
 | `ITunnelProvider` | Public URL exposure (start, stop, getPublicUrl) |
 | `IVerifier` | Task-level outcome verification (format + semantic checks) |
-| `IIdentityProvider` | On-chain agent identity and reputation (plugin-ready) |
+| `IIdentityProvider` | On-chain agent identity and reputation (interface stable; implementation planned) |
 
 ## Packages
 

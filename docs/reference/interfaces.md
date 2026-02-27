@@ -581,6 +581,8 @@ On-chain agent identity, reputation, and validation. This is a **plugin hook** â
 
 Designed for [ERC-8004 (Trustless Agents)](https://eips.ethereum.org/EIPS/eip-8004) but abstract enough to support other identity standards.
 
+> **Status:** The interface is stable and integrated into `DefaultSecurityPolicy` (graceful no-op when no provider is configured) and the x402 payment tool (placeholder signatures). No concrete implementation ships with ch4p yet â€” a `@ch4p/plugin-erc8004` package is planned.
+
 ```typescript
 interface IIdentityProvider {
   readonly id: string;
