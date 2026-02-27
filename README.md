@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/node-%E2%89%A520-brightgreen" alt="Node ≥20" />
   <img src="https://img.shields.io/badge/TypeScript-strict-blue" alt="TypeScript" />
   <a href="https://www.npmjs.com/package/@ch4p/cli"><img src="https://img.shields.io/npm/v/@ch4p/cli" alt="npm version" /></a>
-  <img src="https://img.shields.io/badge/tests-2524-brightgreen" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-2526-brightgreen" alt="Tests" />
 </p>
 
 ---
