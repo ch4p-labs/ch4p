@@ -60,6 +60,34 @@ import type { SteeringMessage } from './steering.js';
 import { ToolWorkerPool } from './worker-pool.js';
 
 // ---------------------------------------------------------------------------
+// Tool XML sanitization
+// ---------------------------------------------------------------------------
+
+/**
+ * Strip `<tool_call>…</tool_call>` and `<tool_result>…</tool_result>` XML
+ * blocks from text.  The SubprocessEngine's StreamingToolParser normally
+ * strips `<tool_call>` blocks, but has fallback paths where they pass
+ * through as text (malformed JSON, missing fields, unclosed tags).
+ * `<tool_result>` tags are never handled by the parser at all.
+ *
+ * Once these XML fragments leak into stored assistant messages, the
+ * auto-recall system re-injects them into future conversations — creating
+ * a feedback loop where raw protocol artifacts appear in channel output.
+ *
+ * This function is applied before persisting assistant messages and before
+ * yielding final answers, ensuring clean text reaches both memory and
+ * channel surfaces (Discord, Telegram, etc.).
+ */
+export function stripToolXml(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
+    .replace(/<tool_result>[\s\S]*?<\/tool_result>/g, '')
+    .replace(/\n{3,}/g, '\n\n') // collapse excessive blank lines left behind
+    .trim();
+}
+
+// ---------------------------------------------------------------------------
 // Workspace path sanitization
 // ---------------------------------------------------------------------------
 
@@ -466,13 +494,15 @@ export class AgentLoop {
 
         // ----- If engine completed (no tool calls) → done -----
         if (completionAnswer !== undefined && pendingToolCalls.length === 0) {
+          // Strip leaked tool XML before persisting or yielding.
+          const cleanAnswer = stripToolXml(completionAnswer);
           // Add assistant answer to context.
           await this.session.getContext().addMessage({
             role: 'assistant',
-            content: completionAnswer,
+            content: cleanAnswer,
           });
-          finalAnswer = completionAnswer;
-          yield { type: 'complete', answer: completionAnswer, usage: completionUsage };
+          finalAnswer = cleanAnswer;
+          yield { type: 'complete', answer: cleanAnswer, usage: completionUsage };
           done = true;
           break;
         }
@@ -482,7 +512,7 @@ export class AgentLoop {
           // Add assistant message with tool calls to context.
           await this.session.getContext().addMessage({
             role: 'assistant',
-            content: accumulatedText || '',
+            content: stripToolXml(accumulatedText || ''),
             toolCalls: pendingToolCalls,
           });
 
@@ -573,12 +603,13 @@ export class AgentLoop {
         // If we got here with accumulated text but no explicit completion
         // event and no tool calls, treat the accumulated text as the answer.
         if (accumulatedText) {
+          const cleanFallback = stripToolXml(accumulatedText);
           await this.session.getContext().addMessage({
             role: 'assistant',
-            content: accumulatedText,
+            content: cleanFallback,
           });
-          finalAnswer = accumulatedText;
-          yield { type: 'complete', answer: accumulatedText, usage: completionUsage };
+          finalAnswer = cleanFallback;
+          yield { type: 'complete', answer: cleanFallback, usage: completionUsage };
           done = true;
         }
       }

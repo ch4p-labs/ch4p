@@ -19,7 +19,7 @@
  */
 
 import { vi } from 'vitest';
-import { AgentLoop } from './agent-loop.js';
+import { AgentLoop, stripToolXml } from './agent-loop.js';
 import { Session } from './session.js';
 import type {
   IEngine,
@@ -2118,5 +2118,61 @@ describe('AgentLoop', () => {
       expect(errorEvents).toHaveLength(1);
       expect((errorEvents[0] as { error: Error }).error.message).toContain('maximum iterations');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// stripToolXml — unit tests
+// ---------------------------------------------------------------------------
+
+describe('stripToolXml', () => {
+  it('returns empty/falsy text unchanged', () => {
+    expect(stripToolXml('')).toBe('');
+    expect(stripToolXml(undefined as unknown as string)).toBeUndefined();
+  });
+
+  it('strips <tool_call>…</tool_call> blocks', () => {
+    const input = 'Hello\n<tool_call>{"tool":"memory_store","args":{"key":"k"}}</tool_call>\nWorld';
+    expect(stripToolXml(input)).toBe('Hello\n\nWorld');
+  });
+
+  it('strips <tool_result>…</tool_result> blocks', () => {
+    const input = 'Before\n<tool_result>Stored memory entry for \'k\'</tool_result>\nAfter';
+    expect(stripToolXml(input)).toBe('Before\n\nAfter');
+  });
+
+  it('strips both tool_call and tool_result from the same text', () => {
+    const input = [
+      'I will store that.',
+      '<tool_call>{"tool":"memory_store","args":{"key":"color","content":"blue"}}</tool_call>',
+      '<tool_result>Stored memory entry for \'color\'</tool_result>',
+      'Done!',
+    ].join('\n');
+    expect(stripToolXml(input)).toBe('I will store that.\n\nDone!');
+  });
+
+  it('handles multiple tool_call blocks', () => {
+    const input = [
+      'Start',
+      '<tool_call>{"tool":"a","args":{}}</tool_call>',
+      'Middle',
+      '<tool_call>{"tool":"b","args":{}}</tool_call>',
+      'End',
+    ].join('\n');
+    expect(stripToolXml(input)).toBe('Start\n\nMiddle\n\nEnd');
+  });
+
+  it('handles multiline content inside tags', () => {
+    const input = 'Text\n<tool_call>\n{\n  "tool": "x",\n  "args": {}\n}\n</tool_call>\nMore';
+    expect(stripToolXml(input)).toBe('Text\n\nMore');
+  });
+
+  it('collapses excessive blank lines left by stripping', () => {
+    const input = 'A\n\n\n<tool_call>{"tool":"x","args":{}}</tool_call>\n\n\nB';
+    expect(stripToolXml(input)).toBe('A\n\nB');
+  });
+
+  it('passes through clean text unchanged (after trim)', () => {
+    expect(stripToolXml('Just a normal response')).toBe('Just a normal response');
   });
 });

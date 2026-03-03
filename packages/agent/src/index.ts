@@ -22,7 +22,7 @@ export type {
 export { Session } from './session.js';
 export type { SessionState, SessionMetadata, SessionOpts } from './session.js';
 
-export { AgentLoop } from './agent-loop.js';
+export { AgentLoop, stripToolXml } from './agent-loop.js';
 export type { AgentEvent, AgentLoopOpts } from './agent-loop.js';
 
 export { FormatVerifier } from './format-verifier.js';

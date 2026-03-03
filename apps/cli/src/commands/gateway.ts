@@ -63,6 +63,25 @@ import { buildSystemPrompt } from '../system-prompt.js';
 import { AgentRouter } from '../agent-router.js';
 
 // ---------------------------------------------------------------------------
+// Tool XML sanitization (defense-in-depth — agent-loop also strips)
+// ---------------------------------------------------------------------------
+
+/**
+ * Strip `<tool_call>…</tool_call>` and `<tool_result>…</tool_result>` XML
+ * blocks from text before sending to channels.  This is a safety net in
+ * case the agent loop's own stripping was bypassed (error paths, streaming
+ * fallbacks, etc.).
+ */
+function stripToolXml(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
+    .replace(/<tool_result>[\s\S]*?<\/tool_result>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// ---------------------------------------------------------------------------
 // Channel factory
 // ---------------------------------------------------------------------------
 
@@ -1378,6 +1397,8 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
       }
 
       if (responseText) {
+        // Strip any leaked tool protocol XML before sending to channels.
+        responseText = stripToolXml(responseText);
         const outbound = {
           text: responseText,
           replyTo: msg.id,
