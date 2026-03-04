@@ -228,10 +228,20 @@ export function buildSafeConfig(cfg: Ch4pConfig): Record<string, unknown> {
  * Only the fields exposed by buildSafeConfig can be modified.
  * Returns a new config object (does not mutate the original).
  */
+/** Valid enum values for fields that accept a fixed set of strings. */
+const VALID_ENUMS = {
+  thinkingLevel: new Set(['low', 'medium', 'high']),
+  autonomyLevel: new Set(['readonly', 'supervised', 'full']),
+  logLevel: new Set(['debug', 'info', 'warn', 'error']),
+} as const;
+
 export function applySafeUpdates(current: Ch4pConfig, updates: Record<string, unknown>): Ch4pConfig {
   const result: Ch4pConfig = { ...current };
   if (updates.agent && typeof updates.agent === 'object') {
     const u = updates.agent as Record<string, unknown>;
+    if (u.thinkingLevel !== undefined && !VALID_ENUMS.thinkingLevel.has(String(u.thinkingLevel))) {
+      throw new Error(`Invalid thinkingLevel: "${u.thinkingLevel}". Must be one of: ${[...VALID_ENUMS.thinkingLevel].join(', ')}`);
+    }
     result.agent = {
       ...current.agent,
       ...(u.model !== undefined && { model: String(u.model) }),
@@ -255,6 +265,9 @@ export function applySafeUpdates(current: Ch4pConfig, updates: Record<string, un
   }
   if (updates.autonomy && typeof updates.autonomy === 'object') {
     const u = updates.autonomy as Record<string, unknown>;
+    if (u.level !== undefined && !VALID_ENUMS.autonomyLevel.has(String(u.level))) {
+      throw new Error(`Invalid autonomy level: "${u.level}". Must be one of: ${[...VALID_ENUMS.autonomyLevel].join(', ')}`);
+    }
     result.autonomy = {
       ...current.autonomy,
       ...(u.level !== undefined && { level: u.level as 'readonly' | 'supervised' | 'full' }),
@@ -262,6 +275,9 @@ export function applySafeUpdates(current: Ch4pConfig, updates: Record<string, un
   }
   if (updates.observability && typeof updates.observability === 'object') {
     const u = updates.observability as Record<string, unknown>;
+    if (u.logLevel !== undefined && !VALID_ENUMS.logLevel.has(String(u.logLevel))) {
+      throw new Error(`Invalid logLevel: "${u.logLevel}". Must be one of: ${[...VALID_ENUMS.logLevel].join(', ')}`);
+    }
     result.observability = {
       ...current.observability,
       ...(u.logLevel !== undefined && { logLevel: u.logLevel as 'debug' | 'info' | 'warn' | 'error' }),
@@ -638,6 +654,14 @@ export async function gateway(args: string[]): Promise<void> {
   console.log(`  ${DIM}  GET    /sessions/:id        - get session details${RESET}`);
   console.log(`  ${DIM}  POST   /sessions/:id/steer  - inject message into session${RESET}`);
   console.log(`  ${DIM}  DELETE /sessions/:id        - end a session${RESET}`);
+
+  // Security warnings.
+  if (x402Cfg?.enabled && x402Cfg.server && !x402Cfg.server.verifyPayment) {
+    console.log(`\n  ${YELLOW}⚠ x402 server: no verifyPayment callback configured.${RESET}`);
+    console.log(`  ${DIM}  Payment headers are accepted structurally — no on-chain signature verification.${RESET}`);
+    console.log(`  ${DIM}  For production, add a verifyPayment callback. See docs/how-to/use-x402.md${RESET}`);
+  }
+
   console.log('');
 
   // ----- Start channel adapters (supervised) -----

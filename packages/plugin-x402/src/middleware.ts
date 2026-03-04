@@ -35,6 +35,44 @@ const DEFAULT_NETWORK = 'base';
 /** Default payment timeout in seconds. */
 const DEFAULT_TIMEOUT = 300;
 
+// ---------------------------------------------------------------------------
+// Nonce replay protection
+// ---------------------------------------------------------------------------
+
+/**
+ * Simple nonce set with TTL-based expiry.
+ * Nonces are kept for `maxTimeoutSeconds` after first use, then purged.
+ */
+class NonceSet {
+  private readonly seen = new Map<string, number>(); // nonce → expiry timestamp (ms)
+  private readonly cleanupInterval: ReturnType<typeof setInterval>;
+
+  constructor() {
+    // Purge expired nonces every 60 s.
+    this.cleanupInterval = setInterval(() => this.purge(), 60_000);
+    this.cleanupInterval.unref();
+  }
+
+  /** Returns true if the nonce is fresh (not replayed). Marks it as seen. */
+  check(nonce: string, ttlSeconds: number): boolean {
+    this.purge();
+    if (this.seen.has(nonce)) return false;
+    this.seen.set(nonce, Date.now() + ttlSeconds * 1000);
+    return true;
+  }
+
+  private purge(): void {
+    const now = Date.now();
+    for (const [nonce, expiry] of this.seen) {
+      if (now > expiry) this.seen.delete(nonce);
+    }
+  }
+
+  destroy(): void {
+    clearInterval(this.cleanupInterval);
+  }
+}
+
 /**
  * Returns true if urlPath matches the protection pattern.
  *
@@ -126,6 +164,7 @@ export function createX402Middleware(config: X402Config): X402PreHandler | null 
   const asset = serverCfg.asset ?? DEFAULT_ASSET;
   const network = serverCfg.network ?? DEFAULT_NETWORK;
   const maxTimeoutSeconds = serverCfg.maxTimeoutSeconds ?? DEFAULT_TIMEOUT;
+  const nonces = new NonceSet();
   const description =
     serverCfg.description ?? 'Payment required to access this gateway resource.';
   const protectedPaths = serverCfg.protectedPaths ?? ['/*'];
@@ -174,6 +213,13 @@ export function createX402Middleware(config: X402Config): X402PreHandler | null 
 
     // Network mismatch — reject.
     if (payment.network !== network) {
+      send402(res, requirements);
+      return true;
+    }
+
+    // Nonce replay protection — reject reused nonces.
+    const paymentNonce = payment.payload?.authorization?.nonce;
+    if (typeof paymentNonce === 'string' && !nonces.check(paymentNonce, maxTimeoutSeconds)) {
       send402(res, requirements);
       return true;
     }

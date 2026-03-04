@@ -212,10 +212,13 @@ export class ZaloChannel implements IChannel {
       const appId = parsed.app_id ?? this.config.appId;
       const timestamp = parsed.timestamp ?? '';
 
+      const { timingSafeEqual } = await import('node:crypto');
       const baseString = `${appId}${rawBody}${timestamp}${this.config.oaSecretKey}`;
       const expected = createHash('sha256').update(baseString).digest('hex');
 
-      return expected === mac;
+      // Constant-time comparison to prevent timing side-channel attacks.
+      if (expected.length !== mac.length) return false;
+      return timingSafeEqual(Buffer.from(expected), Buffer.from(mac));
     } catch {
       return false;
     }

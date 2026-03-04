@@ -12,6 +12,7 @@
  * — suitable for development and testing.
  */
 
+import { randomBytes as nodeRandomBytes } from 'node:crypto';
 import type { ITool, ToolContext, ToolResult, ValidationResult, JSONSchema7 } from '@ch4p/core';
 import type { X402Response, X402PaymentAuthorization, X402PaymentPayload } from './types.js';
 
@@ -143,19 +144,7 @@ export class X402PayTool implements ITool {
 
     // Build EIP-3009 authorization struct.
     const nowSecs = Math.floor(Date.now() / 1000);
-    const randomBytes = new Uint8Array(32);
-    if (typeof globalThis.crypto !== 'undefined') {
-      globalThis.crypto.getRandomValues(randomBytes);
-    } else {
-      // Fallback for environments without Web Crypto (should not happen in Node 22+).
-      // WARNING: Math.random() is not cryptographically secure — nonce may be predictable.
-      console.warn('x402: crypto.getRandomValues unavailable; using insecure Math.random fallback for nonce.');
-      for (let i = 0; i < 32; i++) {
-        randomBytes[i] = Math.floor(Math.random() * 256);
-      }
-    }
-    const nonce =
-      '0x' + Array.from(randomBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+    const nonce = '0x' + nodeRandomBytes(32).toString('hex');
 
     const authorization: X402PaymentAuthorization = {
       from: payer,

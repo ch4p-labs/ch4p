@@ -11,7 +11,7 @@ The `@ch4p/plugin-x402` package adds [x402](https://www.x402.org) HTTP micropaym
 
 - ch4p installed and configured
 - An EVM-compatible wallet address to receive payments (server) or to make payments (client)
-- Optional: an `IIdentityProvider` implementation with a bound wallet for live signing (no implementation ships yet — `@ch4p/plugin-erc8004` is planned)
+- A private key for the paying wallet (client-side signing)
 
 ---
 
@@ -97,66 +97,67 @@ const middleware = createX402Middleware({
 
 ## Client-Side: Agent Pays for Resources
 
-When `x402.enabled` is true, the `x402_pay` tool is automatically registered for all gateway agent sessions.
+The simplest way to enable client-side payments is with a private key in your config. This is the recommended integration path until the `@ch4p/plugin-erc8004` identity provider plugin is complete.
 
-If the agent calls a resource that returns 402, it can use this tool:
+### Quick Setup
+
+1. Add the `client` section to `~/.ch4p/config.json`:
+
+```json
+{
+  "x402": {
+    "enabled": true,
+    "client": {
+      "privateKey": "${X402_PRIVATE_KEY}"
+    }
+  }
+}
+```
+
+2. Set your private key in `~/.ch4p/.env`:
+
+```
+X402_PRIVATE_KEY=0x<your-64-char-hex-private-key>
+```
+
+That's it. The gateway derives your wallet address from the key automatically and injects an EIP-712 signer into the agent runtime.
+
+### How It Works
+
+When the agent encounters an HTTP 402 response, two payment paths are available:
+
+**Automatic (`web_fetch`)** — When `web_fetch` runs on the main thread and hits a 402, it signs an EIP-3009 `transferWithAuthorization`, attaches the `X-PAYMENT` header, and retries the request transparently. No model intervention required.
+
+**Manual (`x402_pay` tool)** — When `web_fetch` runs in a worker thread (the signer can't cross thread boundaries), the agent falls back to calling `x402_pay` explicitly:
 
 ```
 Tool: x402_pay
 Args:
   url: "https://some-paid-api.com/data"
   x402_response: "{\"x402Version\":1,\"error\":\"X402\",\"accepts\":[...]}"
-  wallet_address: "0xYourPayerWallet"
 ```
 
-The tool returns:
+The tool signs the payment and returns the `X-PAYMENT` header value. The agent retries with the header attached. Both paths are transparent to the end user.
 
-```
-Resource:  https://some-paid-api.com/data
-Network:   base
-Amount:    1000000 (asset 0x833589...)
-Pay to:    0xRecipient
-From:      0xYourPayerWallet
+### Client Configuration Options
 
-X-PAYMENT header value (add to your retry request):
-eyJ4NDAyVmVyc2lvbi...
+| Field | Default | Description |
+|-------|---------|-------------|
+| `client.privateKey` | — | 0x-prefixed private key. Use env-var substitution: `"${X402_PRIVATE_KEY}"`. Never commit a real key. |
+| `client.chainId` | `8453` | EIP-712 domain chain ID. Use `84532` for Base Sepolia testnet. |
+| `client.tokenAddress` | USDC on Base | ERC-20 contract for the EIP-712 domain. |
+| `client.tokenName` | `"USD Coin"` | Token name for the EIP-712 domain separator. |
+| `client.tokenVersion` | `"2"` | Token version for the EIP-712 domain separator. |
 
-WARNING: Placeholder signature — cannot be used for real on-chain payments.
-Configure an IIdentityProvider with a bound wallet to enable live signing.
-```
+### Future: Identity Provider Signing
 
-The agent includes the `X-PAYMENT` value in the retry request header.
-
-### Live Signing
-
-To enable real on-chain payments, inject an `x402Signer` via `toolContextExtensions`:
-
-```typescript
-toolContextExtensions: {
-  agentWalletAddress: '0xYourWallet',
-  x402Signer: async (authorization) => {
-    // Sign the EIP-3009 transferWithAuthorization struct.
-    return myWallet.signTypedData(authorization);
-  },
-}
-```
-
-This is typically wired up by an `IIdentityProvider` implementation (e.g., `@ch4p/plugin-erc8004`). This plugin is planned but not yet available. Without it, the x402_pay tool generates structurally valid but unsigned payment headers suitable for testing.
+The `@ch4p/plugin-erc8004` plugin (planned) will provide wallet UI integration and identity-bound signing as an alternative to raw private keys. Until then, the `client.privateKey` approach above is the simplest path to live on-chain payments.
 
 ---
 
 ## Configuration Reference
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `x402.enabled` | boolean | `false` | Enable the x402 plugin |
-| `x402.server.payTo` | string | — | Wallet address receiving payments |
-| `x402.server.amount` | string | — | Amount in smallest unit (e.g. `"1000000"` = 1 USDC) |
-| `x402.server.asset` | string | USDC on Base | ERC-20 token contract address |
-| `x402.server.network` | string | `"base"` | Network identifier |
-| `x402.server.description` | string | auto | Human-readable 402 message |
-| `x402.server.protectedPaths` | string[] | `["/*"]` | Paths to protect. Supports `"/*"` wildcard suffix |
-| `x402.server.maxTimeoutSeconds` | number | `300` | Payment authorization TTL |
+See [Configuration — x402](../reference/configuration.md#x402) for the full field reference covering both server and client options.
 
 ---
 

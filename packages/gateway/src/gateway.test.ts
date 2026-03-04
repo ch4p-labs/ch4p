@@ -565,7 +565,33 @@ describe('GatewayServer', () => {
     it('should respond to OPTIONS with 204', async () => {
       const res = await fetch(`${baseUrl}/sessions`, { method: 'OPTIONS' });
       expect(res.status).toBe(204);
-      expect(res.headers.get('access-control-allow-origin')).toBe('*');
+      // CORS is restricted to localhost; without an Origin header the
+      // server reflects its own address as the allowed origin.
+      const addr = server.getAddress()!;
+      expect(res.headers.get('access-control-allow-origin')).toBe(`http://${addr.host}:${addr.port}`);
+      expect(res.headers.get('vary')).toBe('Origin');
+    });
+
+    it('should reflect a matching localhost origin', async () => {
+      const addr = server.getAddress()!;
+      const origin = `http://localhost:${addr.port}`;
+      const res = await fetch(`${baseUrl}/sessions`, {
+        method: 'OPTIONS',
+        headers: { Origin: origin },
+      });
+      expect(res.status).toBe(204);
+      expect(res.headers.get('access-control-allow-origin')).toBe(origin);
+    });
+
+    it('should not reflect an unknown external origin', async () => {
+      const res = await fetch(`${baseUrl}/sessions`, {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://evil.example.com' },
+      });
+      expect(res.status).toBe(204);
+      // Should fall back to the server's own address, not the attacker origin.
+      const addr = server.getAddress()!;
+      expect(res.headers.get('access-control-allow-origin')).toBe(`http://${addr.host}:${addr.port}`);
     });
   });
 

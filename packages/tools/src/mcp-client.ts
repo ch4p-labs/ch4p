@@ -109,9 +109,27 @@ class StdioConnection {
     this.timeoutMs = config.timeout ?? 10_000;
   }
 
+  /** Commands allowed for MCP stdio server processes. */
+  private static readonly MCP_ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
+    'node', 'npx', 'pnpm', 'npm', 'python', 'python3', 'uvx', 'uv',
+    'deno', 'bun', 'cargo', 'go', 'java', 'ruby',
+  ]);
+
   async connect(): Promise<void> {
     if (!this.config.command) {
       throw new ToolError('MCP stdio transport requires a command.', 'mcp_client');
+    }
+
+    // Validate the command against an allowlist to prevent arbitrary process spawning.
+    const baseName = this.config.command.includes('/')
+      ? this.config.command.slice(this.config.command.lastIndexOf('/') + 1)
+      : this.config.command;
+    if (!StdioConnection.MCP_ALLOWED_COMMANDS.has(baseName)) {
+      throw new ToolError(
+        `MCP command "${baseName}" is not in the allowlist. ` +
+          `Allowed: ${[...StdioConnection.MCP_ALLOWED_COMMANDS].join(', ')}`,
+        'mcp_client',
+      );
     }
 
     const { spawn } = await import('child_process');

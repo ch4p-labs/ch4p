@@ -45,6 +45,10 @@ skills-lock.json
 *.swp
 *.swo
 
+# MCP config and local config (may contain secrets)
+.mcp.json
+config.json
+
 # OS
 Thumbs.db
 /.stoneforge/

@@ -85,8 +85,17 @@ export class SecretStore {
     this.storePath = config.storePath ?? resolve(home, '.ch4p', 'secrets.enc');
 
     // Derive encryption key from machine identity.
-    const machineId = `${hostname()}:${userInfo().username}`;
-    const salt = config.salt ?? `ch4p-secrets-${machineId}`;
+    // Use a strong composite of machine signals so the key is not trivially
+    // guessable from just hostname + username.
+    const machineId = [
+      hostname(),
+      userInfo().username,
+      process.arch,
+      process.platform,
+      home,
+    ].join(':');
+    // Salt is intentionally distinct from the password material.
+    const salt = config.salt ?? 'ch4p-secrets-v1';
     const iterations = config.pbkdf2Iterations ?? DEFAULT_ITERATIONS;
 
     this.key = pbkdf2Sync(machineId, salt, iterations, KEY_LENGTH, 'sha512');

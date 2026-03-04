@@ -34,9 +34,61 @@ import type { CanvasSessionManager } from './canvas-session.js';
 import { WebSocketBridge } from './ws-bridge.js';
 import { serveStatic } from './static.js';
 
+// ---------------------------------------------------------------------------
+// Simple token-bucket rate limiter (per-IP)
+// ---------------------------------------------------------------------------
+
+class RateLimiter {
+  private readonly buckets = new Map<string, { tokens: number; lastRefill: number }>();
+  private readonly maxTokens: number;
+  private readonly refillRate: number; // tokens per second
+  private readonly cleanupInterval: ReturnType<typeof setInterval>;
+
+  constructor(maxTokens: number, refillRate: number) {
+    this.maxTokens = maxTokens;
+    this.refillRate = refillRate;
+    // Purge stale entries every 60 s to prevent unbounded map growth.
+    this.cleanupInterval = setInterval(() => this.cleanup(), 60_000);
+    this.cleanupInterval.unref();
+  }
+
+  /** Returns true if the request should be allowed. */
+  consume(key: string): boolean {
+    const now = Date.now();
+    let bucket = this.buckets.get(key);
+    if (!bucket) {
+      bucket = { tokens: this.maxTokens, lastRefill: now };
+      this.buckets.set(key, bucket);
+    }
+
+    // Refill tokens based on elapsed time.
+    const elapsed = (now - bucket.lastRefill) / 1000;
+    bucket.tokens = Math.min(this.maxTokens, bucket.tokens + elapsed * this.refillRate);
+    bucket.lastRefill = now;
+
+    if (bucket.tokens < 1) return false;
+    bucket.tokens -= 1;
+    return true;
+  }
+
+  private cleanup(): void {
+    const now = Date.now();
+    for (const [key, bucket] of this.buckets) {
+      // Remove entries idle for > 5 minutes.
+      if (now - bucket.lastRefill > 300_000) this.buckets.delete(key);
+    }
+  }
+
+  destroy(): void {
+    clearInterval(this.cleanupInterval);
+  }
+}
+
 export interface GatewayServerOptions {
   port: number;
   host?: string;
+  /** Additional origins allowed for CORS (e.g. tunnel URLs). Localhost is always allowed. */
+  allowedOrigins?: string[];
   sessionManager: SessionManager;
   /** When provided, bearer token auth is enforced on protected routes. */
   pairingManager?: PairingManager;
@@ -106,6 +158,11 @@ export class GatewayServer {
   private readonly preHandler:
     | ((req: IncomingMessage, res: ServerResponse) => boolean | Promise<boolean>)
     | null;
+  private readonly allowedOrigins: Set<string>;
+  /** Per-IP rate limiter: 30 requests burst, refills at 5/s. */
+  private readonly rateLimiter = new RateLimiter(30, 5);
+  /** Actual bound port (may differ from configured port when using port 0). */
+  private boundPort = 0;
   private tunnelUrl: string | null = null;
 
   constructor(options: GatewayServerOptions) {
@@ -128,6 +185,11 @@ export class GatewayServer {
     this.onGetConfig = options.onGetConfig ?? null;
     this.onSaveConfig = options.onSaveConfig ?? null;
     this.preHandler = options.preHandler ?? null;
+    // Additional configured origins (e.g. custom frontends). Localhost
+    // variants are handled dynamically in isAllowedOrigin() using the
+    // actual bound port (which may differ from the configured port when
+    // port 0 is used for dynamic allocation).
+    this.allowedOrigins = new Set(options.allowedOrigins ?? []);
   }
 
   /** Start listening on the configured port. */
@@ -151,6 +213,10 @@ export class GatewayServer {
       this.server.on('error', reject);
 
       this.server.listen(this.port, this.host, () => {
+        const addr = this.server!.address();
+        if (typeof addr === 'object' && addr !== null) {
+          this.boundPort = addr.port;
+        }
         resolve();
       });
     });
@@ -158,6 +224,7 @@ export class GatewayServer {
 
   /** Gracefully close the server. */
   async stop(): Promise<void> {
+    this.rateLimiter.destroy();
     // Close all WebSocket connections
     if (this.wss) {
       this.wss.close();
@@ -177,9 +244,13 @@ export class GatewayServer {
     });
   }
 
-  /** Set the public tunnel URL (shown in GET /health). */
+  /** Set the public tunnel URL (shown in GET /health and added to allowed CORS origins). */
   setTunnelUrl(url: string | null): void {
+    // Remove previous tunnel URL from CORS origins.
+    if (this.tunnelUrl) this.allowedOrigins.delete(this.tunnelUrl);
     this.tunnelUrl = url;
+    // Add new tunnel URL as an allowed CORS origin.
+    if (url) this.allowedOrigins.add(url);
   }
 
   /**
@@ -268,10 +339,25 @@ export class GatewayServer {
     const method = req.method ?? 'GET';
     const url = req.url ?? '/';
 
+    // Rate limiting (per-IP).
+    const clientIp = req.socket.remoteAddress ?? 'unknown';
+    if (!this.rateLimiter.consume(clientIp)) {
+      res.writeHead(429, { 'Retry-After': '5' });
+      res.end('Too Many Requests');
+      return;
+    }
+
     // CORS headers for browser clients.
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // Restrict origin to the local gateway and explicitly configured origins
+    // rather than using wildcard (*), which would allow any website to make
+    // authenticated cross-origin requests.
+    const origin = req.headers['origin'];
+    const selfOrigin = `http://${this.host}:${this.boundPort || this.port}`;
+    const allowedOrigin = origin && this.isAllowedOrigin(origin) ? origin : selfOrigin;
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Vary', 'Origin');
 
     if (method === 'OPTIONS') {
       res.writeHead(204);
@@ -609,10 +695,34 @@ export class GatewayServer {
     res.end(body);
   }
 
+  /** Check if an origin is allowed (localhost variants + configured origins + tunnel). */
+  private isAllowedOrigin(origin: string): boolean {
+    if (this.allowedOrigins.has(origin)) return true;
+    // Allow localhost variants using the actual bound port.
+    const port = this.boundPort || this.port;
+    return (
+      origin === `http://localhost:${port}` ||
+      origin === `http://127.0.0.1:${port}` ||
+      origin === `http://${this.host}:${port}`
+    );
+  }
+
+  /** Maximum request body size in bytes (1 MB). */
+  private static readonly MAX_BODY_SIZE = 1_048_576;
+
   private readBody(req: IncomingMessage): Promise<string> {
     return new Promise<string>((resolve, reject) => {
       const chunks: Buffer[] = [];
-      req.on('data', (chunk: Buffer) => chunks.push(chunk));
+      let totalBytes = 0;
+      req.on('data', (chunk: Buffer) => {
+        totalBytes += chunk.length;
+        if (totalBytes > GatewayServer.MAX_BODY_SIZE) {
+          req.destroy();
+          reject(new Error('Request body too large'));
+          return;
+        }
+        chunks.push(chunk);
+      });
       req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
       req.on('error', reject);
     });
