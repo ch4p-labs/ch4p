@@ -52,7 +52,7 @@ import { EngineError, ToolError } from '@ch4p/core';
 import { abortableSleep, backoffDelay } from '@ch4p/core';
 import { setMaxListeners } from 'node:events';
 
-import { homedir } from 'node:os';
+
 
 import { Session } from './session.js';
 import type { ContextManager } from './context.js';
@@ -85,30 +85,6 @@ export function stripToolXml(text: string): string {
     .replace(/<tool_result>[\s\S]*?<\/tool_result>/g, '')
     .replace(/\n{3,}/g, '\n\n') // collapse excessive blank lines left behind
     .trim();
-}
-
-// ---------------------------------------------------------------------------
-// Workspace path sanitization
-// ---------------------------------------------------------------------------
-
-/**
- * Strip the user's home directory prefix from a workspace path before it is
- * embedded in LLM prompts or tool contexts. This prevents the real home
- * directory path (which may contain a username) from leaking into model
- * context and, by extension, into channel responses.
- *
- * Examples:
- *   /Users/alice/projects/foo  →  ./projects/foo
- *   /home/alice/projects/foo   →  ./projects/foo
- *   /tmp/sandbox               →  /tmp/sandbox  (no change — outside $HOME)
- */
-function sanitizeWorkspacePath(cwd: string): string {
-  const home = homedir();
-  if (cwd === home) return '.';
-  if (cwd.startsWith(home + '/')) {
-    return './' + cwd.slice(home.length + 1);
-  }
-  return cwd;
 }
 
 // ---------------------------------------------------------------------------
@@ -854,10 +830,13 @@ export class AgentLoop {
 
     const startTime = Date.now();
 
+    // IMPORTANT: Use the raw absolute cwd for tool execution — tools use
+    // resolve(context.cwd, filePath) and a relative path would resolve
+    // against process.cwd(), creating doubled/broken paths.
     const rawCwd = this.session.getConfig().cwd ?? process.cwd();
     const toolContext: ToolContext & { memoryBackend?: IMemoryBackend } = {
       sessionId: this.session.getId(),
-      cwd: sanitizeWorkspacePath(rawCwd),
+      cwd: rawCwd,
       securityPolicy: this.opts.securityPolicy ?? PERMISSIVE_POLICY,
       abortSignal: signal,
       onProgress: (_update: string) => {
@@ -891,7 +870,7 @@ export class AgentLoop {
             args: toolCall.args,
             context: {
               sessionId: this.session.getId(),
-              cwd: sanitizeWorkspacePath(rawCwd),
+              cwd: rawCwd,
             },
           },
           signal,

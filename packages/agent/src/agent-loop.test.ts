@@ -2119,6 +2119,59 @@ describe('AgentLoop', () => {
       expect((errorEvents[0] as { error: Error }).error.message).toContain('maximum iterations');
     });
   });
+
+  // =========================================================================
+  // 15. Tool context cwd is always an absolute path (regression)
+  // =========================================================================
+
+  describe('tool context cwd is always absolute', () => {
+    it('passes the session cwd as-is to tool.execute context', async () => {
+      const tool = createMockTool();
+      const engine = createMultiCallEngine([
+        [{ type: 'tool_start', id: 'tc1', tool: 'test_tool', args: { a: 1 } }],
+        [{ type: 'completed', answer: 'ok' }],
+      ]);
+
+      // Session with an absolute cwd (simulating gateway config).
+      const session = new Session({
+        sessionId: 'test-session',
+        channelId: 'cli',
+        userId: 'user-1',
+        engineId: 'test-engine',
+        model: 'test-model',
+        provider: 'test-provider',
+        cwd: '/Users/alice/projects/myapp',
+      });
+
+      const observer = createMockObserver();
+      const loop = new AgentLoop(session, engine, [tool], observer);
+      await collectEvents(loop, 'Use the tool');
+
+      expect(tool.execute).toHaveBeenCalledOnce();
+      const ctx = (tool.execute as ReturnType<typeof vi.fn>).mock.calls[0][1];
+      expect(ctx.cwd).toBe('/Users/alice/projects/myapp');
+    });
+
+    it('falls back to process.cwd() when session has no cwd', async () => {
+      const tool = createMockTool();
+      const engine = createMultiCallEngine([
+        [{ type: 'tool_start', id: 'tc1', tool: 'test_tool', args: {} }],
+        [{ type: 'completed', answer: 'ok' }],
+      ]);
+
+      // Session without cwd — agent-loop should fall back to process.cwd().
+      const session = createSession();
+      const observer = createMockObserver();
+      const loop = new AgentLoop(session, engine, [tool], observer);
+      await collectEvents(loop, 'Use the tool');
+
+      expect(tool.execute).toHaveBeenCalledOnce();
+      const ctx = (tool.execute as ReturnType<typeof vi.fn>).mock.calls[0][1];
+      // process.cwd() is always absolute.
+      expect(ctx.cwd).toBe(process.cwd());
+      expect(ctx.cwd.startsWith('/')).toBe(true);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
