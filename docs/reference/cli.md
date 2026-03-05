@@ -65,6 +65,8 @@ The wizard adapts to your environment. If CLI engines (Claude Code, Codex, Ollam
    - **System** — memory, verification, gateway, security, commands, tunnel, canvas, observability, skills
 6. **Save** — writes config and runs a security audit
 
+Type **back** at any prompt to return to the previous step. The wizard restores the configuration snapshot from before that step ran, so any changes made in that step are cleanly undone. Conditional steps (like API key entry) are automatically skipped when navigating backward.
+
 Every category defaults to skip. Pressing Enter through everything produces the same default configuration.
 
 ---

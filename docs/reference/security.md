@@ -110,6 +110,7 @@ Scans agent output for sensitive patterns before delivery to any channel.
 | `eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+` | `[REDACTED_JWT]` | JSON Web Tokens |
 | `(postgres\|mysql\|mongodb(\+srv)?\|redis)://[^\s]+` | `[REDACTED_DB_URL]` | Database connection strings |
 | `np_[a-zA-Z0-9]{36,}` | `[REDACTED_TOKEN]` | npm publish tokens |
+| `/Users/<name>`, `/home/<name>` | `~` | Home directory paths (redacts username) |
 
 ### Processing Order
 
