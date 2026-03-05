@@ -40,6 +40,22 @@ import {
 } from '../ui.js';
 
 // ---------------------------------------------------------------------------
+// GoBackError -- thrown by prompt helpers when the user types "back"
+// ---------------------------------------------------------------------------
+
+/**
+ * Private exception used to signal "go back to previous step".
+ * Thrown by prompt helpers, caught by the wizard step loop.
+ * Never escapes this module.
+ */
+class GoBackError extends Error {
+  constructor() {
+    super('back');
+    this.name = 'GoBackError';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Engine detection
 // ---------------------------------------------------------------------------
 
@@ -273,6 +289,34 @@ export function parseMultiSelect(answer: string, maxIndex: number): number[] {
     .filter((n) => !isNaN(n) && n >= 0 && n < maxIndex);
 }
 
+/**
+ * Deep-restore a config object in-place so that all existing references
+ * (held by configurator functions) remain valid.
+ */
+export function restoreConfig(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): void {
+  for (const key of Object.keys(target)) delete target[key];
+  for (const [key, value] of Object.entries(structuredClone(source))) {
+    target[key] = value;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// WizardStep -- step definition for the back-navigable loop
+// ---------------------------------------------------------------------------
+
+interface WizardStep {
+  id: string;
+  label: string;
+  shouldRun: () => boolean;
+  run: (
+    rl: readline.Interface,
+    config: ReturnType<typeof getDefaultConfig>,
+  ) => Promise<void>;
+}
+
 // ---------------------------------------------------------------------------
 // Prompt helpers
 // ---------------------------------------------------------------------------
@@ -285,15 +329,20 @@ function createPromptInterface(): readline.Interface {
 }
 
 function ask(rl: readline.Interface, question: string): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     rl.question(question, (answer) => {
-      resolve(answer.trim());
+      const trimmed = answer.trim();
+      if (trimmed.toLowerCase() === 'back') {
+        reject(new GoBackError());
+        return;
+      }
+      resolve(trimmed);
     });
   });
 }
 
 function askSecret(rl: readline.Interface, question: string): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     // For secret input, we print the question then mute the output.
     // Note: Node.js readline does not natively support hidden input,
     // so we use a workaround that replaces characters with nothing.
@@ -315,7 +364,16 @@ function askSecret(rl: readline.Interface, question: string): Promise<string> {
         }
         stdin.removeListener('data', onData);
         process.stdout.write('\n');
-        resolve(input.trim());
+
+        // Check for "back" command before resolving.
+        const trimmed = input.trim();
+        if (trimmed.toLowerCase() === 'back') {
+          rl.resume();
+          reject(new GoBackError());
+          return;
+        }
+
+        resolve(trimmed);
         return;
       }
 
@@ -885,207 +943,278 @@ export async function onboard(): Promise<void> {
   const config = getDefaultConfig();
 
   try {
-    console.log(`  ${DIM}Let's get you set up. Press Enter to skip any step.${RESET}\n`);
+    console.log(`  ${DIM}Let's get you set up. Press Enter to skip any step.${RESET}`);
+    console.log(`  ${DIM}Type ${TEAL}back${DIM} at any prompt to return to the previous step.${RESET}\n`);
 
     // -----------------------------------------------------------------------
-    // Detect available CLI engines
+    // Detect available CLI engines (pre-computation, not a step itself)
     // -----------------------------------------------------------------------
     const detectedEngines = detectEngines();
     let useApiKeys = true; // Default: API key setup
-    let step = 0;
 
-    // Compute total steps based on whether we show engine selection.
-    let totalSteps = 6; // Default: no engine selection shown (anthropic + openai + model + autonomy + features + save)
+    // -----------------------------------------------------------------------
+    // Build the ordered step array
+    // -----------------------------------------------------------------------
+    const steps: WizardStep[] = [
+      // --- Step: Engine selection (conditional) ---
+      {
+        id: 'engine-selection',
+        label: 'Engine Setup',
+        shouldRun: () => detectedEngines.length > 0,
+        run: async (rl, config) => {
+          // Reset useApiKeys on re-entry (back navigation may re-run this).
+          useApiKeys = true;
 
-    if (detectedEngines.length > 0) {
-      // --- Engine selection step ---
-      step++;
-      console.log(`  ${TEAL}${BOLD}Step ${step}${RESET} ${WHITE}Engine Setup${RESET}`);
-      console.log('');
-
-      for (const eng of detectedEngines) {
-        console.log(`  ${GREEN}✓${RESET} ${eng.label} detected`);
-      }
-      console.log('');
-
-      for (let i = 0; i < detectedEngines.length; i++) {
-        const eng = detectedEngines[i]!;
-        const marker = i === 0 ? ` ${GREEN}(recommended)${RESET}` : '';
-        console.log(`  ${DIM}${i + 1}.${RESET} ${eng.label} — ${eng.description}${marker}`);
-      }
-      const apiIdx = detectedEngines.length + 1;
-      console.log(`  ${DIM}${apiIdx}.${RESET} API key setup (Anthropic/OpenAI keys)`);
-
-      const engineChoice = await ask(rl, `  ${TEAL}> Choice [1]: ${RESET}`);
-      const choiceNum = engineChoice ? parseInt(engineChoice, 10) : 1;
-      const chosenEngineIdx = choiceNum - 1;
-
-      if (chosenEngineIdx >= 0 && chosenEngineIdx < detectedEngines.length) {
-        // User picked a detected CLI engine.
-        const chosen = detectedEngines[chosenEngineIdx]!;
-        useApiKeys = false;
-        totalSteps = 4; // engine + autonomy + features + save
-
-        if (chosen.id === 'claude-cli' || chosen.id === 'codex-cli') {
-          // Subprocess engine — set as default.
-          config.engines.default = chosen.id;
-          console.log(`  ${GREEN}Engine set to ${chosen.label}.${RESET}\n`);
-
-          if (chosen.id === 'claude-cli') {
-            console.log(`  ${YELLOW}${BOLD}⚠  Personal use only${RESET}`);
-            console.log(`  ${YELLOW}This setup is intended for personal, local use only.${RESET}`);
-            console.log(`  ${YELLOW}Do not use it in a commercial product or multi-user service${RESET}`);
-            console.log(`  ${YELLOW}where ch4p routes your subscription on behalf of other users.${RESET}`);
-            console.log('');
-            console.log(`  ${DIM}For production or shared deployments, use an API key instead.${RESET}`);
-            console.log(`  ${DIM}See: https://console.anthropic.com${RESET}\n`);
+          console.log('');
+          for (const eng of detectedEngines) {
+            console.log(`  ${GREEN}✓${RESET} ${eng.label} detected`);
           }
-        } else if (chosen.id === 'ollama') {
-          // Ollama — native engine with ollama provider.
-          config.engines.default = 'native';
-          config.agent.provider = 'ollama';
+          console.log('');
 
-          // Try to list installed models and let user pick.
-          const models = listOllamaModels();
-          if (models.length > 0) {
-            console.log(`  ${GREEN}Ollama server is running.${RESET} Installed models:\n`);
-            for (let i = 0; i < models.length; i++) {
-              const marker = i === 0 ? ` ${GREEN}(default)${RESET}` : '';
-              console.log(`  ${DIM}${i + 1}.${RESET} ${models[i]}${marker}`);
+          for (let i = 0; i < detectedEngines.length; i++) {
+            const eng = detectedEngines[i]!;
+            const marker = i === 0 ? ` ${GREEN}(recommended)${RESET}` : '';
+            console.log(`  ${DIM}${i + 1}.${RESET} ${eng.label} — ${eng.description}${marker}`);
+          }
+          const apiIdx = detectedEngines.length + 1;
+          console.log(`  ${DIM}${apiIdx}.${RESET} API key setup (Anthropic/OpenAI keys)`);
+
+          const engineChoice = await ask(rl, `  ${TEAL}> Choice [1]: ${RESET}`);
+          const choiceNum = engineChoice ? parseInt(engineChoice, 10) : 1;
+          const chosenEngineIdx = choiceNum - 1;
+
+          if (chosenEngineIdx >= 0 && chosenEngineIdx < detectedEngines.length) {
+            const chosen = detectedEngines[chosenEngineIdx]!;
+            useApiKeys = false;
+
+            if (chosen.id === 'claude-cli' || chosen.id === 'codex-cli') {
+              config.engines.default = chosen.id;
+              console.log(`  ${GREEN}Engine set to ${chosen.label}.${RESET}\n`);
+
+              if (chosen.id === 'claude-cli') {
+                console.log(`  ${YELLOW}${BOLD}⚠  Personal use only${RESET}`);
+                console.log(`  ${YELLOW}This setup is intended for personal, local use only.${RESET}`);
+                console.log(`  ${YELLOW}Do not use it in a commercial product or multi-user service${RESET}`);
+                console.log(`  ${YELLOW}where ch4p routes your subscription on behalf of other users.${RESET}`);
+                console.log('');
+                console.log(`  ${DIM}For production or shared deployments, use an API key instead.${RESET}`);
+                console.log(`  ${DIM}See: https://console.anthropic.com${RESET}\n`);
+              }
+            } else if (chosen.id === 'ollama') {
+              config.engines.default = 'native';
+              config.agent.provider = 'ollama';
+
+              const models = listOllamaModels();
+              if (models.length > 0) {
+                console.log(`  ${GREEN}Ollama server is running.${RESET} Installed models:\n`);
+                for (let i = 0; i < models.length; i++) {
+                  const marker = i === 0 ? ` ${GREEN}(default)${RESET}` : '';
+                  console.log(`  ${DIM}${i + 1}.${RESET} ${models[i]}${marker}`);
+                }
+                const modelChoice = await ask(rl, `  ${TEAL}> Choice [1]: ${RESET}`);
+                const modelIdx = modelChoice ? parseInt(modelChoice, 10) - 1 : 0;
+                config.agent.model = models[modelIdx] ?? models[0] ?? 'llama3.3';
+              } else {
+                config.agent.model = 'llama3.3';
+                console.log(`  ${YELLOW}Ollama server not reachable. Using default model: llama3.3${RESET}`);
+                console.log(`  ${DIM}Start Ollama with 'ollama serve' before running ch4p.${RESET}`);
+              }
+              console.log(`  ${GREEN}Engine set to Ollama (${config.agent.model}).${RESET}\n`);
             }
-            const modelChoice = await ask(rl, `  ${TEAL}> Choice [1]: ${RESET}`);
-            const modelIdx = modelChoice ? parseInt(modelChoice, 10) - 1 : 0;
-            config.agent.model = models[modelIdx] ?? models[0] ?? 'llama3.3';
           } else {
-            config.agent.model = 'llama3.3';
-            console.log(`  ${YELLOW}Ollama server not reachable. Using default model: llama3.3${RESET}`);
-            console.log(`  ${DIM}Start Ollama with 'ollama serve' before running ch4p.${RESET}`);
+            useApiKeys = true;
+            console.log(`  ${DIM}Proceeding with API key setup.${RESET}\n`);
           }
-          console.log(`  ${GREEN}Engine set to Ollama (${config.agent.model}).${RESET}\n`);
+        },
+      },
+
+      // --- Step: Anthropic API key (conditional on useApiKeys) ---
+      {
+        id: 'anthropic-key',
+        label: 'Anthropic API Key',
+        shouldRun: () => useApiKeys,
+        run: async (rl, config) => {
+          console.log(`  ${DIM}Get yours at https://console.anthropic.com/keys${RESET}`);
+          const anthropicKey = await askSecret(rl, `  ${TEAL}> API key: ${RESET}`);
+          if (anthropicKey) {
+            (config.providers['anthropic'] as Record<string, unknown>)['apiKey'] = anthropicKey;
+            console.log(`  ${GREEN}Saved.${RESET}\n`);
+          } else {
+            console.log(`  ${DIM}Skipped. Set ANTHROPIC_API_KEY env var later.${RESET}\n`);
+          }
+        },
+      },
+
+      // --- Step: OpenAI API key (conditional on useApiKeys) ---
+      {
+        id: 'openai-key',
+        label: 'OpenAI API Key (optional)',
+        shouldRun: () => useApiKeys,
+        run: async (rl, config) => {
+          console.log(`  ${DIM}Get yours at https://platform.openai.com/api-keys${RESET}`);
+          const openaiKey = await askSecret(rl, `  ${TEAL}> API key: ${RESET}`);
+          if (openaiKey) {
+            (config.providers['openai'] as Record<string, unknown>)['apiKey'] = openaiKey;
+            console.log(`  ${GREEN}Saved.${RESET}\n`);
+          } else {
+            console.log(`  ${DIM}Skipped.${RESET}\n`);
+          }
+        },
+      },
+
+      // --- Step: Model selection (conditional on useApiKeys) ---
+      {
+        id: 'model-selection',
+        label: 'Preferred Model',
+        shouldRun: () => useApiKeys,
+        run: async (rl, config) => {
+          for (let i = 0; i < MODELS.length; i++) {
+            const m = MODELS[i]!;
+            const marker = i === 0 ? ` ${GREEN}(default)${RESET}` : '';
+            console.log(`  ${DIM}${i + 1}.${RESET} ${m.label}${marker}`);
+          }
+          const modelChoice = await ask(rl, `  ${TEAL}> Choice [1]: ${RESET}`);
+          const modelIdx = modelChoice ? parseInt(modelChoice, 10) - 1 : 0;
+          const selectedModel = MODELS[modelIdx] ?? MODELS[0]!;
+          config.agent.model = selectedModel.id;
+          config.agent.provider = selectedModel.provider;
+          console.log(`  ${GREEN}Selected: ${selectedModel.label}${RESET}\n`);
+        },
+      },
+
+      // --- Step: Autonomy level (always) ---
+      {
+        id: 'autonomy',
+        label: 'Autonomy Level',
+        shouldRun: () => true,
+        run: async (rl, config) => {
+          for (let i = 0; i < AUTONOMY_LEVELS.length; i++) {
+            const a = AUTONOMY_LEVELS[i]!;
+            const marker = i === 1 ? ` ${GREEN}(default)${RESET}` : '';
+            console.log(`  ${DIM}${i + 1}.${RESET} ${a.label}${marker}`);
+          }
+          const autonomyChoice = await ask(rl, `  ${TEAL}> Choice [2]: ${RESET}`);
+          const autonomyIdx = autonomyChoice ? parseInt(autonomyChoice, 10) - 1 : 1;
+          const selectedAutonomy = AUTONOMY_LEVELS[autonomyIdx] ?? AUTONOMY_LEVELS[1]!;
+          config.autonomy.level = selectedAutonomy.id;
+          console.log(`  ${GREEN}Selected: ${selectedAutonomy.id}${RESET}\n`);
+        },
+      },
+
+      // --- Step: Additional features (always) ---
+      {
+        id: 'features',
+        label: 'Additional Features',
+        shouldRun: () => true,
+        run: async (rl, config) => {
+          console.log(`  ${DIM}Configure providers, channels, services, and system settings.${RESET}`);
+          console.log(`  ${DIM}Each category can be skipped individually.${RESET}\n`);
+
+          const configureFeats = await askYesNo(rl, 'Configure additional features?');
+
+          if (configureFeats) {
+            // Group 1: Providers
+            await configureProviders(rl, config);
+
+            // Group 2: Channels
+            await configureChannels(rl, config);
+
+            // Group 3: Services
+            console.log('');
+            console.log(sectionHeader('Services'));
+            console.log('');
+
+            await configureSearch(rl, config);
+            await configureBrowser(rl, config);
+            await configureVoice(rl, config);
+            await configureVoiceWake(rl, config);
+            await configureMesh(rl, config);
+            await configureMcp(rl, config);
+            await configureCron(rl, config);
+            await configureX402(rl, config);
+
+            // Group 4: System
+            console.log('');
+            console.log(sectionHeader('System'));
+            console.log('');
+
+            await configureMemory(rl, config);
+            await configureVerification(rl, config);
+            await configureGateway(rl, config);
+            await configureSecurity(rl, config);
+            await configureAllowedCommands(rl, config);
+            await configureTunnel(rl, config);
+            await configureCanvas(rl, config);
+            await configureObservability(rl, config);
+            await configureSkills(rl, config);
+          }
+        },
+      },
+
+      // --- Step: Save config (no user prompt — not navigable-back-to) ---
+      {
+        id: 'save',
+        label: 'Saving configuration',
+        shouldRun: () => true,
+        run: async (_rl, config) => {
+          ensureConfigDir();
+          saveConfig(config);
+          console.log(`  ${GREEN}Config written to ${getConfigPath()}${RESET}\n`);
+        },
+      },
+    ];
+
+    // -----------------------------------------------------------------------
+    // Step loop with back-navigation support
+    // -----------------------------------------------------------------------
+    let stepIndex = 0;
+
+    while (stepIndex < steps.length) {
+      const currentStep = steps[stepIndex]!;
+
+      // Skip steps whose condition is not met.
+      if (!currentStep.shouldRun()) {
+        stepIndex++;
+        continue;
+      }
+
+      // Dynamic step numbering (count only runnable steps).
+      const displayStep = steps.slice(0, stepIndex + 1).filter((s) => s.shouldRun()).length;
+      const displayTotal = steps.filter((s) => s.shouldRun()).length;
+
+      // Snapshot config before this step so we can restore on "back".
+      const snapshot = structuredClone(config);
+
+      try {
+        console.log(`  ${TEAL}${BOLD}Step ${displayStep}/${displayTotal}${RESET} ${WHITE}${currentStep.label}${RESET}`);
+        await currentStep.run(rl, config);
+        stepIndex++;
+      } catch (err) {
+        if (err instanceof GoBackError) {
+          // Restore config to pre-step state.
+          restoreConfig(
+            config as unknown as Record<string, unknown>,
+            snapshot as unknown as Record<string, unknown>,
+          );
+
+          // Find previous runnable step.
+          let prev = stepIndex - 1;
+          while (prev >= 0 && !steps[prev]!.shouldRun()) {
+            prev--;
+          }
+
+          if (prev < 0) {
+            console.log(`\n  ${YELLOW}Already at the first step.${RESET}\n`);
+            // Stay on current step (stepIndex unchanged) — it will re-run.
+          } else {
+            stepIndex = prev;
+            console.log(`\n  ${DIM}Going back...${RESET}\n`);
+          }
+        } else {
+          throw err; // Re-throw real errors.
         }
-      } else {
-        // User picked API key setup.
-        useApiKeys = true;
-        totalSteps = 7; // engine + anthropic + openai + model + autonomy + features + save
-        console.log(`  ${DIM}Proceeding with API key setup.${RESET}\n`);
       }
     }
-
-    // -----------------------------------------------------------------------
-    // API key path (skipped for CLI engine users)
-    // -----------------------------------------------------------------------
-    if (useApiKeys) {
-      // --- Anthropic API key ---
-      step++;
-      console.log(`  ${TEAL}${BOLD}Step ${step}/${totalSteps}${RESET} ${WHITE}Anthropic API Key${RESET}`);
-      console.log(`  ${DIM}Get yours at https://console.anthropic.com/keys${RESET}`);
-      const anthropicKey = await askSecret(rl, `  ${TEAL}> API key: ${RESET}`);
-      if (anthropicKey) {
-        (config.providers['anthropic'] as Record<string, unknown>)['apiKey'] = anthropicKey;
-        console.log(`  ${GREEN}Saved.${RESET}\n`);
-      } else {
-        console.log(`  ${DIM}Skipped. Set ANTHROPIC_API_KEY env var later.${RESET}\n`);
-      }
-
-      // --- OpenAI API key ---
-      step++;
-      console.log(`  ${TEAL}${BOLD}Step ${step}/${totalSteps}${RESET} ${WHITE}OpenAI API Key (optional)${RESET}`);
-      console.log(`  ${DIM}Get yours at https://platform.openai.com/api-keys${RESET}`);
-      const openaiKey = await askSecret(rl, `  ${TEAL}> API key: ${RESET}`);
-      if (openaiKey) {
-        (config.providers['openai'] as Record<string, unknown>)['apiKey'] = openaiKey;
-        console.log(`  ${GREEN}Saved.${RESET}\n`);
-      } else {
-        console.log(`  ${DIM}Skipped.${RESET}\n`);
-      }
-
-      // --- Preferred model ---
-      step++;
-      console.log(`  ${TEAL}${BOLD}Step ${step}/${totalSteps}${RESET} ${WHITE}Preferred Model${RESET}`);
-      for (let i = 0; i < MODELS.length; i++) {
-        const m = MODELS[i]!;
-        const marker = i === 0 ? ` ${GREEN}(default)${RESET}` : '';
-        console.log(`  ${DIM}${i + 1}.${RESET} ${m.label}${marker}`);
-      }
-      const modelChoice = await ask(rl, `  ${TEAL}> Choice [1]: ${RESET}`);
-      const modelIdx = modelChoice ? parseInt(modelChoice, 10) - 1 : 0;
-      const selectedModel = MODELS[modelIdx] ?? MODELS[0]!;
-      config.agent.model = selectedModel.id;
-      config.agent.provider = selectedModel.provider;
-      console.log(`  ${GREEN}Selected: ${selectedModel.label}${RESET}\n`);
-    }
-
-    // -----------------------------------------------------------------------
-    // Autonomy level (always shown)
-    // -----------------------------------------------------------------------
-    step++;
-    console.log(`  ${TEAL}${BOLD}Step ${step}/${totalSteps}${RESET} ${WHITE}Autonomy Level${RESET}`);
-    for (let i = 0; i < AUTONOMY_LEVELS.length; i++) {
-      const a = AUTONOMY_LEVELS[i]!;
-      const marker = i === 1 ? ` ${GREEN}(default)${RESET}` : '';
-      console.log(`  ${DIM}${i + 1}.${RESET} ${a.label}${marker}`);
-    }
-    const autonomyChoice = await ask(rl, `  ${TEAL}> Choice [2]: ${RESET}`);
-    const autonomyIdx = autonomyChoice ? parseInt(autonomyChoice, 10) - 1 : 1;
-    const selectedAutonomy = AUTONOMY_LEVELS[autonomyIdx] ?? AUTONOMY_LEVELS[1]!;
-    config.autonomy.level = selectedAutonomy.id;
-    console.log(`  ${GREEN}Selected: ${selectedAutonomy.id}${RESET}\n`);
-
-    // -----------------------------------------------------------------------
-    // Additional features (gated behind a single yes/no)
-    // -----------------------------------------------------------------------
-    step++;
-    console.log(`  ${TEAL}${BOLD}Step ${step}/${totalSteps}${RESET} ${WHITE}Additional Features${RESET}`);
-    console.log(`  ${DIM}Configure providers, channels, services, and system settings.${RESET}`);
-    console.log(`  ${DIM}Each category can be skipped individually.${RESET}\n`);
-
-    const configureFeatures = await askYesNo(rl, 'Configure additional features?');
-
-    if (configureFeatures) {
-      // --- Group 1: Providers ---
-      await configureProviders(rl, config);
-
-      // --- Group 2: Channels ---
-      await configureChannels(rl, config);
-
-      // --- Group 3: Services ---
-      console.log('');
-      console.log(sectionHeader('Services'));
-      console.log('');
-
-      await configureSearch(rl, config);
-      await configureBrowser(rl, config);
-      await configureVoice(rl, config);
-      await configureVoiceWake(rl, config);
-      await configureMesh(rl, config);
-      await configureMcp(rl, config);
-      await configureCron(rl, config);
-      await configureX402(rl, config);
-
-      // --- Group 4: System ---
-      console.log('');
-      console.log(sectionHeader('System'));
-      console.log('');
-
-      await configureMemory(rl, config);
-      await configureVerification(rl, config);
-      await configureGateway(rl, config);
-      await configureSecurity(rl, config);
-      await configureAllowedCommands(rl, config);
-      await configureTunnel(rl, config);
-      await configureCanvas(rl, config);
-      await configureObservability(rl, config);
-      await configureSkills(rl, config);
-    }
-
-    // -----------------------------------------------------------------------
-    // Save config
-    // -----------------------------------------------------------------------
-    step++;
-    console.log(`  ${TEAL}${BOLD}Step ${step}/${totalSteps}${RESET} ${WHITE}Saving configuration${RESET}`);
-    ensureConfigDir();
-    saveConfig(config);
-    console.log(`  ${GREEN}Config written to ${getConfigPath()}${RESET}\n`);
 
     // --- Security audit ---
     console.log(`  ${BOLD}Running security audit...${RESET}\n`);

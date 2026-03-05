@@ -18,7 +18,7 @@ vi.mock('node:child_process', () => ({
 }));
 
 // Import after mock setup.
-const { detectBinary, detectEngines, parseYesNo, parseMultiSelect, CHANNEL_DEFS } = await import('./onboard.js');
+const { detectBinary, detectEngines, parseYesNo, parseMultiSelect, CHANNEL_DEFS, restoreConfig } = await import('./onboard.js');
 
 // ---------------------------------------------------------------------------
 // detectBinary
@@ -287,5 +287,68 @@ describe('CHANNEL_DEFS', () => {
     const irc = CHANNEL_DEFS.find((d: { id: string }) => d.id === 'irc');
     const portField = irc!.fields.find((f: { key: string }) => f.key === 'port');
     expect(portField!.defaultValue).toBe('6697');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// restoreConfig
+// ---------------------------------------------------------------------------
+
+describe('restoreConfig', () => {
+  it('fully restores a mutated config to its snapshot', () => {
+    const original = {
+      name: 'ch4p',
+      engines: { default: 'native' },
+      providers: { anthropic: { apiKey: '' } },
+    } as Record<string, unknown>;
+    const snapshot = structuredClone(original);
+
+    // Mutate the original deeply.
+    (original.engines as Record<string, unknown>).default = 'claude-cli';
+    (original.providers as Record<string, Record<string, unknown>>).anthropic.apiKey = 'sk-secret';
+    original.newKey = 'surprise';
+
+    restoreConfig(original, snapshot);
+
+    expect((original.engines as Record<string, unknown>).default).toBe('native');
+    expect((original.providers as Record<string, Record<string, unknown>>).anthropic.apiKey).toBe('');
+    expect(original.newKey).toBeUndefined();
+  });
+
+  it('removes keys added after snapshot', () => {
+    const target: Record<string, unknown> = { a: 1 };
+    const snapshot: Record<string, unknown> = { a: 1 };
+
+    target.b = 2;
+    target.c = { deep: true };
+
+    restoreConfig(target, snapshot);
+
+    expect(target.a).toBe(1);
+    expect(target.b).toBeUndefined();
+    expect(target.c).toBeUndefined();
+    expect(Object.keys(target)).toEqual(['a']);
+  });
+
+  it('restores deleted keys', () => {
+    const target: Record<string, unknown> = {};
+    const snapshot: Record<string, unknown> = { a: 1, b: 'hello' };
+
+    restoreConfig(target, snapshot);
+
+    expect(target.a).toBe(1);
+    expect(target.b).toBe('hello');
+  });
+
+  it('does not share references with source', () => {
+    const nested = { inner: [1, 2, 3] };
+    const target: Record<string, unknown> = {};
+    const snapshot: Record<string, unknown> = { data: nested };
+
+    restoreConfig(target, snapshot);
+
+    // Mutating the restored target should NOT affect the snapshot.
+    (target.data as { inner: number[] }).inner.push(4);
+    expect(nested.inner).toEqual([1, 2, 3]);
   });
 });
