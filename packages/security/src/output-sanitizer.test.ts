@@ -291,6 +291,34 @@ describe('OutputSanitizer', () => {
       expect(text2.clean).toBe('~/file.ts');
       expect(text3.clean).toBe('~/file.ts');
     });
+
+    it('does not redact /Users/Shared (macOS system directory)', () => {
+      const text = 'File at /Users/Shared/Documents/report.pdf';
+      const result = sanitizer.sanitize(text);
+      expect(result.clean).toBe(text);
+      expect(result.redacted).toBe(false);
+    });
+
+    it('does not redact home paths embedded in URLs', () => {
+      const text = 'See https://example.com/Users/admin/profile for details';
+      const result = sanitizer.sanitize(text);
+      expect(result.clean).toBe(text);
+      expect(result.redacted).toBe(false);
+    });
+
+    it('does not redact home paths preceded by domain-like text', () => {
+      const text = 'Visit docs.site.org/home/guide/setup for help';
+      const result = sanitizer.sanitize(text);
+      expect(result.clean).toBe(text);
+      expect(result.redacted).toBe(false);
+    });
+
+    it('still redacts real home paths next to URLs', () => {
+      const text = 'Downloaded to /Users/coin/Downloads/file.zip from https://example.com';
+      const result = sanitizer.sanitize(text);
+      expect(result.clean).toBe('Downloaded to ~/Downloads/file.zip from https://example.com');
+      expect(result.redacted).toBe(true);
+    });
   });
 
   // -----------------------------------------------------------------------

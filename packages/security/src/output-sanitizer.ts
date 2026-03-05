@@ -156,7 +156,7 @@ const SENSITIVE_PATTERNS: readonly SensitivePattern[] = [
   // -- Home directory paths (redact username from absolute paths) --
   {
     name: 'Home directory path',
-    pattern: /(?:\/Users\/[^\s/]+|\/home\/[^\s/]+)/g,
+    pattern: /(?<![a-zA-Z0-9.])(?:\/Users\/(?!Shared\b)[^\s/]+|\/home\/[^\s/]+)/g,
     replacement: '~',
   },
 
