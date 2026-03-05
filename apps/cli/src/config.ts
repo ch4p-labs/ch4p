@@ -76,6 +76,7 @@ export function getDefaultConfig(): Ch4pConfig {
     autonomy: {
       level: 'supervised',
       allowedCommands: [
+        'bash', 'sh',
         'git', 'npm', 'pnpm', 'node', 'npx', 'cargo',
         'ls', 'cat', 'grep', 'find', 'wc', 'sort', 'head', 'tail',
         'mkdir', 'cp', 'mv', 'echo', 'touch',

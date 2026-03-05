@@ -14,6 +14,8 @@ describe('CommandAllowlist', () => {
     it('uses default allowed commands when none are provided', () => {
       const allowlist = new CommandAllowlist();
       const cmds = allowlist.getAllowedCommands();
+      expect(cmds.has('bash')).toBe(true);
+      expect(cmds.has('sh')).toBe(true);
       expect(cmds.has('git')).toBe(true);
       expect(cmds.has('npm')).toBe(true);
       expect(cmds.has('node')).toBe(true);
@@ -32,9 +34,12 @@ describe('CommandAllowlist', () => {
       expect(cmds.has('npm')).toBe(false);
     });
 
-    it('has empty shellModeCommands by default', () => {
+    it('includes bash and sh in default shellModeCommands', () => {
       const allowlist = new CommandAllowlist();
-      expect(allowlist.getShellModeCommands().size).toBe(0);
+      const shellCmds = allowlist.getShellModeCommands();
+      expect(shellCmds.has('bash')).toBe(true);
+      expect(shellCmds.has('sh')).toBe(true);
+      expect(shellCmds.size).toBe(2);
     });
 
     it('accepts custom shellModeCommands', () => {
@@ -251,6 +256,24 @@ describe('CommandAllowlist', () => {
 
       const result = allowlist.validateCommand('git', ['log | cat']);
       expect(result.allowed).toBe(false);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // bash -c regression (agent tool must work with defaults)
+  // -----------------------------------------------------------------------
+
+  describe('bash -c regression', () => {
+    it('allows bash -c with shell syntax using default config', () => {
+      const allowlist = new CommandAllowlist();
+      const result = allowlist.validateCommand('bash', ['-c', 'ls -la | grep foo && echo done']);
+      expect(result.allowed).toBe(true);
+    });
+
+    it('allows sh -c with shell syntax using default config', () => {
+      const allowlist = new CommandAllowlist();
+      const result = allowlist.validateCommand('sh', ['-c', 'cat file.txt | wc -l']);
+      expect(result.allowed).toBe(true);
     });
   });
 

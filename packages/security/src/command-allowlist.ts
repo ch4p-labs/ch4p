@@ -32,6 +32,8 @@ export interface CommandAllowlistConfig {
 
 /** Default set of commands an agent may invoke. */
 const DEFAULT_ALLOWED_COMMANDS: readonly string[] = [
+  'bash',
+  'sh',
   'git',
   'npm',
   'pnpm',
@@ -51,6 +53,15 @@ const DEFAULT_ALLOWED_COMMANDS: readonly string[] = [
   'mv',
   'echo',
   'touch',
+] as const;
+
+/**
+ * Commands that run shell syntax by design (e.g. `bash -c "..."`).
+ * Shell metacharacter detection is skipped for these.
+ */
+const DEFAULT_SHELL_MODE_COMMANDS: readonly string[] = [
+  'bash',
+  'sh',
 ] as const;
 
 /**
@@ -84,7 +95,9 @@ export class CommandAllowlist {
     this.allowedCommands = new Set(
       config.allowedCommands ?? DEFAULT_ALLOWED_COMMANDS
     );
-    this.shellModeCommands = new Set(config.shellModeCommands ?? []);
+    this.shellModeCommands = new Set(
+      config.shellModeCommands ?? DEFAULT_SHELL_MODE_COMMANDS
+    );
   }
 
   // -----------------------------------------------------------------------
