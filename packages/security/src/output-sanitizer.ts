@@ -153,6 +153,13 @@ const SENSITIVE_PATTERNS: readonly SensitivePattern[] = [
     replacement: '[SSN_REDACTED]',
   },
 
+  // -- Home directory paths (redact username from absolute paths) --
+  {
+    name: 'Home directory path',
+    pattern: /(?:\/Users\/[^\s/]+|\/home\/[^\s/]+)/g,
+    replacement: '~',
+  },
+
   // -- Generic secret patterns (key=value in configs, env files) --
   {
     name: 'Generic secret assignment',
