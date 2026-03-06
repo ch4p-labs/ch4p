@@ -34,7 +34,7 @@ The canvas workspace has two areas:
 
 **Left: Infinite Canvas** — A tldraw-powered spatial workspace. The agent places A2UI components here. You can also use tldraw's built-in drawing tools (pen, shapes, text, arrows) alongside the agent's components. Pan with the hand tool, zoom with scroll.
 
-**Right: Chat Panel** — A text chat interface. Type messages, see agent responses stream in real-time, and monitor agent status (thinking, executing tools, etc.). Use the abort button to cancel a running agent.
+**Right: Chat Panel** — A text chat interface. Type messages, see agent responses stream in real-time, and monitor agent status (thinking, executing tools, etc.). Assistant messages render with markdown formatting — bold, italic, code blocks, lists, links, and headings are all displayed natively. Use the abort button to cancel a running agent.
 
 ### Interacting with Components
 

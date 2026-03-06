@@ -32,7 +32,10 @@ export function buildSystemPrompt(opts: SystemPromptOpts = {}): string {
   let prompt =
     'You are ch4p, a personal AI assistant. ' +
     'You are helpful, concise, and security-conscious. ' +
-    'When asked to perform actions, respect the configured autonomy level.';
+    'When asked to perform actions, respect the configured autonomy level. ' +
+    'Never include tool call indices, tool names, internal identifiers, or ' +
+    'execution metadata in your responses. Present results naturally without ' +
+    'referencing how they were obtained.';
 
   if (opts.hasMemory) {
     prompt +=

@@ -1,16 +1,47 @@
 import { BaseBoxShapeUtil } from 'tldraw';
 import { type Ch4pShape, safeRender } from './base';
-import type { ChartComponent } from '@ch4p/canvas';
+import type { ChartComponent, ChartData } from '@ch4p/canvas';
 
 type ChartShape = Ch4pShape<'ch4p-chart'>;
 
+/**
+ * Sanitise chart data so the SVG renderer never receives NaN or undefined.
+ * Returns a cleaned copy — or `null` if no usable data remains.
+ */
+function sanitizeChartData(data: unknown): ChartData | null {
+  if (!data || typeof data !== 'object') return null;
+  const d = data as Record<string, unknown>;
+
+  const labels = Array.isArray(d.labels)
+    ? (d.labels as unknown[]).map((l) => String(l ?? ''))
+    : [];
+
+  if (!Array.isArray(d.datasets)) return null;
+
+  const datasets = (d.datasets as unknown[])
+    .filter((ds): ds is Record<string, unknown> => !!ds && typeof ds === 'object')
+    .filter((ds) => Array.isArray(ds.values))
+    .map((ds) => ({
+      label: String(ds.label ?? ''),
+      values: (ds.values as unknown[]).map((v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      }),
+      ...(ds.color ? { color: String(ds.color) } : {}),
+    }));
+
+  if (datasets.length === 0) return null;
+  return { labels, datasets };
+}
+
 /** Simple SVG-based bar chart renderer. */
 function SimpleBarChart({ comp, w, h }: { comp: ChartComponent; w: number; h: number }) {
-  // Defensive: bail gracefully if data is missing or malformed.
-  if (!comp.data?.datasets || !comp.data?.labels) {
+  // Defensive: sanitise data before rendering to prevent NaN in SVG attributes.
+  const data = sanitizeChartData(comp.data);
+  if (!data) {
     return (
       <div style={{ padding: 16, color: '#999', fontSize: 13 }}>
-        Chart: missing data
+        Chart: no valid data
       </div>
     );
   }
@@ -19,11 +50,11 @@ function SimpleBarChart({ comp, w, h }: { comp: ChartComponent; w: number; h: nu
   const chartW = w - padding.left - padding.right;
   const chartH = h - padding.top - padding.bottom;
 
-  const allValues = comp.data.datasets.flatMap((ds) => ds.values);
+  const allValues = data.datasets.flatMap((ds) => ds.values);
   const maxVal = Math.max(...allValues, 1);
-  const barCount = comp.data.labels.length;
+  const barCount = data.labels.length;
   const groupWidth = chartW / Math.max(barCount, 1);
-  const barWidth = (groupWidth * 0.7) / Math.max(comp.data.datasets.length, 1);
+  const barWidth = (groupWidth * 0.7) / Math.max(data.datasets.length, 1);
 
   const colors = ['#4263eb', '#f76707', '#37b24d', '#ae3ec9', '#f03e3e'];
 
@@ -40,10 +71,10 @@ function SimpleBarChart({ comp, w, h }: { comp: ChartComponent; w: number; h: nu
       <line x1={padding.left} y1={padding.top + chartH} x2={padding.left + chartW} y2={padding.top + chartH} stroke="#ddd" />
 
       {/* Bars */}
-      {comp.data.datasets.map((ds, dsIdx) =>
+      {data.datasets.map((ds, dsIdx) =>
         ds.values.map((val, i) => {
           const barH = (val / maxVal) * chartH;
-          const x = padding.left + i * groupWidth + dsIdx * barWidth + (groupWidth - barWidth * comp.data.datasets.length) / 2;
+          const x = padding.left + i * groupWidth + dsIdx * barWidth + (groupWidth - barWidth * data.datasets.length) / 2;
           const y = padding.top + chartH - barH;
           return (
             <rect
@@ -61,7 +92,7 @@ function SimpleBarChart({ comp, w, h }: { comp: ChartComponent; w: number; h: nu
       )}
 
       {/* X-axis labels */}
-      {comp.data.labels.map((label, i) => (
+      {data.labels.map((label, i) => (
         <text
           key={i}
           x={padding.left + i * groupWidth + groupWidth / 2}

@@ -241,7 +241,22 @@ export function validateComponentFields(value: A2UIComponent): string[] {
       break;
     case 'chart':
       if (typeof obj.chartType !== 'string') errors.push('Chart component requires a "chartType" string.');
-      if (!obj.data || typeof obj.data !== 'object') errors.push('Chart component requires a "data" object.');
+      if (!obj.data || typeof obj.data !== 'object') {
+        errors.push('Chart component requires a "data" object.');
+      } else {
+        const d = obj.data as Record<string, unknown>;
+        if (!Array.isArray(d.labels)) errors.push('Chart data requires a "labels" array.');
+        if (!Array.isArray(d.datasets)) {
+          errors.push('Chart data requires a "datasets" array.');
+        } else {
+          for (let i = 0; i < (d.datasets as unknown[]).length; i++) {
+            const ds = (d.datasets as Record<string, unknown>[])[i];
+            if (!ds || !Array.isArray(ds.values)) {
+              errors.push(`Dataset ${i} requires a "values" array.`);
+            }
+          }
+        }
+      }
       break;
     case 'form':
       if (!Array.isArray(obj.fields)) errors.push('Form component requires a "fields" array.');

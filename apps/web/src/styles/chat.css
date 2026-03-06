@@ -111,7 +111,6 @@
   font-size: 14px;
   line-height: 1.5;
   word-wrap: break-word;
-  white-space: pre-wrap;
 }
 
 .message-bubble.user {
@@ -119,6 +118,7 @@
   background: var(--accent);
   color: #fff;
   border-bottom-right-radius: 4px;
+  white-space: pre-wrap;
 }
 
 .message-bubble.assistant {
@@ -130,6 +130,78 @@
 
 .message-content {
   position: relative;
+}
+
+/* ---- Markdown elements inside assistant messages ---- */
+.message-content p {
+  margin: 0 0 8px;
+}
+
+.message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.message-content h3 {
+  margin: 4px 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.message-content pre {
+  background: #282c34;
+  color: #abb2bf;
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 6px 0;
+}
+
+.message-content code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 12.5px;
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+}
+
+.message-content pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
+}
+
+.message-content blockquote {
+  margin: 6px 0;
+  padding-left: 12px;
+  border-left: 3px solid rgba(0, 0, 0, 0.15);
+  opacity: 0.85;
+}
+
+.message-content blockquote p {
+  margin: 0;
+}
+
+.message-content ul,
+.message-content ol {
+  margin: 4px 0;
+  padding-left: 22px;
+}
+
+.message-content li {
+  margin-bottom: 2px;
+}
+
+.message-content a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.message-content strong {
+  font-weight: 600;
 }
 
 .streaming-cursor {

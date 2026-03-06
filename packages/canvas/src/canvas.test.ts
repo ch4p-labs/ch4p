@@ -26,7 +26,7 @@ import type {
   StatusComponent,
   ComponentPosition,
 } from './components.js';
-import { isA2UIComponent } from './components.js';
+import { isA2UIComponent, validateComponentFields } from './components.js';
 
 // State
 import { CanvasState } from './state.js';
@@ -156,6 +156,41 @@ describe('A2UI Components', () => {
       expect(form.fields).toHaveLength(2);
       expect(form.fields[0]!.fieldType).toBe('text');
       expect(form.submitLabel).toBe('Submit');
+    });
+
+    it('validates chart with valid structure', () => {
+      const errors = validateComponentFields(makeChart());
+      expect(errors).toHaveLength(0);
+    });
+
+    it('validates chart — rejects missing datasets key', () => {
+      const chart = { id: 'c1', type: 'chart', chartType: 'bar', data: { labels: ['A'] } } as unknown as ChartComponent;
+      const errors = validateComponentFields(chart);
+      expect(errors.some((e) => e.includes('datasets'))).toBe(true);
+    });
+
+    it('validates chart — rejects dataset without values array', () => {
+      const chart = {
+        id: 'c1', type: 'chart', chartType: 'bar',
+        data: { labels: ['A'], datasets: [{ label: 'No values' }] },
+      } as unknown as ChartComponent;
+      const errors = validateComponentFields(chart);
+      expect(errors.some((e) => e.includes('values'))).toBe(true);
+    });
+
+    it('validates chart — rejects missing labels key', () => {
+      const chart = {
+        id: 'c1', type: 'chart', chartType: 'bar',
+        data: { datasets: [{ label: 'DS', values: [1, 2] }] },
+      } as unknown as ChartComponent;
+      const errors = validateComponentFields(chart);
+      expect(errors.some((e) => e.includes('labels'))).toBe(true);
+    });
+
+    it('validates chart — rejects missing data object', () => {
+      const chart = { id: 'c1', type: 'chart', chartType: 'bar' } as unknown as ChartComponent;
+      const errors = validateComponentFields(chart);
+      expect(errors.some((e) => e.includes('data'))).toBe(true);
     });
 
     it('all 11 component types can be constructed', () => {
