@@ -103,6 +103,7 @@ When the agent is actively processing a message on any gateway channel (Telegram
 | `/stop` | Cancel the current task immediately. |
 | `/cancel` | Same as `/stop`. |
 | `/stop <reason>` | Cancel with a reason (e.g., `/stop wrong task`). |
+| `stop` / `cancel` | Bare form (no slash) — works on Slack and all channels. |
 
 **Behavior:**
 
@@ -110,6 +111,13 @@ When the agent is actively processing a message on any gateway channel (Telegram
 - When a steering command is processed, any queued follow-up messages are cleared.
 - The agent sends a brief confirmation ("Stopping…") immediately.
 - Commands are case-insensitive: `/Stop`, `/STOP`, and `/stop` all work.
+- If the agent is waiting for a permission prompt response (`[y/n]`), steering commands are deferred until the prompt is answered.
+
+**Channel notes:**
+
+- **Telegram groups** — Telegram appends `@botname` to commands (e.g., `/stop@mybot`); this is handled automatically.
+- **Slack** — Slack intercepts unregistered `/` commands, so use the bare form (`stop` or `cancel`) instead.
+- **All other channels** — Both `/stop` and `stop` work.
 
 ---
 

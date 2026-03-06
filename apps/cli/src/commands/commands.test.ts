@@ -590,4 +590,57 @@ describe('parseSteeringCommand', () => {
     expect(parseSteeringCommand('/focus test')).toBeNull();
     expect(parseSteeringCommand('/context new info')).toBeNull();
   });
+
+  // Telegram group chats append @botname to commands.
+  it('handles Telegram @botname suffix: /stop@mybot', () => {
+    const result = parseSteeringCommand('/stop@ch4p_bot');
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('abort');
+    expect(result!.content).toBe('User requested stop');
+  });
+
+  it('handles Telegram @botname suffix: /cancel@mybot', () => {
+    const result = parseSteeringCommand('/cancel@ch4p_bot');
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('abort');
+  });
+
+  it('handles Telegram @botname with reason: /stop@mybot wrong task', () => {
+    // Telegram can send: /stop@botname followed by text
+    const result = parseSteeringCommand('/stop@ch4p_bot wrong task');
+    expect(result).not.toBeNull();
+    expect(result!.content).toBe('wrong task');
+  });
+
+  // Slack intercepts / commands; bare "stop" / "cancel" work as fallback.
+  it('handles bare "stop" without slash (Slack fallback)', () => {
+    const result = parseSteeringCommand('stop');
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('abort');
+  });
+
+  it('handles bare "cancel" without slash (Slack fallback)', () => {
+    const result = parseSteeringCommand('cancel');
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('abort');
+  });
+
+  it('handles bare "stop" with reason', () => {
+    const result = parseSteeringCommand('stop wrong task');
+    expect(result).not.toBeNull();
+    expect(result!.content).toBe('wrong task');
+  });
+
+  it('bare stop is case-insensitive', () => {
+    expect(parseSteeringCommand('STOP')).not.toBeNull();
+    expect(parseSteeringCommand('Stop')).not.toBeNull();
+    expect(parseSteeringCommand('CANCEL')).not.toBeNull();
+  });
+
+  it('does NOT match bare partial words like "stopping"', () => {
+    expect(parseSteeringCommand('stopping')).toBeNull();
+    expect(parseSteeringCommand('stopped')).toBeNull();
+    expect(parseSteeringCommand('cancellation')).toBeNull();
+    expect(parseSteeringCommand('cancelled')).toBeNull();
+  });
 });

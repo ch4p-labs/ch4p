@@ -214,13 +214,19 @@ const MAX_PENDING_PER_USER = 2;
  */
 export function parseSteeringCommand(text: string): SteeringMessage | null {
   const trimmed = text.trim();
-  const lower = trimmed.toLowerCase();
+
+  // Strip Telegram-style @botname suffix: /stop@mybot → /stop
+  const stripped = trimmed.replace(/^(\/\w+)@\w+/, '$1');
+  const lower = stripped.toLowerCase();
 
   // /stop or /cancel — abort the running loop.
   // Match exact command or command followed by a space + reason.
+  // Also match bare "stop" / "cancel" (for Slack where / is intercepted).
   if (lower === '/stop' || lower === '/cancel' ||
-      lower.startsWith('/stop ') || lower.startsWith('/cancel ')) {
-    const reason = trimmed.replace(/^\/(stop|cancel)\s*/i, '').trim();
+      lower === 'stop' || lower === 'cancel' ||
+      lower.startsWith('/stop ') || lower.startsWith('/cancel ') ||
+      lower.startsWith('stop ') || lower.startsWith('cancel ')) {
+    const reason = stripped.replace(/^\/?(?:stop|cancel)\s*/i, '').trim();
     return {
       type: 'abort',
       content: reason || 'User requested stop',
