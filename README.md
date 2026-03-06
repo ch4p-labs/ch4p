@@ -190,7 +190,7 @@ corepack pnpm --filter @ch4p/core build   # Build single package
 - TypeScript strict mode, ES2023 target, NodeNext module resolution
 - ESM-only (all imports use `.js` extension)
 - Zero required external runtime dependencies for core, security, and CLI
-- 88 test files, 2556 tests, 0 vulnerabilities
+- 90 test files, 2615 tests, 0 vulnerabilities
 
 ## Configuration
 
