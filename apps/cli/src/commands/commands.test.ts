@@ -77,7 +77,7 @@ describe('performAudit', () => {
   it('all checks pass for secure default config', () => {
     const config = getDefaultConfig();
     // Set real API keys so audit check #8 passes.
-    (config.providers['anthropic'] as Record<string, unknown>).apiKey = 'sk-ant-real-key';
+    (config.providers['anthropic'] as Record<string, unknown>).apiKey = 'sk-ant-test-key';
 
     const results = performAudit(config);
     const allPass = results.every((r) => r.severity === 'pass');
@@ -383,7 +383,7 @@ describe('doctor checks (functional)', () => {
 
   it('performAudit integrates with doctor — config with all passes', () => {
     const config = getDefaultConfig();
-    (config.providers['anthropic'] as Record<string, unknown>).apiKey = 'sk-ant-real';
+    (config.providers['anthropic'] as Record<string, unknown>).apiKey = 'sk-ant-test';
 
     const results = performAudit(config);
     const passed = results.filter((r) => r.severity === 'pass').length;
@@ -514,5 +514,80 @@ describe('status command integration', () => {
     expect(config.tunnel.provider).toBeDefined();
     expect(config.observability.observers).toBeDefined();
     expect(config.secrets.encrypt).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Steering command parser tests
+// ---------------------------------------------------------------------------
+
+import { parseSteeringCommand } from './gateway.js';
+
+describe('parseSteeringCommand', () => {
+  it('returns abort for /stop', () => {
+    const result = parseSteeringCommand('/stop');
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('abort');
+    expect(result!.content).toBe('User requested stop');
+    expect(result!.priority).toBe(100);
+    expect(result!.timestamp).toBeInstanceOf(Date);
+  });
+
+  it('returns abort for /cancel', () => {
+    const result = parseSteeringCommand('/cancel');
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('abort');
+    expect(result!.content).toBe('User requested stop');
+  });
+
+  it('is case-insensitive', () => {
+    expect(parseSteeringCommand('/STOP')).not.toBeNull();
+    expect(parseSteeringCommand('/Stop')).not.toBeNull();
+    expect(parseSteeringCommand('/CANCEL')).not.toBeNull();
+    expect(parseSteeringCommand('/Cancel')).not.toBeNull();
+  });
+
+  it('includes reason from /stop <reason>', () => {
+    const result = parseSteeringCommand('/stop too slow');
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe('abort');
+    expect(result!.content).toBe('too slow');
+  });
+
+  it('includes reason from /cancel <reason>', () => {
+    const result = parseSteeringCommand('/cancel wrong task');
+    expect(result).not.toBeNull();
+    expect(result!.content).toBe('wrong task');
+  });
+
+  it('trims whitespace', () => {
+    expect(parseSteeringCommand('  /stop  ')).not.toBeNull();
+    expect(parseSteeringCommand('\n/cancel\n')).not.toBeNull();
+  });
+
+  it('returns null for normal messages', () => {
+    expect(parseSteeringCommand('hello world')).toBeNull();
+    expect(parseSteeringCommand('what is the weather?')).toBeNull();
+    expect(parseSteeringCommand('please stop doing that')).toBeNull();
+  });
+
+  it('does NOT match partial words like /stopping', () => {
+    expect(parseSteeringCommand('/stopping')).toBeNull();
+    expect(parseSteeringCommand('/stopped')).toBeNull();
+    expect(parseSteeringCommand('/cancellation')).toBeNull();
+    expect(parseSteeringCommand('/cancelled')).toBeNull();
+  });
+
+  it('returns null for empty string', () => {
+    expect(parseSteeringCommand('')).toBeNull();
+  });
+
+  it('returns null for bare slash', () => {
+    expect(parseSteeringCommand('/')).toBeNull();
+  });
+
+  it('returns null for unimplemented commands', () => {
+    expect(parseSteeringCommand('/focus test')).toBeNull();
+    expect(parseSteeringCommand('/context new info')).toBeNull();
   });
 });

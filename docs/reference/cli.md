@@ -94,6 +94,23 @@ ch4p gateway --production --tunnel --channels telegram,slack
 
 **Output:** Gateway boot log showing connected channels and tunnel URL (if enabled).
 
+### Steering Commands
+
+When the agent is actively processing a message on any gateway channel (Telegram, Discord, Slack, etc.), you can send these commands to control the running task:
+
+| Command | Effect |
+|---------|--------|
+| `/stop` | Cancel the current task immediately. |
+| `/cancel` | Same as `/stop`. |
+| `/stop <reason>` | Cancel with a reason (e.g., `/stop wrong task`). |
+
+**Behavior:**
+
+- Commands are **only recognized while the agent is working**. If no task is in-flight, `/stop` is treated as a normal message.
+- When a steering command is processed, any queued follow-up messages are cleared.
+- The agent sends a brief confirmation ("Stopping…") immediately.
+- Commands are case-insensitive: `/Stop`, `/STOP`, and `/stop` all work.
+
 ---
 
 ## ch4p audit

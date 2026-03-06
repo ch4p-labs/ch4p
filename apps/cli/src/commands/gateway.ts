@@ -45,6 +45,7 @@ import {
 } from '@ch4p/channels';
 import { createTunnelProvider } from '@ch4p/tunnels';
 import { Session, AgentLoop, ContextManager, FormatVerifier, LLMVerifier, createAutoRecallHook, createAutoSummarizeHook, ToolWorkerPool } from '@ch4p/agent';
+import type { SteeringMessage } from '@ch4p/agent';
 import { NativeEngine, createClaudeCliEngine, createCodexCliEngine } from '@ch4p/engines';
 import { ProviderRegistry } from '@ch4p/providers';
 import { ToolRegistry, LoadSkillTool } from '@ch4p/tools';
@@ -197,6 +198,40 @@ const GATEWAY_CONTEXT_MAX_TOKENS = 32_000;
 
 /** Max depth of per-user pending message queue before older messages are replaced. */
 const MAX_PENDING_PER_USER = 2;
+
+// ---------------------------------------------------------------------------
+// Steering command parser
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a channel message for steering commands.
+ *
+ * When the agent is actively processing a message, users can send `/stop` or
+ * `/cancel` to abort the running loop. Returns a SteeringMessage if the text
+ * matches a recognized command, or `null` for normal messages.
+ *
+ * Designed for future extensibility — add cases for `/focus`, `/context`, etc.
+ */
+export function parseSteeringCommand(text: string): SteeringMessage | null {
+  const trimmed = text.trim();
+  const lower = trimmed.toLowerCase();
+
+  // /stop or /cancel — abort the running loop.
+  // Match exact command or command followed by a space + reason.
+  if (lower === '/stop' || lower === '/cancel' ||
+      lower.startsWith('/stop ') || lower.startsWith('/cancel ')) {
+    const reason = trimmed.replace(/^\/(stop|cancel)\s*/i, '').trim();
+    return {
+      type: 'abort',
+      content: reason || 'User requested stop',
+      priority: 100,
+      timestamp: new Date(),
+    };
+  }
+
+  // Future: /focus, /context — add cases here.
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Settings panel helpers
@@ -1178,29 +1213,46 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
         // Forward to subprocess stdin for permission-prompt responses.
         inflight.loop.steerEngine(msg.text ?? '');
         inflight.permissionPending = false;
-      } else if (pendingMessages) {
-        // Queue follow-up messages (max depth 2). Beyond the cap, replace the last entry.
-        const queue = pendingMessages.get(userKey) ?? [];
-        if (queue.length < MAX_PENDING_PER_USER) {
-          queue.push({ msg, channel });
-        } else {
-          // Cap reached — replace the last entry with the newest message.
-          queue[queue.length - 1] = { msg, channel };
-        }
-        pendingMessages.set(userKey, queue);
-        // Acknowledge the first queued message; don't spam on repeated follow-ups.
-        if (queue.length === 1) {
+      } else {
+        // Check for steering commands (/stop, /cancel) before queuing.
+        const steering = parseSteeringCommand(msg.text ?? '');
+        if (steering) {
+          if (steering.type === 'abort') {
+            inflight.loop.abort(steering.content ?? 'User requested stop');
+          } else {
+            inflight.loop.steer(steering);
+          }
+          // Clear any pending messages — the user cancelled the interaction.
+          pendingMessages?.delete(userKey);
+          // Send immediate confirmation.
           channel.send(msg.from, {
-            text: "Got it — I'll get to your message once I finish what I'm working on.",
+            text: steering.type === 'abort' ? 'Stopping…' : 'Got it.',
+            replyTo: msg.id,
+          }).catch(() => {});
+        } else if (pendingMessages) {
+          // Queue follow-up messages (max depth 2). Beyond the cap, replace the last entry.
+          const queue = pendingMessages.get(userKey) ?? [];
+          if (queue.length < MAX_PENDING_PER_USER) {
+            queue.push({ msg, channel });
+          } else {
+            // Cap reached — replace the last entry with the newest message.
+            queue[queue.length - 1] = { msg, channel };
+          }
+          pendingMessages.set(userKey, queue);
+          // Acknowledge the first queued message; don't spam on repeated follow-ups.
+          if (queue.length === 1) {
+            channel.send(msg.from, {
+              text: "Got it — I'll get to your message once I finish what I'm working on. Send /stop to cancel.",
+              replyTo: msg.id,
+            }).catch(() => {});
+          }
+        } else {
+          // No queue available — reject to prevent concurrent memory pressure.
+          channel.send(msg.from, {
+            text: "I'm still working on your previous message. Please wait for me to finish, or send /stop to cancel.",
             replyTo: msg.id,
           }).catch(() => {});
         }
-      } else {
-        // No queue available — reject to prevent concurrent memory pressure.
-        channel.send(msg.from, {
-          text: "I'm still working on your previous message. Please wait for me to finish.",
-          replyTo: msg.id,
-        }).catch(() => {});
       }
       return;
     }
