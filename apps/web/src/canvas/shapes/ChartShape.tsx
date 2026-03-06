@@ -1,38 +1,9 @@
 import { BaseBoxShapeUtil } from 'tldraw';
 import { type Ch4pShape, safeRender } from './base';
-import type { ChartComponent, ChartData } from '@ch4p/canvas';
+import type { ChartComponent } from '@ch4p/canvas';
+import { sanitizeChartData } from './chart-utils';
 
 type ChartShape = Ch4pShape<'ch4p-chart'>;
-
-/**
- * Sanitise chart data so the SVG renderer never receives NaN or undefined.
- * Returns a cleaned copy — or `null` if no usable data remains.
- */
-function sanitizeChartData(data: unknown): ChartData | null {
-  if (!data || typeof data !== 'object') return null;
-  const d = data as Record<string, unknown>;
-
-  const labels = Array.isArray(d.labels)
-    ? (d.labels as unknown[]).map((l) => String(l ?? ''))
-    : [];
-
-  if (!Array.isArray(d.datasets)) return null;
-
-  const datasets = (d.datasets as unknown[])
-    .filter((ds): ds is Record<string, unknown> => !!ds && typeof ds === 'object')
-    .filter((ds) => Array.isArray(ds.values))
-    .map((ds) => ({
-      label: String(ds.label ?? ''),
-      values: (ds.values as unknown[]).map((v) => {
-        const n = Number(v);
-        return Number.isFinite(n) ? n : 0;
-      }),
-      ...(ds.color ? { color: String(ds.color) } : {}),
-    }));
-
-  if (datasets.length === 0) return null;
-  return { labels, datasets };
-}
 
 /** Simple SVG-based bar chart renderer. */
 function SimpleBarChart({ comp, w, h }: { comp: ChartComponent; w: number; h: number }) {

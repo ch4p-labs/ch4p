@@ -25,6 +25,12 @@ describe('buildSystemPrompt', () => {
       const p = buildSystemPrompt();
       expect(p).toContain('security-conscious');
     });
+
+    it('includes tool-index suppression directive', () => {
+      const p = buildSystemPrompt();
+      expect(p).toContain('tool call indices');
+      expect(p).toContain('execution metadata');
+    });
   });
 
   describe('memory capability hint', () => {
