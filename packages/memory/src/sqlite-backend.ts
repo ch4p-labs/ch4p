@@ -148,15 +148,15 @@ export class SQLiteMemoryBackend implements IMemoryBackend {
 
     // Compute embeddings outside the transaction (async API calls)
     const blobs: Array<Buffer | null> = [];
-    for (const entry of entries) {
+    for (const { key: entryKey, content } of entries) {
       let blob: Buffer | null = null;
       if (this.embeddingProvider) {
         try {
-          const embedding = await this.getOrComputeEmbedding(entry.content);
+          const embedding = await this.getOrComputeEmbedding(content);
           if (embedding) blob = embeddingToBlob(embedding);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          console.warn(`[memory] Failed to compute embedding for "${entry.key}": ${message}`);
+          console.warn(`[memory] Failed to compute embedding for "${entryKey}": ${message}`);
         }
       }
       blobs.push(blob);
