@@ -1,6 +1,6 @@
 {
   "name": "@ch4p/observability",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "private": true,
   "description": "Console, file, and multi-observer event logging",
   "license": "Apache-2.0",

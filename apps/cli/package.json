@@ -1,6 +1,6 @@
 {
   "name": "@ch4p/cli",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "Personal AI assistant platform — security-first, multi-channel, programmable",
   "license": "Apache-2.0",
   "type": "module",
