@@ -11,6 +11,9 @@
  * no persistent memory and not using web tools on non-CLI channels.
  */
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { homedir } from 'node:os';
 import type { SkillRegistry } from '@ch4p/skills';
 
 export interface SystemPromptOpts {
@@ -20,6 +23,8 @@ export interface SystemPromptOpts {
   hasSearch?: boolean;
   /** Skill registry — if non-empty, descriptions are appended for progressive disclosure. */
   skillRegistry?: SkillRegistry;
+  /** Contents of ~/.ch4p/soul.md — personal identity/personality customization. */
+  soulContent?: string;
 }
 
 /**
@@ -60,5 +65,23 @@ export function buildSystemPrompt(opts: SystemPromptOpts = {}): string {
       descriptions;
   }
 
+  if (opts.soulContent) {
+    prompt += '\n\n---\n\n' + opts.soulContent;
+  }
+
   return prompt;
+}
+
+/**
+ * Read ~/.ch4p/soul.md if it exists.
+ * Returns the file contents (trimmed) or undefined if the file doesn't exist.
+ */
+export function loadSoulContent(): string | undefined {
+  try {
+    const soulPath = resolve(homedir(), '.ch4p', 'soul.md');
+    const content = readFileSync(soulPath, 'utf-8').trim();
+    return content || undefined;
+  } catch {
+    return undefined;
+  }
 }

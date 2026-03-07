@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/node-%E2%89%A520-brightgreen" alt="Node ≥20" />
   <img src="https://img.shields.io/badge/TypeScript-strict-blue" alt="TypeScript" />
   <a href="https://www.npmjs.com/package/@ch4p/cli"><img src="https://img.shields.io/npm/v/@ch4p/cli" alt="npm version" /></a>
-  <img src="https://img.shields.io/badge/tests-2627-brightgreen" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-2632-brightgreen" alt="Tests" />
 </p>
 
 ---
@@ -190,7 +190,7 @@ corepack pnpm --filter @ch4p/core build   # Build single package
 - TypeScript strict mode, ES2023 target, NodeNext module resolution
 - ESM-only (all imports use `.js` extension)
 - Zero required external runtime dependencies for core, security, and CLI
-- 91 test files, 2627 tests, 0 vulnerabilities
+- 91 test files, 2632 tests, 0 vulnerabilities
 
 ## Configuration
 
@@ -215,6 +215,10 @@ Config lives in `~/.ch4p/config.json`. The onboarding wizard (`ch4p onboard`) cr
 Environment variables referenced as `${VAR_NAME}` are resolved at load time. `~/.ch4p/.env` is loaded automatically at startup.
 
 See [Configuration Reference](docs/reference/configuration.md) for all options.
+
+### Personality (soul.md)
+
+Create `~/.ch4p/soul.md` to customize your ch4p's personality and behavior. The file contents are automatically included in every session's system prompt — no config changes needed.
 
 ## Documentation
 

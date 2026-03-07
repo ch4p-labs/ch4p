@@ -116,6 +116,36 @@ describe('buildSystemPrompt', () => {
     });
   });
 
+  describe('soul content', () => {
+    it('is absent when soulContent is not provided', () => {
+      const p = buildSystemPrompt();
+      expect(p).not.toContain('---');
+    });
+
+    it('is absent when soulContent is undefined', () => {
+      const p = buildSystemPrompt({ soulContent: undefined });
+      expect(p).not.toContain('---');
+    });
+
+    it('is absent when soulContent is empty string', () => {
+      const p = buildSystemPrompt({ soulContent: '' });
+      expect(p).not.toContain('---');
+    });
+
+    it('appends soul content after a separator when provided', () => {
+      const p = buildSystemPrompt({ soulContent: 'Be kind and thoughtful.' });
+      expect(p).toContain('---');
+      expect(p).toContain('Be kind and thoughtful.');
+    });
+
+    it('appends soul content after capability hints', () => {
+      const p = buildSystemPrompt({ hasMemory: true, soulContent: 'Have opinions.' });
+      const memIdx = p.indexOf('persistent memory');
+      const soulIdx = p.indexOf('Have opinions.');
+      expect(memIdx).toBeLessThan(soulIdx);
+    });
+  });
+
   describe('combined capabilities', () => {
     it('includes all hints when all features are enabled', () => {
       const fakeRegistry = {

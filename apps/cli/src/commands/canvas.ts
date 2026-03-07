@@ -30,6 +30,7 @@ import { DefaultSecurityPolicy } from '@ch4p/security';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
+import { loadSoulContent } from '../system-prompt.js';
 import { TEAL, RESET, BOLD, DIM, GREEN, RED, separator } from '../ui.js';
 
 // ---------------------------------------------------------------------------
@@ -123,18 +124,25 @@ export async function canvas(args: string[]): Promise<void> {
   // Default session ID.
   const sessionId = generateId(16);
 
+  let canvasPrompt =
+    'You are ch4p, an AI assistant with an interactive canvas workspace. ' +
+    'You can render visual components on the canvas using the canvas_render tool. ' +
+    'Available component types: card, chart, form, button, text_field, data_table, ' +
+    'code_block, markdown, image, progress, status. ' +
+    'Components are placed at (x, y) positions on a spatial canvas. ' +
+    'You can connect components with directional edges to show relationships. ' +
+    'Use the canvas to create rich, visual responses when appropriate.';
+
+  const soulContent = loadSoulContent();
+  if (soulContent) {
+    canvasPrompt += '\n\n---\n\n' + soulContent;
+  }
+
   const defaultSessionConfig = {
     engineId: config.engines?.default ?? 'native',
     model: config.agent.model,
     provider: config.agent.provider,
-    systemPrompt:
-      'You are ch4p, an AI assistant with an interactive canvas workspace. ' +
-      'You can render visual components on the canvas using the canvas_render tool. ' +
-      'Available component types: card, chart, form, button, text_field, data_table, ' +
-      'code_block, markdown, image, progress, status. ' +
-      'Components are placed at (x, y) positions on a spatial canvas. ' +
-      'You can connect components with directional edges to show relationships. ' +
-      'Use the canvas to create rich, visual responses when appropriate.',
+    systemPrompt: canvasPrompt,
   };
 
   // Create the gateway server with canvas support.

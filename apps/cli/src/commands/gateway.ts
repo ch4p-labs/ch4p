@@ -60,7 +60,7 @@ import type { ChildHandle } from '@ch4p/supervisor';
 import { VoiceProcessor, WhisperSTT, DeepgramSTT, ElevenLabsTTS } from '@ch4p/voice';
 import type { VoiceConfig } from '@ch4p/voice';
 import { TEAL, RESET, BOLD, DIM, GREEN, YELLOW, RED, box, kvRow } from '../ui.js';
-import { buildSystemPrompt } from '../system-prompt.js';
+import { buildSystemPrompt, loadSoulContent } from '../system-prompt.js';
 import { AgentRouter } from '../agent-router.js';
 
 // ---------------------------------------------------------------------------
@@ -422,7 +422,8 @@ export async function gateway(args: string[]): Promise<void> {
   // ignores tool capabilities entirely.
   const hasMemory = !!memoryBackend;
   const hasSearch = !!(config.search?.enabled && config.search.apiKey);
-  const defaultSystemPrompt = buildSystemPrompt({ hasMemory, hasSearch, skillRegistry });
+  const soulContent = loadSoulContent();
+  const defaultSystemPrompt = buildSystemPrompt({ hasMemory, hasSearch, skillRegistry, soulContent });
 
   const defaultSessionConfig = {
     engineId: config.engines?.default ?? 'native',

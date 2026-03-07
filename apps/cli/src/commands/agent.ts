@@ -30,7 +30,7 @@ import { SkillRegistry } from '@ch4p/skills';
 import { WakeListener, WhisperSTT, DeepgramSTT, ElevenLabsTTS } from '@ch4p/voice';
 import type { WakeEvent } from '@ch4p/voice';
 import { loadConfig, getLogsDir } from '../config.js';
-import { buildSystemPrompt } from '../system-prompt.js';
+import { buildSystemPrompt, loadSoulContent } from '../system-prompt.js';
 import { playBriefSplash } from './splash.js';
 import {
   TEAL, TEAL_DIM, RESET, BOLD, DIM, GREEN, YELLOW, RED, BLUE,
@@ -359,7 +359,8 @@ function createStubEngine(config: Ch4pConfig): IEngine {
 // ---------------------------------------------------------------------------
 
 function createSessionConfig(config: Ch4pConfig, skillRegistry?: SkillRegistry, hasMemory?: boolean, hasSearch?: boolean): SessionConfig {
-  const systemPrompt = buildSystemPrompt({ hasMemory, hasSearch, skillRegistry });
+  const soulContent = loadSoulContent();
+  const systemPrompt = buildSystemPrompt({ hasMemory, hasSearch, skillRegistry, soulContent });
 
   return {
     sessionId: generateId(16),
