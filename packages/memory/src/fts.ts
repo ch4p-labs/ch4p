@@ -6,6 +6,7 @@
  */
 
 import type Database from 'better-sqlite3';
+import type { Statement } from 'better-sqlite3';
 
 export interface FTSResult {
   key: string;
@@ -14,10 +15,42 @@ export interface FTSResult {
 }
 
 export class FTSSearch {
-  private readonly db: Database.Database;
+  // Prepared statements — two variants per query (with/without keyPrefix).
+  private readonly searchStmt: Statement;
+  private readonly searchPrefixStmt: Statement;
+  private readonly fallbackStmt: Statement;
+  private readonly fallbackPrefixStmt: Statement;
 
   constructor(db: Database.Database) {
-    this.db = db;
+    this.searchStmt = db.prepare(`
+      SELECT m.key, m.content, rank AS score
+      FROM memories_fts
+      JOIN memories m ON memories_fts.rowid = m.rowid
+      WHERE memories_fts MATCH ?
+      ORDER BY rank LIMIT ?
+    `);
+
+    this.searchPrefixStmt = db.prepare(`
+      SELECT m.key, m.content, rank AS score
+      FROM memories_fts
+      JOIN memories m ON memories_fts.rowid = m.rowid
+      WHERE memories_fts MATCH ? AND m.key LIKE ?
+      ORDER BY rank LIMIT ?
+    `);
+
+    this.fallbackStmt = db.prepare(`
+      SELECT key, content
+      FROM memories
+      WHERE (content LIKE ? OR key LIKE ?)
+      ORDER BY updated_at DESC LIMIT ?
+    `);
+
+    this.fallbackPrefixStmt = db.prepare(`
+      SELECT key, content
+      FROM memories
+      WHERE (content LIKE ? OR key LIKE ?) AND key LIKE ?
+      ORDER BY updated_at DESC LIMIT ?
+    `);
   }
 
   /**
@@ -33,31 +66,13 @@ export class FTSSearch {
     if (!escaped) return [];
 
     try {
-      let sql = `
-        SELECT
-          m.key,
-          m.content,
-          rank AS score
-        FROM memories_fts
-        JOIN memories m ON memories_fts.rowid = m.rowid
-        WHERE memories_fts MATCH ?
-      `;
-      const params: unknown[] = [escaped];
+      let rows: Array<{ key: string; content: string; score: number }>;
 
       if (keyPrefix) {
-        sql += ` AND m.key LIKE ?`;
-        params.push(`${keyPrefix}%`);
+        rows = this.searchPrefixStmt.all(escaped, `${keyPrefix}%`, limit) as typeof rows;
+      } else {
+        rows = this.searchStmt.all(escaped, limit) as typeof rows;
       }
-
-      sql += ` ORDER BY rank LIMIT ?`;
-      params.push(limit);
-
-      const stmt = this.db.prepare(sql);
-      const rows = stmt.all(...params) as Array<{
-        key: string;
-        content: string;
-        score: number;
-      }>;
 
       // FTS5 rank values are negative (more negative = more relevant).
       // Convert to positive scores where higher = better.
@@ -96,29 +111,14 @@ export class FTSSearch {
    */
   private fallbackSearch(query: string, limit: number, keyPrefix?: string): FTSResult[] {
     const pattern = `%${query}%`;
-    const params: unknown[] = [pattern, pattern];
 
-    // Wrap the OR condition in parens before adding the namespace AND clause
-    // to avoid accidental binding of AND only to the second OR term.
-    let sql = `
-      SELECT key, content
-      FROM memories
-      WHERE (content LIKE ? OR key LIKE ?)
-    `;
+    let rows: Array<{ key: string; content: string }>;
 
     if (keyPrefix) {
-      sql += ` AND key LIKE ?`;
-      params.push(`${keyPrefix}%`);
+      rows = this.fallbackPrefixStmt.all(pattern, pattern, `${keyPrefix}%`, limit) as typeof rows;
+    } else {
+      rows = this.fallbackStmt.all(pattern, pattern, limit) as typeof rows;
     }
-
-    sql += ` ORDER BY updated_at DESC LIMIT ?`;
-    params.push(limit);
-
-    const stmt = this.db.prepare(sql);
-    const rows = stmt.all(...params) as Array<{
-      key: string;
-      content: string;
-    }>;
 
     // Assign decreasing scores based on position
     return rows.map((row, i) => ({

@@ -31,6 +31,9 @@
     "keywordWeight": 0.3,
     "dbPath": "~/.ch4p/memory.db"
   },
+  "canvas": {
+    "port": 4800
+  },
   "gateway": {
     "port": 18789,
     "requirePairing": true,

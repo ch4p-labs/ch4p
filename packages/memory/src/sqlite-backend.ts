@@ -8,6 +8,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
+import type { Statement } from 'better-sqlite3';
 import { generateId, MemoryError } from '@ch4p/core';
 import type { IMemoryBackend, RecallOpts, MemoryResult, MemoryEntry } from '@ch4p/core';
 import type { IEmbeddingProvider } from './embedding-provider.js';
@@ -35,6 +36,15 @@ export class SQLiteMemoryBackend implements IMemoryBackend {
   private readonly cache: EmbeddingCache;
   private closed = false;
 
+  // Prepared statements — allocated once, reused on every call.
+  private readonly storeStmt: Statement;
+  private readonly forgetStmt: Statement;
+  private readonly listAllStmt: Statement;
+  private readonly listPrefixStmt: Statement;
+  private readonly reindexFtsStmt: Statement;
+  private readonly reindexSelectStmt: Statement;
+  private readonly reindexUpdateStmt: Statement;
+
   constructor(opts: SQLiteBackendOpts) {
     // Ensure parent directory exists
     const dir = dirname(opts.dbPath);
@@ -58,7 +68,34 @@ export class SQLiteMemoryBackend implements IMemoryBackend {
     // Initialize schema
     this.initSchema();
 
-    // Initialize search modules
+    // Prepare reusable statements (after schema is ready)
+    this.storeStmt = this.db.prepare(`
+      INSERT INTO memories (id, key, content, metadata, embedding, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        content = excluded.content,
+        metadata = excluded.metadata,
+        embedding = excluded.embedding,
+        updated_at = excluded.updated_at
+    `);
+    this.forgetStmt = this.db.prepare('DELETE FROM memories WHERE key = ?');
+    this.listAllStmt = this.db.prepare(`
+      SELECT key, content, metadata, created_at, updated_at
+      FROM memories ORDER BY key
+    `);
+    this.listPrefixStmt = this.db.prepare(`
+      SELECT key, content, metadata, created_at, updated_at
+      FROM memories WHERE key LIKE ? ORDER BY key
+    `);
+    this.reindexFtsStmt = this.db.prepare(
+      "INSERT INTO memories_fts(memories_fts) VALUES('rebuild')",
+    );
+    this.reindexSelectStmt = this.db.prepare('SELECT key, content FROM memories');
+    this.reindexUpdateStmt = this.db.prepare(
+      'UPDATE memories SET embedding = ? WHERE key = ?',
+    );
+
+    // Initialize search modules (they prepare their own statements)
     this.fts = new FTSSearch(this.db);
     this.vector = new VectorSearch(this.db);
     this.cache = new EmbeddingCache(this.db, {
@@ -96,18 +133,46 @@ export class SQLiteMemoryBackend implements IMemoryBackend {
       }
     }
 
-    // Upsert using INSERT OR REPLACE
-    // We need to handle the FTS triggers correctly -- REPLACE triggers
-    // DELETE then INSERT, so triggers will fire properly.
-    this.db.prepare(`
-      INSERT INTO memories (id, key, content, metadata, embedding, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(key) DO UPDATE SET
-        content = excluded.content,
-        metadata = excluded.metadata,
-        embedding = excluded.embedding,
-        updated_at = excluded.updated_at
-    `).run(id, key, content, metaJson, embeddingBlob, now, now);
+    this.storeStmt.run(id, key, content, metaJson, embeddingBlob, now, now);
+  }
+
+  /**
+   * Store multiple memories in a single transaction (one fsync).
+   * Computes embeddings for all entries first, then batch-inserts atomically.
+   */
+  async storeBatch(
+    entries: Array<{ key: string; content: string; metadata?: Record<string, unknown> }>,
+  ): Promise<void> {
+    this.assertOpen();
+    if (entries.length === 0) return;
+
+    // Compute embeddings outside the transaction (async API calls)
+    const blobs: Array<Buffer | null> = [];
+    for (const entry of entries) {
+      let blob: Buffer | null = null;
+      if (this.embeddingProvider) {
+        try {
+          const embedding = await this.getOrComputeEmbedding(entry.content);
+          if (embedding) blob = embeddingToBlob(embedding);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[memory] Failed to compute embedding for "${entry.key}": ${message}`);
+        }
+      }
+      blobs.push(blob);
+    }
+
+    // Batch-insert in a single transaction (one WAL sync)
+    const now = new Date().toISOString();
+    const tx = this.db.transaction(() => {
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i]!;
+        const id = generateId();
+        const metaJson = entry.metadata ? JSON.stringify(entry.metadata) : null;
+        this.storeStmt.run(id, entry.key, entry.content, metaJson, blobs[i] ?? null, now, now);
+      }
+    });
+    tx();
   }
 
   /**
@@ -167,10 +232,7 @@ export class SQLiteMemoryBackend implements IMemoryBackend {
   async forget(key: string): Promise<boolean> {
     this.assertOpen();
 
-    const result = this.db.prepare(
-      'DELETE FROM memories WHERE key = ?',
-    ).run(key);
-
+    const result = this.forgetStmt.run(key);
     return result.changes > 0;
   }
 
@@ -180,28 +242,17 @@ export class SQLiteMemoryBackend implements IMemoryBackend {
   async list(prefix?: string): Promise<MemoryEntry[]> {
     this.assertOpen();
 
-    let rows: Array<{
+    type Row = {
       key: string;
       content: string;
       metadata: string | null;
       created_at: string;
       updated_at: string;
-    }>;
+    };
 
-    if (prefix) {
-      rows = this.db.prepare(`
-        SELECT key, content, metadata, created_at, updated_at
-        FROM memories
-        WHERE key LIKE ?
-        ORDER BY key
-      `).all(`${prefix}%`) as typeof rows;
-    } else {
-      rows = this.db.prepare(`
-        SELECT key, content, metadata, created_at, updated_at
-        FROM memories
-        ORDER BY key
-      `).all() as typeof rows;
-    }
+    const rows: Row[] = prefix
+      ? this.listPrefixStmt.all(`${prefix}%`) as Row[]
+      : this.listAllStmt.all() as Row[];
 
     return rows.map((row) => ({
       key: row.key,
@@ -219,15 +270,11 @@ export class SQLiteMemoryBackend implements IMemoryBackend {
     this.assertOpen();
 
     // Rebuild FTS5 index
-    this.db.prepare(
-      "INSERT INTO memories_fts(memories_fts) VALUES('rebuild')",
-    ).run();
+    this.reindexFtsStmt.run();
 
     // Recompute embeddings if provider is available
     if (this.embeddingProvider) {
-      const rows = this.db.prepare(
-        'SELECT key, content FROM memories',
-      ).all() as Array<{ key: string; content: string }>;
+      const rows = this.reindexSelectStmt.all() as Array<{ key: string; content: string }>;
 
       const batchSize = 50;
       for (let i = 0; i < rows.length; i += batchSize) {
@@ -237,17 +284,13 @@ export class SQLiteMemoryBackend implements IMemoryBackend {
         try {
           const embeddings = await this.embeddingProvider.embed(texts);
 
-          const updateStmt = this.db.prepare(
-            'UPDATE memories SET embedding = ? WHERE key = ?',
-          );
-
           const tx = this.db.transaction(() => {
             for (let j = 0; j < batch.length; j++) {
               const embedding = embeddings[j];
               const row = batch[j];
               if (embedding && row) {
                 const blob = embeddingToBlob(embedding);
-                updateStmt.run(blob, row.key);
+                this.reindexUpdateStmt.run(blob, row.key);
                 // Update cache too
                 this.cache.set(row.content, embedding);
               }
@@ -284,6 +327,10 @@ export class SQLiteMemoryBackend implements IMemoryBackend {
    * Create all required tables, indexes, and triggers.
    */
   private initSchema(): void {
+    // Drop redundant index — the UNIQUE constraint on `key` already creates
+    // an implicit index. This duplicate doubled write overhead for zero benefit.
+    this.db.exec('DROP INDEX IF EXISTS idx_memories_key');
+
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,
@@ -320,7 +367,6 @@ export class SQLiteMemoryBackend implements IMemoryBackend {
         accessed_at TEXT NOT NULL
       );
 
-      CREATE INDEX IF NOT EXISTS idx_memories_key ON memories(key);
       CREATE INDEX IF NOT EXISTS idx_cache_accessed ON embedding_cache(accessed_at);
     `);
   }
@@ -361,7 +407,7 @@ export class SQLiteMemoryBackend implements IMemoryBackend {
     const keys = results.map((r) => r.key);
     if (keys.length === 0) return [];
 
-    // Fetch metadata for all result keys
+    // Dynamic IN clause — placeholder count varies per call
     const placeholders = keys.map(() => '?').join(', ');
     const rows = this.db.prepare(`
       SELECT key, metadata FROM memories WHERE key IN (${placeholders})
@@ -390,6 +436,7 @@ export class SQLiteMemoryBackend implements IMemoryBackend {
   private enrichWithMetadata(results: MemoryResult[]): MemoryResult[] {
     if (results.length === 0) return results;
 
+    // Dynamic IN clause — placeholder count varies per call
     const keys = results.map((r) => r.key);
     const placeholders = keys.map(() => '?').join(', ');
     const rows = this.db.prepare(`

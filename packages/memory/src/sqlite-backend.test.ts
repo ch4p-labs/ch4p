@@ -182,3 +182,66 @@ describe('SQLiteMemoryBackend — forget()', () => {
     expect(deleted).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// storeBatch()
+// ---------------------------------------------------------------------------
+
+describe('SQLiteMemoryBackend — storeBatch()', () => {
+  it('stores multiple entries atomically', async () => {
+    await backend.storeBatch([
+      { key: 'batch:a', content: 'alpha' },
+      { key: 'batch:b', content: 'bravo' },
+      { key: 'batch:c', content: 'charlie' },
+    ]);
+
+    const entries = await backend.list('batch:');
+    expect(entries.length).toBe(3);
+    expect(entries.map((e) => e.key).sort()).toEqual(['batch:a', 'batch:b', 'batch:c']);
+  });
+
+  it('handles empty batch gracefully', async () => {
+    await backend.storeBatch([]);
+    const entries = await backend.list();
+    expect(entries.length).toBe(0);
+  });
+
+  it('upserts on key conflict within batch', async () => {
+    await backend.store('batch:dup', 'original');
+    await backend.storeBatch([
+      { key: 'batch:dup', content: 'updated via batch' },
+      { key: 'batch:new', content: 'new entry' },
+    ]);
+
+    const entries = await backend.list('batch:');
+    expect(entries.length).toBe(2);
+    expect(entries.find((e) => e.key === 'batch:dup')!.content).toBe('updated via batch');
+  });
+
+  it('stores metadata alongside content', async () => {
+    await backend.storeBatch([
+      { key: 'meta:a', content: 'with metadata', metadata: { source: 'test' } },
+    ]);
+
+    const entries = await backend.list('meta:');
+    expect(entries.length).toBe(1);
+    expect(entries[0]!.metadata).toEqual({ source: 'test' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Redundant index removal
+// ---------------------------------------------------------------------------
+
+describe('SQLiteMemoryBackend — schema', () => {
+  it('does not have a redundant idx_memories_key index', async () => {
+    // The UNIQUE constraint on `key` already provides an index.
+    // The explicit idx_memories_key was removed to avoid doubling write overhead.
+    const db = (backend as unknown as { db: { prepare: (sql: string) => { all: () => Array<{ name: string }> } } }).db;
+    const indexes = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'memories'",
+    ).all();
+    const names = indexes.map((r) => r.name);
+    expect(names).not.toContain('idx_memories_key');
+  });
+});

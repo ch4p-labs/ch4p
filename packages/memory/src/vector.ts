@@ -6,6 +6,7 @@
  */
 
 import type Database from 'better-sqlite3';
+import type { Statement } from 'better-sqlite3';
 
 export interface VectorResult {
   key: string;
@@ -16,8 +17,20 @@ export interface VectorResult {
 export class VectorSearch {
   private readonly db: Database.Database;
 
+  // Prepared statements — two variants (with/without keyPrefix).
+  // Phase 2 content fetch uses dynamic IN clause, so can't be pre-prepared.
+  private readonly scanStmt: Statement;
+  private readonly scanPrefixStmt: Statement;
+
   constructor(db: Database.Database) {
     this.db = db;
+
+    this.scanStmt = db.prepare(
+      'SELECT key, embedding FROM memories WHERE embedding IS NOT NULL',
+    );
+    this.scanPrefixStmt = db.prepare(
+      'SELECT key, embedding FROM memories WHERE embedding IS NOT NULL AND key LIKE ?',
+    );
   }
 
   /**
@@ -30,40 +43,45 @@ export class VectorSearch {
    * @returns Scored results sorted by similarity (higher = more similar)
    */
   search(queryEmbedding: Float32Array, limit = 20, minScore = 0.0, keyPrefix?: string): VectorResult[] {
-    // Fetch memories that have embeddings, optionally scoped to a key prefix
-    let sql = `SELECT key, content, embedding FROM memories WHERE embedding IS NOT NULL`;
-    const params: unknown[] = [];
-
-    if (keyPrefix) {
-      sql += ` AND key LIKE ?`;
-      params.push(`${keyPrefix}%`);
-    }
-
-    const rows = this.db.prepare(sql).all(...params) as Array<{
-      key: string;
-      content: string;
-      embedding: Buffer;
-    }>;
+    // Phase 1: Scan embeddings only (skip content to reduce data transfer).
+    // Content is fetched in phase 2 only for the top-N results.
+    const rows = keyPrefix
+      ? this.scanPrefixStmt.all(`${keyPrefix}%`) as Array<{ key: string; embedding: Buffer }>
+      : this.scanStmt.all() as Array<{ key: string; embedding: Buffer }>;
 
     // Compute similarity scores
-    const scored: VectorResult[] = [];
+    const scored: Array<{ key: string; score: number }> = [];
     for (const row of rows) {
       const stored = blobToEmbedding(row.embedding);
       if (stored.length !== queryEmbedding.length) continue;
 
       const score = cosineSimilarity(queryEmbedding, stored);
       if (score >= minScore) {
-        scored.push({
-          key: row.key,
-          content: row.content,
-          score,
-        });
+        scored.push({ key: row.key, score });
       }
     }
 
     // Sort descending by similarity, take top results
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, limit);
+    const topN = scored.slice(0, limit);
+
+    if (topN.length === 0) return [];
+
+    // Phase 2: Batch-fetch content only for the top-N results.
+    // Dynamic IN clause — can't be pre-prepared (varying placeholder count).
+    const placeholders = topN.map(() => '?').join(', ');
+    const keys = topN.map((r) => r.key);
+    const contentRows = this.db.prepare(
+      `SELECT key, content FROM memories WHERE key IN (${placeholders})`,
+    ).all(...keys) as Array<{ key: string; content: string }>;
+
+    const contentMap = new Map(contentRows.map((r) => [r.key, r.content]));
+
+    return topN.map((r) => ({
+      key: r.key,
+      content: contentMap.get(r.key) ?? '',
+      score: r.score,
+    }));
   }
 }
 

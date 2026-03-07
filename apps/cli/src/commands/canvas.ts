@@ -49,7 +49,7 @@ export async function canvas(args: string[]): Promise<void> {
   }
 
   // Parse arguments.
-  let port = config.canvas?.port ?? config.gateway.port ?? 4800;
+  let port = config.canvas?.port ?? 4800;
   let autoOpen = true;
 
   for (let i = 0; i < args.length; i++) {
