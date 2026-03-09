@@ -22,7 +22,7 @@ import type { X402Config } from '@ch4p/plugin-x402';
 import { generateId } from '@ch4p/core';
 import { loadConfig, saveConfig, getLogsDir, getCh4pDir } from '../config.js';
 import { SessionNotes } from '../session-notes.js';
-import { SessionManager, GatewayServer, MessageRouter, PairingManager, Scheduler, LogChannel } from '@ch4p/gateway';
+import { SessionManager, GatewayServer, MessageRouter, PairingManager, Scheduler, LogChannel, StreamHandler } from '@ch4p/gateway';
 import type { CronJob } from '@ch4p/gateway';
 import {
   ChannelRegistry,
@@ -1456,6 +1456,16 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
         loop.abort('Gateway run timeout exceeded');
       }, runTimeoutMs);
 
+      // Stream responses progressively via edit-based streaming.
+      // On first text event, send the message. On subsequent text events,
+      // edit it in-place. On complete, do a final edit with the full answer.
+      // Channels without editMessage support fall back to a single send.
+      const streamer = new StreamHandler({
+        channel,
+        to: msg.from,
+        format: 'markdown',
+        replyTo: msg.id,
+      });
       let responseText = '';
 
       // Pattern that indicates the subprocess is waiting for user permission input.
@@ -1464,6 +1474,15 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
       for await (const event of loop.run(processedMsg.text)) {
         if (event.type === 'text') {
           responseText = event.partial;
+
+          // Stream cleaned text progressively to the channel.
+          // stripToolXml is applied to every partial to prevent tool XML
+          // from flashing in the channel during streaming.
+          await streamer.handleEvent({
+            ...event,
+            partial: stripToolXml(event.partial),
+          });
+
           // Detect permission prompts and flag the loop as waiting for user response.
           if (inFlightLoops && PERM_RE.test(event.partial)) {
             const entry = inFlightLoops.get(userKey);
@@ -1474,26 +1493,41 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
           // Update the session note with a brief progress snippet so a subsequent
           // crash still has recent context.
           if (event.answer) sessionNotes?.appendActivity(contextKey, event.answer);
+
+          // Apply stripToolXml + voice processing on the final answer only.
+          const cleaned = stripToolXml(event.answer);
+          const outbound = { text: cleaned, format: 'markdown' as const };
+          const finalOutbound = voiceProcessor
+            ? await voiceProcessor.processOutbound(outbound)
+            : outbound;
+
+          await streamer.handleEvent({
+            type: 'complete',
+            answer: finalOutbound.text ?? cleaned,
+          });
         } else if (event.type === 'error') {
           responseText = `Error: ${event.error.message}`;
+          // Update the streamed message with the error, or send a new one.
+          if (streamer.getSentMessageId() && channel.editMessage) {
+            await channel.editMessage(msg.from, streamer.getSentMessageId()!, {
+              text: responseText,
+              format: 'markdown',
+            });
+          } else if (!streamer.getSentMessageId()) {
+            await channel.send(msg.from, { text: responseText, replyTo: msg.id });
+          }
         }
       }
 
-      if (responseText) {
-        // Strip any leaked tool protocol XML before sending to channels.
-        responseText = stripToolXml(responseText);
-        const outbound = {
-          text: responseText,
+      // Fallback: if no events produced a send (e.g., immediate empty complete,
+      // or channel doesn't support editing and no complete event fired), send now.
+      if (!streamer.getSentMessageId() && responseText) {
+        const cleaned = stripToolXml(responseText);
+        await channel.send(msg.from, {
+          text: cleaned,
           replyTo: msg.id,
           format: 'markdown' as const,
-        };
-
-        // Synthesize response audio (TTS) if voice is enabled.
-        const finalOutbound = voiceProcessor
-          ? await voiceProcessor.processOutbound(outbound)
-          : outbound;
-
-        await channel.send(msg.from, finalOutbound);
+        });
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);

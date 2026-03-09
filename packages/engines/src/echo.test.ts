@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import { getEventListeners } from 'node:events';
 import { EchoEngine } from './echo.js';
 import type { Job, EngineEvent, ResumeToken } from '@ch4p/core';
 
@@ -214,6 +215,55 @@ describe('EchoEngine', () => {
     it('steer() does not throw (no-op for echo)', async () => {
       const handle = await engine.startRun(makeJob());
       expect(() => handle.steer('new direction')).not.toThrow();
+    });
+  });
+
+  describe('abort signal listener cleanup', () => {
+    it('removes the abort listener from the external signal after events complete', async () => {
+      const controller = new AbortController();
+      const handle = await engine.startRun(makeJob(), {
+        signal: controller.signal,
+      });
+
+      // Before consuming events, there should be a listener on the signal
+      const listenersBefore = getEventListeners(controller.signal, 'abort');
+      expect(listenersBefore.length).toBe(1);
+
+      await collectEvents(handle.events);
+
+      // After consuming events, the listener should be removed
+      const listenersAfter = getEventListeners(controller.signal, 'abort');
+      expect(listenersAfter.length).toBe(0);
+    });
+
+    it('does not accumulate listeners across multiple startRun calls with the same signal', async () => {
+      const controller = new AbortController();
+
+      // Simulate multiple iterations — same signal, multiple startRun calls
+      for (let i = 0; i < 10; i++) {
+        const handle = await engine.startRun(makeJob(), {
+          signal: controller.signal,
+        });
+        await collectEvents(handle.events);
+      }
+
+      // After all runs complete, no listeners should remain
+      const listeners = getEventListeners(controller.signal, 'abort');
+      expect(listeners.length).toBe(0);
+    });
+
+    it('cleans up listener even when signal is already aborted', async () => {
+      const controller = new AbortController();
+      controller.abort('test abort');
+
+      const handle = await engine.startRun(makeJob(), {
+        signal: controller.signal,
+      });
+      await collectEvents(handle.events);
+
+      // No listener should have been added (signal was already aborted)
+      const listeners = getEventListeners(controller.signal, 'abort');
+      expect(listeners.length).toBe(0);
     });
   });
 });

@@ -50,7 +50,6 @@ import type {
 } from '@ch4p/core';
 import { EngineError, ToolError } from '@ch4p/core';
 import { abortableSleep, backoffDelay } from '@ch4p/core';
-import { setMaxListeners } from 'node:events';
 
 
 
@@ -295,11 +294,6 @@ export class AgentLoop {
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
 
-    // The same signal is passed to every startRun() call in the loop.
-    // Each call adds a listener; with maxIterations up to 50 this exceeds
-    // the default EventTarget limit of 10. Raise it to avoid the warning.
-    try { setMaxListeners(this.opts.maxIterations + 5, signal); } catch { /* ignore */ }
-
     // Reset AWM tracking state.
     this.stateRecords = [];
     this.allToolResults = [];
@@ -333,6 +327,7 @@ export class AgentLoop {
     let consecutiveErrors = 0;
     let done = false;
     let finalAnswer = '';
+    let lastPartialText = '';  // best-available text for memory persist on abort/error
 
     try {
       while (!done && iterations < this.opts.maxIterations) {
@@ -420,6 +415,7 @@ export class AgentLoop {
             // Update accumulated text for text_delta events.
             if (event.type === 'text_delta') {
               accumulatedText += event.delta;
+              lastPartialText = accumulatedText;
             }
 
             if (event.type === 'completed') {
@@ -643,21 +639,33 @@ export class AgentLoop {
       }
 
       this.session.complete();
-
-      // Lifecycle hook: auto-summarize the completed conversation.
-      if (this.opts.onAfterComplete && finalAnswer) {
-        try {
-          await this.opts.onAfterComplete(this.session.getContext(), finalAnswer);
-        } catch {
-          // Memory store failures should never crash the agent loop.
-        }
-      }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       yield { type: 'error', error };
       this.session.fail(error);
     } finally {
       this.currentHandle = null;
+
+      // Lifecycle hook: persist conversation summary on ALL exit paths (success,
+      // abort, error, timeout). Previously this only ran on successful completion,
+      // which meant /stop, /cancel, timeouts, and errors created a memory gap.
+      // The hook's own guards (minMessages, answer length >= 10 chars) prevent
+      // storing empty or trivial entries.
+      if (this.opts.onAfterComplete) {
+        const answer = finalAnswer || lastPartialText;
+        if (answer) {
+          try {
+            await this.opts.onAfterComplete(this.session.getContext(), answer);
+          } catch (err) {
+            // Log memory store failures instead of silently swallowing them.
+            this.observer.onError(
+              err instanceof Error ? err : new Error(String(err)),
+              { phase: 'memory-persist' },
+            );
+          }
+        }
+      }
+
       // Clean up resources.
       this.observer.onSessionEnd(
         {

@@ -2229,3 +2229,157 @@ describe('stripToolXml', () => {
     expect(stripToolXml('Just a normal response')).toBe('Just a normal response');
   });
 });
+
+// ===========================================================================
+// 15. onAfterComplete fires on all exit paths (memory persist fix)
+// ===========================================================================
+
+describe('onAfterComplete — memory persist on all exit paths', () => {
+  it('fires onAfterComplete on normal completion with finalAnswer', async () => {
+    const onAfterComplete = vi.fn();
+    const engine = createMockEngine([
+      { type: 'started' },
+      { type: 'text_delta', delta: 'The answer is 42.' },
+      { type: 'completed', answer: 'The answer is 42.' },
+    ]);
+
+    const session = createSession();
+    const loop = new AgentLoop(session, engine, [], createMockObserver(), {
+      onAfterComplete,
+    });
+
+    await collectEvents(loop, 'What is the answer?');
+
+    expect(onAfterComplete).toHaveBeenCalledTimes(1);
+    expect(onAfterComplete.mock.calls[0]![1]).toBe('The answer is 42.');
+  });
+
+  it('fires onAfterComplete on abort with partial text', async () => {
+    const onAfterComplete = vi.fn();
+    // Engine yields some text, then stalls — we abort via steering
+    const engine: IEngine = {
+      id: 'test-engine',
+      name: 'Test Engine',
+      startRun: vi.fn().mockResolvedValue({
+        ref: 'run-1',
+        events: (async function* () {
+          yield { type: 'started' } as EngineEvent;
+          yield { type: 'text_delta', delta: 'Working on it...' } as EngineEvent;
+          // Engine doesn't yield 'completed' — will be aborted
+          yield { type: 'text_delta', delta: ' Still going.' } as EngineEvent;
+          // Simulate tool call to trigger another iteration
+          yield {
+            type: 'completed',
+            answer: '',
+            toolCalls: [{ id: 'tc1', name: 'test_tool', args: {} }],
+          } as EngineEvent;
+        })(),
+        cancel: vi.fn().mockResolvedValue(undefined),
+        steer: vi.fn(),
+      } satisfies RunHandle),
+      resume: vi.fn(),
+    };
+
+    const session = createSession();
+    const loop = new AgentLoop(session, engine, [createMockTool()], createMockObserver(), {
+      onAfterComplete,
+    });
+
+    // Start the loop and abort after first event
+    const events: import('./agent-loop.js').AgentEvent[] = [];
+    let yieldCount = 0;
+    for await (const event of loop.run('Do something')) {
+      events.push(event);
+      yieldCount++;
+      if (yieldCount === 2) {
+        // Abort after receiving some text
+        loop.abort('User cancelled');
+      }
+    }
+
+    expect(onAfterComplete).toHaveBeenCalledTimes(1);
+    // Should receive the partial text
+    const answer = onAfterComplete.mock.calls[0]![1] as string;
+    expect(answer).toContain('Working on it...');
+  });
+
+  it('fires onAfterComplete on max iterations with partial text', async () => {
+    const onAfterComplete = vi.fn();
+    // Engine always returns tool calls — forces max iterations
+    const engine = createMultiCallEngine([
+      [
+        { type: 'started' },
+        { type: 'text_delta', delta: 'Let me think...' },
+        {
+          type: 'completed',
+          answer: '',
+          toolCalls: [{ id: 'tc1', name: 'test_tool', args: {} }],
+        },
+      ],
+      // Second call — will hit maxIterations=1
+      [
+        { type: 'started' },
+        { type: 'text_delta', delta: 'More thinking.' },
+        {
+          type: 'completed',
+          answer: '',
+          toolCalls: [{ id: 'tc2', name: 'test_tool', args: {} }],
+        },
+      ],
+    ]);
+
+    const session = createSession();
+    const loop = new AgentLoop(session, engine, [createMockTool()], createMockObserver(), {
+      maxIterations: 1,
+      onAfterComplete,
+    });
+
+    await collectEvents(loop, 'Think about this');
+
+    expect(onAfterComplete).toHaveBeenCalledTimes(1);
+    const answer = onAfterComplete.mock.calls[0]![1] as string;
+    expect(answer).toBe('Let me think...');
+  });
+
+  it('does not fire onAfterComplete when no text was produced', async () => {
+    const onAfterComplete = vi.fn();
+    // Engine yields started then immediately errors with empty text
+    const engine = createMockEngine([
+      { type: 'started' },
+      { type: 'completed', answer: '' },
+    ]);
+
+    const session = createSession();
+    const loop = new AgentLoop(session, engine, [], createMockObserver(), {
+      onAfterComplete,
+    });
+
+    await collectEvents(loop, 'Hello');
+
+    // Empty answer should not trigger the hook
+    expect(onAfterComplete).not.toHaveBeenCalled();
+  });
+
+  it('logs errors from onAfterComplete via observer instead of swallowing them', async () => {
+    const observer = createMockObserver();
+    const onAfterComplete = vi.fn().mockRejectedValue(new Error('SQLite disk full'));
+    const engine = createMockEngine([
+      { type: 'started' },
+      { type: 'text_delta', delta: 'A real answer here.' },
+      { type: 'completed', answer: 'A real answer here.' },
+    ]);
+
+    const session = createSession();
+    const loop = new AgentLoop(session, engine, [], observer, {
+      onAfterComplete,
+    });
+
+    // Should not throw
+    await collectEvents(loop, 'test');
+
+    expect(observer.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'SQLite disk full' }),
+      { phase: 'memory-persist' },
+    );
+  });
+});

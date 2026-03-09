@@ -39,14 +39,17 @@ export class EchoEngine implements IEngine {
     const ref = generateId();
     const abortController = new AbortController();
 
-    // Link the caller's signal
+    // Link the caller's abort signal to our internal controller.
+    // Use a named function so we can remove it in the generator's finally block,
+    // preventing listener accumulation across iterations (MaxListenersExceeded).
+    let externalSignalCleanup: { signal: AbortSignal; listener: () => void } | undefined;
     if (opts?.signal) {
       if (opts.signal.aborted) {
         abortController.abort(opts.signal.reason);
       } else {
-        opts.signal.addEventListener('abort', () => {
-          abortController.abort(opts.signal!.reason);
-        }, { once: true });
+        const onExternalAbort = () => abortController.abort(opts.signal!.reason);
+        opts.signal.addEventListener('abort', onExternalAbort, { once: true });
+        externalSignalCleanup = { signal: opts.signal, listener: onExternalAbort };
       }
     }
 
@@ -58,6 +61,7 @@ export class EchoEngine implements IEngine {
       echoText,
       abortController.signal,
       opts?.onProgress,
+      externalSignalCleanup,
     );
 
     return {
@@ -101,38 +105,46 @@ export class EchoEngine implements IEngine {
     echoText: string,
     signal: AbortSignal,
     onProgress?: (event: EngineEvent) => void,
+    externalSignalCleanup?: { signal: AbortSignal; listener: () => void },
   ): AsyncGenerator<EngineEvent, void, undefined> {
     const emit = (event: EngineEvent): EngineEvent => {
       onProgress?.(event);
       return event;
     };
 
-    // started
-    const resumeToken: ResumeToken = {
-      engineId: ENGINE_ID,
-      ref,
-      state: { echoText },
-    };
-    yield emit({ type: 'started', resumeToken });
+    try {
+      // started
+      const resumeToken: ResumeToken = {
+        engineId: ENGINE_ID,
+        ref,
+        state: { echoText },
+      };
+      yield emit({ type: 'started', resumeToken });
 
-    // Check for cancellation
-    if (signal.aborted) {
+      // Check for cancellation
+      if (signal.aborted) {
+        yield emit({
+          type: 'error',
+          error: new EngineError('Run was cancelled', ENGINE_ID),
+        });
+        return;
+      }
+
+      // text_delta — emit the entire echo as a single delta
+      yield emit({ type: 'text_delta', delta: echoText });
+
+      // completed
       yield emit({
-        type: 'error',
-        error: new EngineError('Run was cancelled', ENGINE_ID),
+        type: 'completed',
+        answer: echoText,
+        usage: { inputTokens: 0, outputTokens: 0 },
       });
-      return;
+    } finally {
+      // Remove the external signal listener to prevent accumulation across
+      // iterations — each startRun() call adds a listener, and without cleanup
+      // this triggers MaxListenersExceededWarning after ~25 iterations.
+      externalSignalCleanup?.signal.removeEventListener('abort', externalSignalCleanup.listener);
     }
-
-    // text_delta — emit the entire echo as a single delta
-    yield emit({ type: 'text_delta', delta: echoText });
-
-    // completed
-    yield emit({
-      type: 'completed',
-      answer: echoText,
-      usage: { inputTokens: 0, outputTokens: 0 },
-    });
   }
 
   // -----------------------------------------------------------------------

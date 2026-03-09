@@ -86,14 +86,17 @@ export class NativeEngine implements IEngine {
     const abortController = new AbortController();
     const steerQueue: string[] = [];
 
-    // Link the caller's signal to our internal controller
+    // Link the caller's abort signal to our internal controller.
+    // Use a named function so we can remove it in the generator's finally block,
+    // preventing listener accumulation across iterations (MaxListenersExceeded).
+    let externalSignalCleanup: { signal: AbortSignal; listener: () => void } | undefined;
     if (opts?.signal) {
       if (opts.signal.aborted) {
         abortController.abort(opts.signal.reason);
       } else {
-        opts.signal.addEventListener('abort', () => {
-          abortController.abort(opts.signal!.reason);
-        }, { once: true });
+        const onExternalAbort = () => abortController.abort(opts.signal!.reason);
+        opts.signal.addEventListener('abort', onExternalAbort, { once: true });
+        externalSignalCleanup = { signal: opts.signal, listener: onExternalAbort };
       }
     }
 
@@ -131,6 +134,7 @@ export class NativeEngine implements IEngine {
       resumeState,
       steerQueue,
       opts?.onProgress,
+      externalSignalCleanup,
     );
 
     return {
@@ -192,6 +196,7 @@ export class NativeEngine implements IEngine {
     resumeState: ResumeState,
     steerQueue: string[],
     onProgress?: (event: EngineEvent) => void,
+    externalSignalCleanup?: { signal: AbortSignal; listener: () => void },
   ): AsyncGenerator<EngineEvent, void, undefined> {
     const emit = (event: EngineEvent): EngineEvent => {
       onProgress?.(event);
@@ -263,6 +268,11 @@ export class NativeEngine implements IEngine {
         : new EngineError(String(err), ENGINE_ID);
 
       yield emit({ type: 'error', error });
+    } finally {
+      // Remove the external signal listener to prevent accumulation across
+      // iterations — each startRun() call adds a listener, and without cleanup
+      // this triggers MaxListenersExceededWarning after ~25 iterations.
+      externalSignalCleanup?.signal.removeEventListener('abort', externalSignalCleanup.listener);
     }
   }
 

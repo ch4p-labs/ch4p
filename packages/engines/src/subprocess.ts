@@ -154,13 +154,17 @@ export class SubprocessEngine implements IEngine {
     const ref = generateId();
     const abortController = new AbortController();
 
+    // Link the caller's abort signal to our internal controller.
+    // Use a named function so we can remove it in the generator's finally block,
+    // preventing listener accumulation across iterations (MaxListenersExceeded).
+    let externalSignalCleanup: { signal: AbortSignal; listener: () => void } | undefined;
     if (opts?.signal) {
       if (opts.signal.aborted) {
         abortController.abort(opts.signal.reason);
       } else {
-        opts.signal.addEventListener('abort', () => {
-          abortController.abort(opts.signal!.reason);
-        }, { once: true });
+        const onExternalAbort = () => abortController.abort(opts.signal!.reason);
+        opts.signal.addEventListener('abort', onExternalAbort, { once: true });
+        externalSignalCleanup = { signal: opts.signal, listener: onExternalAbort };
       }
     }
 
@@ -170,7 +174,7 @@ export class SubprocessEngine implements IEngine {
     // Shared reference so steer() can write to the child's stdin after it starts.
     const stdinRef: { stream: Writable | null } = { stream: null };
 
-    const events = this.runSubprocess(prompt, ref, job, abortController, opts?.onProgress, stdinRef);
+    const events = this.runSubprocess(prompt, ref, job, abortController, opts?.onProgress, stdinRef, externalSignalCleanup);
 
     return {
       ref,
@@ -222,6 +226,7 @@ export class SubprocessEngine implements IEngine {
     abortController: AbortController,
     onProgress?: (event: EngineEvent) => void,
     stdinRef?: { stream: Writable | null },
+    externalSignalCleanup?: { signal: AbortSignal; listener: () => void },
   ): AsyncGenerator<EngineEvent, void, undefined> {
     const emit = (event: EngineEvent): EngineEvent => {
       onProgress?.(event);
@@ -456,6 +461,10 @@ export class SubprocessEngine implements IEngine {
       try { child.stdout?.destroy(); } catch { /* ignore */ }
       try { child.stderr?.destroy(); } catch { /* ignore */ }
       if (stdinRef) stdinRef.stream = null;
+      // Remove the external signal listener to prevent accumulation across
+      // iterations — each startRun() call adds a listener, and without cleanup
+      // this triggers MaxListenersExceededWarning after ~25 iterations.
+      externalSignalCleanup?.signal.removeEventListener('abort', externalSignalCleanup.listener);
     }
   }
 
