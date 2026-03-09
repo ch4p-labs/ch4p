@@ -161,6 +161,7 @@ Nine defense layers, all on by default:
 | **State snapshots** | Tools capture observable state before/after execution for diff-based verification |
 | **Auto-memory** | Recall relevant memories before each message, store learnings after each run |
 | **Hybrid memory search** | SQLite FTS5 BM25 + cosine vector similarity, configurable blend; OpenAI → Ollama → noop provider chain with automatic fallback |
+| **Progressive streaming** | Gateway streams agent responses in real-time via edit-based message updates on supported channels |
 | **Crash recovery** | Session notes survive gateway restarts; agent resumes in-flight tasks from where it left off |
 | **Canvas workspace** | Spatial tldraw interface with 11 A2UI component types, bidirectional interaction |
 | **Skills** | Curated instruction sets loaded on-demand via progressive disclosure (OpenClaw compatible) |
