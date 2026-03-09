@@ -652,7 +652,7 @@ export class AgentLoop {
       // The hook's own guards (minMessages, answer length >= 10 chars) prevent
       // storing empty or trivial entries.
       if (this.opts.onAfterComplete) {
-        const answer = finalAnswer || lastPartialText;
+        const answer = stripToolXml(finalAnswer || lastPartialText);
         if (answer) {
           try {
             await this.opts.onAfterComplete(this.session.getContext(), answer);

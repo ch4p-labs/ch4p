@@ -1492,7 +1492,7 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
           responseText = event.answer;
           // Update the session note with a brief progress snippet so a subsequent
           // crash still has recent context.
-          if (event.answer) sessionNotes?.appendActivity(contextKey, event.answer);
+          if (event.answer) sessionNotes?.appendActivity(contextKey, stripToolXml(event.answer));
 
           // Apply stripToolXml + voice processing on the final answer only.
           const cleaned = stripToolXml(event.answer);

@@ -242,6 +242,21 @@ describe('StreamHandler', () => {
       expect(handler.getSentMessageId()).toBeNull();
     });
 
+    it('sets sentMessageId on complete for non-editing channels (prevents double-send)', async () => {
+      const channel = createMockChannel(false);
+      const handler = new StreamHandler({ channel, to: TO });
+
+      // Text events are skipped for non-editing channels.
+      await handler.handleEvent({ type: 'text', delta: 'Hi', partial: 'Hi' });
+      expect(handler.getSentMessageId()).toBeNull();
+
+      // Complete should send and capture the messageId.
+      await handler.handleEvent({ type: 'complete', answer: 'Full answer.' });
+      expect(handler.getSentMessageId()).toBe('msg-001');
+      // Only one send call total (the complete send).
+      expect(channel.send).toHaveBeenCalledTimes(1);
+    });
+
     it('falls back to send on complete when send returned no messageId', async () => {
       const channel = createMockChannel(true);
       (channel.send as ReturnType<typeof vi.fn>).mockResolvedValue({

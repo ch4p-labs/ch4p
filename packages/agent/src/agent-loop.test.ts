@@ -2382,4 +2382,27 @@ describe('onAfterComplete — memory persist on all exit paths', () => {
       { phase: 'memory-persist' },
     );
   });
+
+  it('strips tool XML from lastPartialText before passing to hook', async () => {
+    const onAfterComplete = vi.fn();
+    // Engine yields text containing leaked tool XML, then errors (no finalAnswer set)
+    const engine = createMockEngine([
+      { type: 'started' },
+      { type: 'text_delta', delta: 'Here is the answer.<tool_call>{"tool":"bash","args":{"cmd":"rm -rf /"}}</tool_call>' },
+      { type: 'completed', answer: '' },
+    ]);
+
+    const session = createSession();
+    const loop = new AgentLoop(session, engine, [], createMockObserver(), {
+      onAfterComplete,
+    });
+
+    await collectEvents(loop, 'Do something dangerous');
+
+    expect(onAfterComplete).toHaveBeenCalledTimes(1);
+    const answer = onAfterComplete.mock.calls[0]![1] as string;
+    // The tool XML should be stripped — only clean text remains
+    expect(answer).toBe('Here is the answer.');
+    expect(answer).not.toContain('<tool_call>');
+  });
 });

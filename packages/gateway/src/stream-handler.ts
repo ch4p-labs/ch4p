@@ -132,11 +132,17 @@ export class StreamHandler {
 
     // Either no message was sent yet (streaming was off or no text events)
     // or the channel doesn't support editing — send the full answer.
-    return this.channel.send(this.to, {
+    const result = await this.channel.send(this.to, {
       text: answer,
       format: this.format,
       replyTo: this.replyTo,
     });
+
+    if (result.success && result.messageId) {
+      this.sentMessageId = result.messageId;
+    }
+
+    return result;
   }
 
   /**
