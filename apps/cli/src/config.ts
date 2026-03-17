@@ -45,7 +45,7 @@ export function getLogsDir(): string {
 export function getDefaultConfig(): Ch4pConfig {
   return {
     agent: {
-      model: 'claude-sonnet-4-6',
+      model: 'claude-opus-4-6',
       provider: 'anthropic',
       thinkingLevel: 'medium',
     },
@@ -87,7 +87,7 @@ export function getDefaultConfig(): Ch4pConfig {
       available: {
         native: {
           provider: 'anthropic',
-          model: 'claude-sonnet-4-6',
+          model: 'claude-opus-4-6',
         },
         'claude-cli': {
           command: 'claude',

@@ -104,9 +104,9 @@ describe('AnthropicProvider', () => {
       const provider = validProvider();
       const models = await provider.listModels();
       const ids = models.map((m) => m.id);
-      expect(ids).toContain('claude-sonnet-4-20250514');
-      expect(ids).toContain('claude-opus-4-20250514');
-      expect(ids).toContain('claude-haiku-3-5-20241022');
+      expect(ids).toContain('claude-sonnet-4-6');
+      expect(ids).toContain('claude-opus-4-6');
+      expect(ids).toContain('claude-haiku-4-5-20251001');
     });
   });
 

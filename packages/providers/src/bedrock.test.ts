@@ -48,8 +48,8 @@ function bedrockConverseResponse(overrides: Record<string, unknown> = {}) {
 function validProvider(overrides: Record<string, unknown> = {}) {
   return new BedrockProvider({
     region: 'us-east-1',
-    accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
-    secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+    accessKeyId: 'test-access-key-id',
+    secretAccessKey: 'test-secret-access-key',
     maxRetries: 0,
     ...overrides,
   });
@@ -137,7 +137,7 @@ describe('BedrockProvider', () => {
       const provider = validProvider();
       const models = await provider.listModels();
       const ids = models.map((m) => m.id);
-      expect(ids).toContain('anthropic.claude-sonnet-4-20250514-v1:0');
+      expect(ids).toContain('anthropic.claude-sonnet-4-6');
       expect(ids).toContain('amazon.nova-pro-v1:0');
     });
   });
@@ -150,7 +150,7 @@ describe('BedrockProvider', () => {
     const provider = validProvider();
 
     it('returns true for known models with tool support', () => {
-      expect(provider.supportsTools('anthropic.claude-sonnet-4-20250514-v1:0')).toBe(true);
+      expect(provider.supportsTools('anthropic.claude-sonnet-4-6')).toBe(true);
       expect(provider.supportsTools('amazon.nova-pro-v1:0')).toBe(true);
     });
 
@@ -230,9 +230,9 @@ describe('BedrockProvider', () => {
       mockFetch(jsonResponse(bedrockConverseResponse()));
       const provider = new BedrockProvider({
         region: 'us-east-1',
-        accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
-        secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
-        sessionToken: 'FwoGZXIvYXdzEBYaDH...',
+        accessKeyId: 'test-access-key-id',
+        secretAccessKey: 'test-secret-access-key',
+        sessionToken: 'test-session-token',
         maxRetries: 0,
       });
       await provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [
@@ -242,7 +242,7 @@ describe('BedrockProvider', () => {
       const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
       const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
       const headers = init.headers as Record<string, string>;
-      expect(headers['x-amz-security-token']).toBe('FwoGZXIvYXdzEBYaDH...');
+      expect(headers['x-amz-security-token']).toBe('test-session-token');
     });
 
     it('maps response to CompletionResult', async () => {
@@ -391,8 +391,8 @@ describe('BedrockProvider', () => {
       mockFetch(jsonResponse(bedrockConverseResponse()));
       const provider = new BedrockProvider({
         region: 'us-west-2',
-        accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
-        secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+        accessKeyId: 'test-access-key-id',
+        secretAccessKey: 'test-secret-access-key',
         baseUrl: 'https://proxy.example.com',
         maxRetries: 0,
       });
@@ -435,8 +435,8 @@ describe('BedrockProvider', () => {
       mockFetch(jsonResponse(bedrockConverseResponse()));
       const provider = new BedrockProvider({
         region: 'eu-west-1',
-        accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
-        secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+        accessKeyId: 'test-access-key-id',
+        secretAccessKey: 'test-secret-access-key',
         maxRetries: 0,
       });
       await provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [

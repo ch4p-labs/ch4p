@@ -102,9 +102,9 @@ describe('OpenAIProvider', () => {
       const provider = validProvider();
       const models = await provider.listModels();
       const ids = models.map((m) => m.id);
+      expect(ids).toContain('gpt-4.1');
+      expect(ids).toContain('gpt-4.1-mini');
       expect(ids).toContain('gpt-4o');
-      expect(ids).toContain('gpt-4o-mini');
-      expect(ids).toContain('gpt-4-turbo');
     });
   });
 
@@ -116,9 +116,9 @@ describe('OpenAIProvider', () => {
     const provider = validProvider();
 
     it('returns true for known tool-capable models', () => {
+      expect(provider.supportsTools('gpt-4.1')).toBe(true);
+      expect(provider.supportsTools('gpt-4.1-mini')).toBe(true);
       expect(provider.supportsTools('gpt-4o')).toBe(true);
-      expect(provider.supportsTools('gpt-4o-mini')).toBe(true);
-      expect(provider.supportsTools('gpt-4-turbo')).toBe(true);
     });
 
     it('returns true for gpt-4 prefix models (fallback)', () => {

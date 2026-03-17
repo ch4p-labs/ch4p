@@ -110,8 +110,8 @@ describe('OpenRouterProvider', () => {
       const models = await provider.listModels();
       const ids = models.map((m) => m.id);
       expect(ids).toContain('openrouter/auto');
-      expect(ids).toContain('anthropic/claude-sonnet-4');
-      expect(ids).toContain('openai/gpt-4o');
+      expect(ids).toContain('anthropic/claude-sonnet-4.6');
+      expect(ids).toContain('openai/gpt-4.1');
     });
   });
 
@@ -124,8 +124,8 @@ describe('OpenRouterProvider', () => {
 
     it('returns true for known models with tool support', () => {
       expect(provider.supportsTools('openrouter/auto')).toBe(true);
-      expect(provider.supportsTools('anthropic/claude-sonnet-4')).toBe(true);
-      expect(provider.supportsTools('openai/gpt-4o')).toBe(true);
+      expect(provider.supportsTools('anthropic/claude-sonnet-4.6')).toBe(true);
+      expect(provider.supportsTools('openai/gpt-4.1')).toBe(true);
     });
 
     it('returns true for unknown models (default true)', () => {

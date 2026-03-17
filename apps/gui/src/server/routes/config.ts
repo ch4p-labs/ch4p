@@ -15,6 +15,7 @@ export function getSafeConfig(): SafeConfig | null {
   const config = loadConfig();
   return {
     agent: {
+      engine: config.agent.engine,
       model: config.agent.model,
       provider: config.agent.provider,
       thinkingLevel: config.agent.thinkingLevel,

@@ -33,6 +33,13 @@ export function configExists(): boolean {
   return existsSync(getConfigPath());
 }
 
+export function ensureConfigDir(): void {
+  const dir = getCh4pDir();
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Config type (inline to avoid @ch4p/core import in server bundle)
 // ---------------------------------------------------------------------------

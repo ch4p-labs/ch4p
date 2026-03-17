@@ -1,6 +1,6 @@
 {
   "agent": {
-    "model": "anthropic/claude-sonnet-4-20250514",
+    "model": "claude-opus-4-6",
     "provider": "anthropic",
     "thinkingLevel": "medium",
     "systemPrompt": "You are ch4p, a personal AI assistant. You are helpful, direct, and security-conscious. You have access to tools for file operations, shell commands, web access, and persistent memory. Always validate actions against the security policy before executing."

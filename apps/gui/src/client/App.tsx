@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ThemeProvider } from './theme/ThemeProvider';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './pages/Dashboard';
+import { Onboarding } from './pages/Onboarding';
 import type { Page } from '../shared/types';
 import './App.css';
 
@@ -22,7 +23,7 @@ function AppContent() {
       <Sidebar activePage={page} onNavigate={setPage} />
       <main className="app-main">
         {page === 'dashboard' && <Dashboard />}
-        {page === 'onboarding' && <Placeholder name="Setup Wizard" />}
+        {page === 'onboarding' && <Onboarding onComplete={() => setPage('dashboard')} />}
         {page === 'chat' && <Placeholder name="Chat" />}
         {page === 'channels' && <Placeholder name="Channels" />}
         {page === 'security' && <Placeholder name="Security Audit" />}
