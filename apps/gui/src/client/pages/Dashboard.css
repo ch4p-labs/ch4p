@@ -1,0 +1,170 @@
+/* ── Dashboard ─────────────────────────────────────────── */
+
+.dashboard {
+  padding: 32px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.dashboard-header {
+  margin-bottom: 32px;
+}
+
+.page-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.page-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ── Sections ──────────────────────────────────────────── */
+
+.dashboard-section {
+  margin-bottom: 40px;
+  opacity: 0;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.section-header .section-title {
+  margin-bottom: 0;
+}
+
+/* ── Status grid ───────────────────────────────────────── */
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.status-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.status-value {
+  font-size: 13px;
+  color: var(--text);
+  text-align: right;
+}
+
+.status-value.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.status-value.accent {
+  color: var(--accent);
+}
+
+.autonomy-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.channel-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.channel-tag {
+  display: inline-flex;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+/* ── Doctor checks ─────────────────────────────────────── */
+
+.doctor-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.doctor-check-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.doctor-check-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  min-width: 140px;
+  flex-shrink: 0;
+}
+
+.doctor-check-message {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doctor-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+/* ── Utilities ─────────────────────────────────────────── */
+
+.text-muted {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.loading-text {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 16px 0;
+}
+
+.error-text {
+  color: var(--danger);
+  font-size: 13px;
+  padding: 16px 0;
+}
