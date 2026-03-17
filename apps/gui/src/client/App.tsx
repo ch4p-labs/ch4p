@@ -6,6 +6,8 @@ import { Onboarding } from './pages/Onboarding';
 import { Settings } from './pages/Settings';
 import { Security } from './pages/Security';
 import { Chat } from './pages/Chat';
+import { Channels } from './pages/Channels';
+import { Tools } from './pages/Tools';
 import type { Page } from '../shared/types';
 import './App.css';
 
@@ -28,9 +30,9 @@ function AppContent() {
         {page === 'dashboard' && <Dashboard />}
         {page === 'onboarding' && <Onboarding onComplete={() => setPage('dashboard')} />}
         {page === 'chat' && <Chat />}
-        {page === 'channels' && <Placeholder name="Channels" />}
+        {page === 'channels' && <Channels />}
         {page === 'security' && <Security />}
-        {page === 'tools' && <Placeholder name="Tools & Skills" />}
+        {page === 'tools' && <Tools />}
         {page === 'settings' && <Settings />}
         {page === 'terminal' && <Placeholder name="Terminal" />}
       </main>

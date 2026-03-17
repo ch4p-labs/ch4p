@@ -17,6 +17,8 @@ import { getSafeConfig, applySafeUpdates } from './routes/config.js';
 import { getEnginesData } from './routes/engines.js';
 import { applyOnboard } from './routes/onboard.js';
 import { handleChat, type ChatRequest } from './routes/chat.js';
+import { getChannels } from './routes/channels.js';
+import { getTools } from './routes/tools.js';
 import type { OnboardPayload } from '../shared/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -94,6 +96,16 @@ async function handleRequest(
 
   if (method === 'GET' && url === '/api/engines') {
     sendJson(res, 200, getEnginesData());
+    return;
+  }
+
+  if (method === 'GET' && url === '/api/channels') {
+    sendJson(res, 200, getChannels());
+    return;
+  }
+
+  if (method === 'GET' && url === '/api/tools') {
+    sendJson(res, 200, getTools());
     return;
   }
 
