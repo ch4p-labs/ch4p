@@ -3,6 +3,8 @@ import { ThemeProvider } from './theme/ThemeProvider';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './pages/Dashboard';
 import { Onboarding } from './pages/Onboarding';
+import { Settings } from './pages/Settings';
+import { Security } from './pages/Security';
 import type { Page } from '../shared/types';
 import './App.css';
 
@@ -26,9 +28,9 @@ function AppContent() {
         {page === 'onboarding' && <Onboarding onComplete={() => setPage('dashboard')} />}
         {page === 'chat' && <Placeholder name="Chat" />}
         {page === 'channels' && <Placeholder name="Channels" />}
-        {page === 'security' && <Placeholder name="Security Audit" />}
+        {page === 'security' && <Security />}
         {page === 'tools' && <Placeholder name="Tools & Skills" />}
-        {page === 'settings' && <Placeholder name="Settings" />}
+        {page === 'settings' && <Settings />}
         {page === 'terminal' && <Placeholder name="Terminal" />}
       </main>
     </div>
