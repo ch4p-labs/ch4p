@@ -16,6 +16,7 @@ import { getAuditResults } from './routes/audit.js';
 import { getSafeConfig, applySafeUpdates } from './routes/config.js';
 import { getEnginesData } from './routes/engines.js';
 import { applyOnboard } from './routes/onboard.js';
+import { handleChat, type ChatRequest } from './routes/chat.js';
 import type { OnboardPayload } from '../shared/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -101,6 +102,18 @@ async function handleRequest(
       const body = await readBody(req);
       const payload = JSON.parse(body) as OnboardPayload;
       const result = applyOnboard(payload);
+      sendJson(res, 200, result);
+    } catch (err) {
+      sendJson(res, 400, { error: err instanceof Error ? err.message : 'Invalid request' });
+    }
+    return;
+  }
+
+  if (method === 'POST' && url === '/api/chat') {
+    try {
+      const body = await readBody(req);
+      const payload = JSON.parse(body) as ChatRequest;
+      const result = await handleChat(payload);
       sendJson(res, 200, result);
     } catch (err) {
       sendJson(res, 400, { error: err instanceof Error ? err.message : 'Invalid request' });
