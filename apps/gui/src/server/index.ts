@@ -19,6 +19,7 @@ import { applyOnboard } from './routes/onboard.js';
 import { handleChat, type ChatRequest } from './routes/chat.js';
 import { getChannels } from './routes/channels.js';
 import { getTools } from './routes/tools.js';
+import { getLogs } from './routes/logs.js';
 import type { OnboardPayload } from '../shared/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -106,6 +107,13 @@ async function handleRequest(
 
   if (method === 'GET' && url === '/api/tools') {
     sendJson(res, 200, getTools());
+    return;
+  }
+
+  if (method === 'GET' && (url === '/api/logs' || url?.startsWith('/api/logs?'))) {
+    const params = new URL(url, 'http://localhost').searchParams;
+    const lines = parseInt(params.get('lines') ?? '200', 10);
+    sendJson(res, 200, getLogs(Math.min(lines, 1000)));
     return;
   }
 

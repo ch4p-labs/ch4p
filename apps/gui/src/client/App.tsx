@@ -8,17 +8,9 @@ import { Security } from './pages/Security';
 import { Chat } from './pages/Chat';
 import { Channels } from './pages/Channels';
 import { Tools } from './pages/Tools';
+import { Terminal } from './pages/Terminal';
 import type { Page } from '../shared/types';
 import './App.css';
-
-function Placeholder({ name }: { name: string }) {
-  return (
-    <div className="placeholder-page">
-      <h2 className="placeholder-title">{name}</h2>
-      <p className="placeholder-text">Coming soon — Phase 2+</p>
-    </div>
-  );
-}
 
 function AppContent() {
   const [page, setPage] = useState<Page>('dashboard');
@@ -34,7 +26,7 @@ function AppContent() {
         {page === 'security' && <Security />}
         {page === 'tools' && <Tools />}
         {page === 'settings' && <Settings />}
-        {page === 'terminal' && <Placeholder name="Terminal" />}
+        {page === 'terminal' && <Terminal />}
       </main>
     </div>
   );
