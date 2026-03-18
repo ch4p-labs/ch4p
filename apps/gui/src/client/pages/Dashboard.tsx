@@ -20,8 +20,8 @@ export function Dashboard() {
       <section className="dashboard-section animate-fade-up">
         <h2 className="section-title">System Status</h2>
 
-        {status.loading && <div className="loading-text">Loading status...</div>}
-        {status.error && <div className="error-text">{status.error}</div>}
+        {status.initialLoading && <div className="loading-text">Loading status...</div>}
+        {status.error && !status.data && <div className="error-text">{status.error}</div>}
 
         {status.data && (
           <div className="status-grid">
@@ -92,13 +92,13 @@ export function Dashboard() {
       <section className="dashboard-section animate-fade-up" style={{ animationDelay: '0.1s' }}>
         <div className="section-header">
           <h2 className="section-title">Health Checks</h2>
-          <Button variant="secondary" size="sm" onClick={doctor.refetch} loading={doctor.loading}>
+          <Button variant="secondary" size="sm" onClick={doctor.refetch} loading={doctor.refreshing}>
             Re-run
           </Button>
         </div>
 
-        {doctor.loading && !doctor.data && <div className="loading-text">Running checks...</div>}
-        {doctor.error && <div className="error-text">{doctor.error}</div>}
+        {doctor.initialLoading && <div className="loading-text">Running checks...</div>}
+        {doctor.error && !doctor.data && <div className="error-text">{doctor.error}</div>}
 
         {doctor.data && (
           <>

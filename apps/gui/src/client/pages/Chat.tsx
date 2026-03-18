@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { renderMarkdown } from './render-markdown';
 import './Chat.css';
 
@@ -9,7 +9,12 @@ interface Message {
   timestamp: number;
 }
 
-export function Chat() {
+/** Exposed handle for parent components (currently unused but available for future needs). */
+export interface ChatHandle {
+  clearChat: () => void;
+}
+
+export const Chat = forwardRef<ChatHandle>(function Chat(_props, ref) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -100,6 +105,8 @@ export function Chat() {
     setSessionId('');
   };
 
+  useImperativeHandle(ref, () => ({ clearChat }));
+
   return (
     <div className="chat">
       {/* Header */}
@@ -184,4 +191,4 @@ export function Chat() {
       </div>
     </div>
   );
-}
+});

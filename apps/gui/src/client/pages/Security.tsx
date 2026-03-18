@@ -13,8 +13,8 @@ const SEVERITY_ICON: Record<string, string> = {
 export function Security() {
   const audit = useApi<AuditResponse>('/api/audit');
 
-  if (audit.loading) return <div className="security"><p className="loading-text">Running security audit...</p></div>;
-  if (audit.error) return <div className="security"><p className="error-text">{audit.error}</p></div>;
+  if (audit.initialLoading) return <div className="security"><p className="loading-text">Running security audit...</p></div>;
+  if (audit.error && !audit.data) return <div className="security"><p className="error-text">{audit.error}</p></div>;
   if (!audit.data) return null;
 
   const { results, summary } = audit.data;
@@ -26,7 +26,7 @@ export function Security() {
           <h1 className="page-title">Security Audit</h1>
           <p className="page-subtitle">10-point security posture assessment</p>
         </div>
-        <Button variant="secondary" size="sm" onClick={audit.refetch}>
+        <Button variant="secondary" size="sm" onClick={audit.refetch} loading={audit.refreshing}>
           Re-run Audit
         </Button>
       </div>

@@ -362,8 +362,12 @@ function createSessionConfig(config: Ch4pConfig, skillRegistry?: SkillRegistry, 
   const soulContent = loadSoulContent();
   const systemPrompt = buildSystemPrompt({ hasMemory, hasSearch, skillRegistry, soulContent });
 
+  // Use CH4P_SESSION_ID env var if set (e.g., from GUI chat) for stable session
+  // identity across messages. Otherwise generate a random one.
+  const sessionId = process.env.CH4P_SESSION_ID || generateId(16);
+
   return {
-    sessionId: generateId(16),
+    sessionId,
     engineId: config.engines?.default ?? 'native',
     model: config.agent.model,
     provider: config.agent.provider,

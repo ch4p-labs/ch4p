@@ -1,25 +1,28 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '../components/Button';
+import { Select } from '../components/Select';
 import './Terminal.css';
 
-interface LogEntry {
+interface LiveLine {
+  text: string;
   source: 'stdout' | 'stderr';
-  file: string;
-  lines: string[];
-  size: number;
-  modified: string;
+  ts: number;
 }
 
-interface LogsResponse {
-  logsDir: string;
-  entries: LogEntry[];
-  available: string[];
+interface GatewayOutputResponse {
+  lines: LiveLine[];
+  total: number;
 }
 
 type LogFilter = 'all' | 'stdout' | 'stderr';
 
+/** Strip ANSI escape codes for display. */
+function stripAnsi(text: string): string {
+  return text.replace(/\x1b\[\d*(;\d+)*m/g, '');
+}
+
 export function Terminal() {
-  const [logs, setLogs] = useState<LogsResponse | null>(null);
+  const [output, setOutput] = useState<GatewayOutputResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<LogFilter>('all');
@@ -27,51 +30,36 @@ export function Terminal() {
   const [lines, setLines] = useState(200);
   const logEndRef = useRef<HTMLDivElement>(null);
 
-  const fetchLogs = useCallback(async () => {
+  const fetchOutput = useCallback(async () => {
     try {
-      const res = await fetch(`/api/logs?lines=${lines}`);
-      const data = await res.json() as LogsResponse;
-      setLogs(data);
+      const res = await fetch(`/api/gateway-output?lines=${lines}&filter=${filter}`);
+      const data = await res.json() as GatewayOutputResponse;
+      setOutput(data);
       setError('');
     } catch {
-      setError('Failed to fetch logs');
+      setError('Failed to fetch gateway output');
     } finally {
       setLoading(false);
     }
-  }, [lines]);
+  }, [lines, filter]);
 
+  // Poll every 2 seconds for live output
   useEffect(() => {
-    fetchLogs();
-    const interval = setInterval(fetchLogs, 5000);
+    fetchOutput();
+    const interval = setInterval(fetchOutput, 2000);
     return () => clearInterval(interval);
-  }, [fetchLogs]);
+  }, [fetchOutput]);
 
   useEffect(() => {
     if (autoScroll) {
       logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [logs, autoScroll]);
+  }, [output, autoScroll]);
 
-  if (loading) return <div className="terminal-page"><p className="loading-text">Loading logs...</p></div>;
-  if (error) return <div className="terminal-page"><p className="error-text">{error}</p></div>;
+  if (loading && !output) return <div className="terminal-page"><p className="loading-text">Connecting to gateway...</p></div>;
+  if (error && !output) return <div className="terminal-page"><p className="error-text">{error}</p></div>;
 
-  const filteredEntries = (logs?.entries ?? []).filter(
-    e => filter === 'all' || e.source === filter,
-  );
-
-  // Merge and interleave lines with source labels
-  const allLines: { text: string; source: 'stdout' | 'stderr' }[] = [];
-  for (const entry of filteredEntries) {
-    for (const line of entry.lines) {
-      allLines.push({ text: line, source: entry.source });
-    }
-  }
-
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
+  const displayLines = output?.lines ?? [];
 
   return (
     <div className="terminal-page">
@@ -79,7 +67,8 @@ export function Terminal() {
         <div>
           <h1 className="page-title">Terminal</h1>
           <p className="page-subtitle">
-            Gateway logs from <code>{logs?.logsDir}</code>
+            Live gateway output
+            {output && <span className="terminal-total"> ({output.total} lines captured)</span>}
           </p>
         </div>
         <div className="terminal-controls">
@@ -101,38 +90,25 @@ export function Terminal() {
           >
             ↓
           </button>
-          <Button variant="secondary" size="sm" onClick={fetchLogs}>Refresh</Button>
+          <Button variant="secondary" size="sm" onClick={fetchOutput}>Refresh</Button>
         </div>
       </div>
 
-      {/* Log file info */}
-      {logs && logs.entries.length > 0 && (
-        <div className="terminal-file-info">
-          {logs.entries.map(e => (
-            <div key={e.file} className="terminal-file-badge">
-              <span className={`terminal-source-dot ${e.source}`} />
-              <span className="terminal-file-name">{e.file}</span>
-              <span className="terminal-file-size">{formatSize(e.size)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Log output */}
       <div className="terminal-output">
-        {allLines.length === 0 ? (
+        {displayLines.length === 0 ? (
           <div className="terminal-empty">
-            <p>No log entries found.</p>
+            <p>No gateway output yet.</p>
             <p className="terminal-empty-hint">
-              Start the gateway with <code>ch4p gateway</code> to generate logs.
+              The gateway starts automatically with the GUI. Output will appear here.
             </p>
           </div>
         ) : (
           <pre className="terminal-pre">
-            {allLines.map((line, i) => (
+            {displayLines.map((line, i) => (
               <div key={i} className={`terminal-line ${line.source}`}>
                 <span className="terminal-line-num">{i + 1}</span>
-                <span className="terminal-line-text">{line.text}</span>
+                <span className="terminal-line-text">{stripAnsi(line.text)}</span>
               </div>
             ))}
             <div ref={logEndRef} />
@@ -142,20 +118,20 @@ export function Terminal() {
 
       {/* Footer */}
       <div className="terminal-footer">
-        <span className="terminal-line-count">{allLines.length} lines</span>
+        <span className="terminal-line-count">{displayLines.length} lines</span>
         <div className="terminal-lines-select">
           <span>Show:</span>
-          <select
-            value={lines}
-            onChange={e => setLines(Number(e.target.value))}
-            className="setting-select"
-          >
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-            <option value={200}>200</option>
-            <option value={500}>500</option>
-            <option value={1000}>1000</option>
-          </select>
+          <Select
+            value={String(lines)}
+            options={[
+              { value: '50', label: '50' },
+              { value: '100', label: '100' },
+              { value: '200', label: '200' },
+              { value: '500', label: '500' },
+              { value: '1000', label: '1000' },
+            ]}
+            onChange={v => setLines(Number(v))}
+          />
         </div>
       </div>
     </div>

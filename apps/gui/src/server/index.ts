@@ -119,6 +119,17 @@ async function handleRequest(
     return;
   }
 
+  if (method === 'GET' && (url === '/api/gateway-output' || url?.startsWith('/api/gateway-output?'))) {
+    const params = new URL(url, 'http://localhost').searchParams;
+    const lines = parseInt(params.get('lines') ?? '200', 10);
+    const filter = (params.get('filter') ?? 'all') as 'all' | 'stdout' | 'stderr';
+    sendJson(res, 200, {
+      lines: getLiveGatewayOutput(Math.min(lines, 1000), filter),
+      total: liveGatewayLines.length,
+    });
+    return;
+  }
+
   if (method === 'POST' && url === '/api/onboard') {
     try {
       const body = await readBody(req);
@@ -217,6 +228,35 @@ export function getGatewayAuthToken(): string | null {
 }
 
 /**
+ * Live gateway output buffer.
+ * Captures stdout/stderr from the gateway child process in real-time.
+ * Ring buffer capped at MAX_LINES to prevent unbounded memory growth.
+ */
+const MAX_LIVE_LINES = 2000;
+const liveGatewayLines: { text: string; source: 'stdout' | 'stderr'; ts: number }[] = [];
+
+function addLiveLines(data: string, source: 'stdout' | 'stderr') {
+  const lines = data.split('\n');
+  const ts = Date.now();
+  for (const line of lines) {
+    if (!line) continue;
+    liveGatewayLines.push({ text: line, source, ts });
+  }
+  // Cap at MAX_LINES
+  while (liveGatewayLines.length > MAX_LIVE_LINES) {
+    liveGatewayLines.shift();
+  }
+}
+
+/** Get live gateway output for the /api/gateway-output endpoint. */
+export function getLiveGatewayOutput(maxLines = 200, filter: 'all' | 'stdout' | 'stderr' = 'all') {
+  const filtered = filter === 'all'
+    ? liveGatewayLines
+    : liveGatewayLines.filter(l => l.source === filter);
+  return filtered.slice(-maxLines);
+}
+
+/**
  * Try to start the gateway if it's not already running.
  * Captures the pairing code from stdout and auto-pairs.
  */
@@ -258,12 +298,13 @@ async function ensureGateway(): Promise<ChildProcess | null> {
     env: { ...process.env },
   });
 
-  // Capture pairing code from stdout using a promise
+  // Capture pairing code from stdout + feed into live output buffer
   let pairingCode: string | null = null;
   const codePromise = new Promise<string | null>((resolve) => {
     const timeout = setTimeout(() => resolve(null), 10000);
     child.stdout?.on('data', (chunk: Buffer) => {
       const text = chunk.toString();
+      addLiveLines(text, 'stdout');
       const stripped = text.replace(/\x1b\[\d*(;\d+)*m/g, '');
       const match = stripped.match(/pairing code:\s*([A-Z0-9]{5,8})/i);
       if (match && !pairingCode) {
@@ -274,7 +315,9 @@ async function ensureGateway(): Promise<ChildProcess | null> {
     });
   });
 
-  child.stderr?.resume();
+  child.stderr?.on('data', (chunk: Buffer) => {
+    addLiveLines(chunk.toString(), 'stderr');
+  });
   child.on('error', (err) => console.error(`  Gateway error: ${err.message}`));
   child.on('exit', (code) => {
     if (code !== null && code !== 0) console.error(`  Gateway exited with code ${code}`);

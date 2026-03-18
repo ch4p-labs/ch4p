@@ -46,6 +46,12 @@ function stripAnsi(text: string): string {
 /**
  * Extract the agent's reply from CLI output.
  * Output format: preamble → "◆ ch4p" or "◆ c" → reply lines → verification footer
+ *
+ * Filters out:
+ *   - Thinking blocks (dim/italic text from extended thinking)
+ *   - Tool calls (lines starting with │ gutter character)
+ *   - Session/preamble lines ([SESSION], sid=, ❯ You)
+ *   - Token/usage footers
  */
 function extractReply(raw: string): string {
   const clean = stripAnsi(raw);
@@ -61,21 +67,40 @@ function extractReply(raw: string): string {
   }
 
   if (startIdx < 0) {
-    // No marker — filter out preamble
+    // No marker — filter out preamble and tool/thinking noise
     const filtered = lines.filter(l => {
       const t = l.trim();
-      return t && !t.includes('❯ You') && !t.includes('[SESSION]') &&
-        !t.includes('sid=') && !t.startsWith('│');
+      return t && !isNoiseLine(t);
     });
     return filtered.join('\n').trim() || clean.trim();
   }
 
-  // Collect reply lines, stop at verification/footer
+  // Collect reply lines, filtering out thinking/tool/footer noise
   const replyLines: string[] = [];
+  let inThinking = false;
+
   for (let i = startIdx; i < lines.length; i++) {
     const t = lines[i]!.trim();
+
+    // Stop at verification/usage footer
     if (t.startsWith('│ verify') || t.startsWith('│ All ') ||
-        t.startsWith('│ ⚠') || t.startsWith('│ ✓')) break;
+        t.startsWith('│ ⚠') || t.startsWith('│ ✓') ||
+        t.match(/^\d+\s*in\s*[│|]/) || t.match(/^tokens:/i) ||
+        t.match(/^\d+ input.*\d+ output/)) break;
+
+    // Skip tool call gutter lines
+    if (t.startsWith('│')) continue;
+
+    // Skip thinking indicator (extended thinking appears before text)
+    // Thinking lines are typically short, indented, and appear before the actual response
+    if (!replyLines.length && !t) {
+      // Skip empty lines before content starts
+      continue;
+    }
+
+    // Skip common noise patterns
+    if (isNoiseLine(t)) continue;
+
     replyLines.push(lines[i]!);
   }
 
@@ -87,6 +112,19 @@ function extractReply(raw: string): string {
   }
 
   return result;
+}
+
+/** Check if a line is noise (preamble, tool output, session info, etc.) */
+function isNoiseLine(t: string): boolean {
+  return !!(
+    t.includes('❯ You') ||
+    t.includes('[SESSION]') ||
+    t.includes('sid=') ||
+    t.startsWith('│') ||
+    t.match(/^Done\s*$/) ||
+    t.match(/^\d+ input.*\d+ output/) ||
+    t.match(/^tokens:/i)
+  );
 }
 
 export async function handleChat(payload: ChatRequest): Promise<ChatResponse> {
@@ -113,8 +151,13 @@ export async function handleChat(payload: ChatRequest): Promise<ChatResponse> {
     let resolved = false;
     let responseTimer: ReturnType<typeof setTimeout> | null = null;
 
+    // Use a stable session ID for GUI chat so memory persists across messages.
+    // The CH4P_SESSION_ID env var is picked up by the agent to use a consistent
+    // session context for auto-recall and auto-save.
+    const sessionId = payload.sessionId || 'gui-chat';
+
     const child = spawn(process.execPath, [cliEntry, 'agent', '-m', payload.message], {
-      env: { ...process.env },
+      env: { ...process.env, CH4P_SESSION_ID: sessionId },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 

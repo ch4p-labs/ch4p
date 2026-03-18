@@ -1,9 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 interface UseApiResult<T> {
   data: T | null;
   error: string | null;
   loading: boolean;
+  /** True only on the very first load (no existing data). */
+  initialLoading: boolean;
+  /** True when refetching (data already exists, refreshing in background). */
+  refreshing: boolean;
   refetch: () => void;
 }
 
@@ -12,6 +16,7 @@ export function useApi<T>(url: string): UseApiResult<T> {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [trigger, setTrigger] = useState(0);
+  const hasData = useRef(false);
 
   const refetch = useCallback(() => setTrigger((t) => t + 1), []);
 
@@ -31,6 +36,7 @@ export function useApi<T>(url: string): UseApiResult<T> {
       .then((json) => {
         if (!cancelled) {
           setData(json);
+          hasData.current = true;
           setLoading(false);
         }
       })
@@ -44,5 +50,12 @@ export function useApi<T>(url: string): UseApiResult<T> {
     return () => { cancelled = true; };
   }, [url, trigger]);
 
-  return { data, error, loading, refetch };
+  return {
+    data,
+    error,
+    loading,
+    initialLoading: loading && !hasData.current,
+    refreshing: loading && hasData.current,
+    refetch,
+  };
 }

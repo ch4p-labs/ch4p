@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useApi } from '../hooks/useApi';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { Select } from '../components/Select';
 import type { SafeConfig } from '../../shared/types';
 import './Settings.css';
 
@@ -38,15 +39,11 @@ function SettingField({ label, value, type = 'text', options, onChange, mono }: 
     return (
       <div className="setting-row">
         <span className="setting-label">{label}</span>
-        <select
-          className="setting-select"
+        <Select
           value={String(value)}
-          onChange={e => onChange(e.target.value)}
-        >
-          {options.map(o => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+          options={options}
+          onChange={v => onChange(v)}
+        />
       </div>
     );
   }
