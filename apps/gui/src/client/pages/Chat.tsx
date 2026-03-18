@@ -122,7 +122,7 @@ export function Chat() {
             <div className="chat-empty-icon">◈</div>
             <p>Send a message to start chatting with ch4p.</p>
             <p className="chat-empty-hint">
-              The gateway must be running (<code>ch4p gateway</code>) for responses.
+              Powered by your configured engine. Press Enter to send.
             </p>
           </div>
         )}

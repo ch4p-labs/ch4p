@@ -7,9 +7,11 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serveStatic } from './static.js';
+import { configExists, loadConfig } from './config.js';
 import { getStatus } from './routes/status.js';
 import { getDoctorResults } from './routes/doctor.js';
 import { getAuditResults } from './routes/audit.js';
@@ -182,6 +184,143 @@ async function handleRequest(
 // Server startup
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Gateway auto-start
+// ---------------------------------------------------------------------------
+
+async function isGatewayRunning(port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/health`, {
+      signal: AbortSignal.timeout(1500),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForGateway(port: number, timeoutMs = 15000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await isGatewayRunning(port)) return true;
+    await new Promise(r => setTimeout(r, 500));
+  }
+  return false;
+}
+
+/** Stored gateway auth token after auto-pairing. */
+let gatewayAuthToken: string | null = null;
+
+/** Get the gateway auth token (used by chat route). */
+export function getGatewayAuthToken(): string | null {
+  return gatewayAuthToken;
+}
+
+/**
+ * Try to start the gateway if it's not already running.
+ * Captures the pairing code from stdout and auto-pairs.
+ */
+async function ensureGateway(): Promise<ChildProcess | null> {
+  let gatewayPort = 18789;
+  try {
+    if (configExists()) {
+      const config = loadConfig();
+      gatewayPort = config.gateway?.port ?? 18789;
+    }
+  } catch { /* use default */ }
+
+  if (await isGatewayRunning(gatewayPort)) {
+    console.log(`  Gateway already running on port ${gatewayPort}`);
+    return null;
+  }
+
+  // Find the CLI entry point to spawn `ch4p gateway`
+  const cliPaths = [
+    resolve(__dirname, '..', '..', '..', 'cli', 'dist', 'index.js'),
+    resolve(__dirname, '..', '..', 'cli', 'dist', 'index.js'),
+  ];
+
+  let cliEntry: string | undefined;
+  const { existsSync } = await import('node:fs');
+  for (const p of cliPaths) {
+    if (existsSync(p)) { cliEntry = p; break; }
+  }
+
+  if (!cliEntry) {
+    console.log('  Gateway CLI not found — chat will require manual gateway start');
+    return null;
+  }
+
+  console.log(`  Starting gateway on port ${gatewayPort}...`);
+
+  const child = spawn(process.execPath, [cliEntry, 'gateway'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env },
+  });
+
+  // Capture pairing code from stdout using a promise
+  let pairingCode: string | null = null;
+  const codePromise = new Promise<string | null>((resolve) => {
+    const timeout = setTimeout(() => resolve(null), 10000);
+    child.stdout?.on('data', (chunk: Buffer) => {
+      const text = chunk.toString();
+      const stripped = text.replace(/\x1b\[\d*(;\d+)*m/g, '');
+      const match = stripped.match(/pairing code:\s*([A-Z0-9]{5,8})/i);
+      if (match && !pairingCode) {
+        pairingCode = match[1]!;
+        clearTimeout(timeout);
+        resolve(pairingCode);
+      }
+    });
+  });
+
+  child.stderr?.resume();
+  child.on('error', (err) => console.error(`  Gateway error: ${err.message}`));
+  child.on('exit', (code) => {
+    if (code !== null && code !== 0) console.error(`  Gateway exited with code ${code}`);
+  });
+
+  // Wait for both: gateway healthy + pairing code captured
+  const [healthy, capturedCode] = await Promise.all([
+    waitForGateway(gatewayPort),
+    codePromise,
+  ]);
+
+  if (!healthy) {
+    console.log('  Gateway may not be ready — chat might not work immediately');
+    return child;
+  }
+
+  console.log(`  Gateway started on port ${gatewayPort}`);
+
+  // Auto-pair if we captured a code
+  if (capturedCode) {
+    try {
+      const pairRes = await fetch(`http://127.0.0.1:${gatewayPort}/pair`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: capturedCode, label: 'ch4p-gui' }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (pairRes.ok) {
+        const pairData = await pairRes.json() as { token?: string };
+        if (pairData.token) {
+          gatewayAuthToken = pairData.token;
+          console.log('  GUI auto-paired with gateway');
+        }
+      }
+    } catch {
+      console.log('  Auto-pairing failed — chat may require manual pairing');
+    }
+  }
+
+  return child;
+}
+
+// ---------------------------------------------------------------------------
+// Server factory
+// ---------------------------------------------------------------------------
+
 export function createGuiServer(options?: { port?: number; staticDir?: string }): {
   start: () => Promise<{ port: number; host: string }>;
   stop: () => Promise<void>;
@@ -189,6 +328,7 @@ export function createGuiServer(options?: { port?: number; staticDir?: string })
   const port = options?.port ?? 4810;
   const host = '127.0.0.1';
   const staticDir = options?.staticDir ?? resolve(__dirname, '..', 'client');
+  let gatewayChild: ChildProcess | null = null;
 
   const server = createServer((req, res) => {
     handleRequest(req, res, staticDir).catch((err: unknown) => {
@@ -197,19 +337,29 @@ export function createGuiServer(options?: { port?: number; staticDir?: string })
   });
 
   return {
-    start: () =>
-      new Promise((resolve, reject) => {
+    start: async () => {
+      // Auto-start gateway
+      gatewayChild = await ensureGateway();
+
+      return new Promise((resolve, reject) => {
         server.on('error', reject);
         server.listen(port, host, () => {
           const addr = server.address();
           const boundPort = typeof addr === 'object' && addr ? addr.port : port;
           resolve({ port: boundPort, host });
         });
-      }),
-    stop: () =>
-      new Promise((resolve, reject) => {
+      });
+    },
+    stop: async () => {
+      // Kill gateway child if we spawned it
+      if (gatewayChild && !gatewayChild.killed) {
+        gatewayChild.kill('SIGTERM');
+        gatewayChild = null;
+      }
+      return new Promise((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()));
-      }),
+      });
+    },
   };
 }
 

@@ -487,10 +487,16 @@ function createVerifier(config: Ch4pConfig, _engine: IEngine) {
   };
 
   if (vCfg.semantic) {
-    // LLMVerifier needs a provider. Try to reuse the agent's provider.
+    // LLMVerifier needs a provider with a valid API key.
+    // When using CLI engines (claude-cli, codex-cli), the provider's API key
+    // may be empty — fall back to format-only verification.
     try {
       const providerName = config.agent.provider;
       const providerConfig = config.providers?.[providerName] as Record<string, unknown> | undefined;
+      const apiKey = providerConfig?.['apiKey'] as string | undefined;
+      if (!apiKey || apiKey.includes('${') || apiKey.length === 0) {
+        return new FormatVerifier(formatOpts);
+      }
       const provider = ProviderRegistry.createProvider({
         id: `${providerName}-verifier`,
         type: providerName,

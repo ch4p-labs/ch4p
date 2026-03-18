@@ -1,12 +1,12 @@
 /**
  * GUI command — start the ch4p graphical interface.
  *
- * Starts the GUI server (raw node:http, zero external deps) and
- * opens the browser to the local URL.
+ * Starts the GUI server which auto-starts the gateway and auto-pairs.
+ * Opens the browser to the local URL.
  *
  * Usage:
  *   ch4p gui              — start GUI and open browser
- *   ch4p gui --port N     — override the default port (4810)
+ *   ch4p gui --port N     — override the GUI port (default 4810)
  *   ch4p gui --no-open    — don't auto-open browser
  */
 
@@ -54,7 +54,7 @@ export async function gui(args: string[]): Promise<void> {
     return;
   }
 
-  // Dynamic import of the GUI server
+  // Dynamic import — GUI server handles gateway auto-start + auto-pair
   const { createGuiServer } = await import(guiEntry) as {
     createGuiServer: (opts?: { port?: number; staticDir?: string }) => {
       start: () => Promise<{ port: number; host: string }>;
@@ -90,13 +90,12 @@ export async function gui(args: string[]): Promise<void> {
 
     // Keep process alive until Ctrl+C
     await new Promise<void>((resolve) => {
-      process.on('SIGINT', () => {
-        console.log(`\n  ${DIM}Stopping GUI server...${RESET}`);
+      const shutdown = () => {
+        console.log(`\n  ${DIM}Stopping...${RESET}`);
         server.stop().then(resolve).catch(resolve);
-      });
-      process.on('SIGTERM', () => {
-        server.stop().then(resolve).catch(resolve);
-      });
+      };
+      process.on('SIGINT', shutdown);
+      process.on('SIGTERM', shutdown);
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
