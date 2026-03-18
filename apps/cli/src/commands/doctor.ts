@@ -49,18 +49,18 @@ function checkNodeVersion(): CheckResult {
   const version = process.version;
   const major = parseInt(version.slice(1).split('.')[0]!, 10);
 
-  if (major >= 22) {
+  if (major >= 20) {
     return {
       name: 'Node.js version',
       status: 'ok',
-      message: `Node.js ${version} (>= 22 required)`,
+      message: `Node.js ${version}`,
     };
   }
 
   return {
     name: 'Node.js version',
     status: 'fail',
-    message: `Node.js ${version} detected. Version >= 22 is required.`,
+    message: `Node.js ${version} detected. Version >= 20 is required.`,
   };
 }
 

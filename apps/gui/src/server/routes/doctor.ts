@@ -11,9 +11,9 @@ import type { CheckResult, DoctorResponse } from '../../shared/types.js';
 function checkNodeVersion(): CheckResult {
   const version = process.version;
   const major = parseInt(version.slice(1).split('.')[0]!, 10);
-  return major >= 22
-    ? { name: 'Node.js version', status: 'ok', message: `Node.js ${version} (>= 22 required)` }
-    : { name: 'Node.js version', status: 'fail', message: `Node.js ${version} detected. Version >= 22 is required.` };
+  return major >= 20
+    ? { name: 'Node.js version', status: 'ok', message: `Node.js ${version}` }
+    : { name: 'Node.js version', status: 'fail', message: `Node.js ${version} detected. Version >= 20 is required.` };
 }
 
 function checkConfigFile(): CheckResult {
