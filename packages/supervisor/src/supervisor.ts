@@ -203,7 +203,7 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
     // Stop children in reverse order (mirrors OTP shutdown semantics).
     for (let i = this.children.length - 1; i >= 0; i--) {
       const child = this.children[i];
-      if (!child) continue;
+      if (!this.isValidChildEntry(child)) continue;
       if (child.status === 'running' || child.status === 'restarting') {
         await this.stopChild(child);
       }
@@ -301,12 +301,8 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
         // Stop all children that were started AFTER the crashed one (reverse).
         const toRestart: ChildState[] = [];
         for (let i = this.children.length - 1; i > idx; i--) {
-          // Note: this.children can be made sparse during external dynamic
-          //       reconfiguration / hot-swap operations (e.g. delete/undefined
-          //       writes), so entries may be temporarily undefined; guard against
-          //       such holes.
           const sibling = this.children[i];
-          if (!sibling) continue;
+          if (!this.isValidChildEntry(sibling)) continue;
           if (sibling.status === 'running') {
             await this.stopChild(sibling);
           }
@@ -327,12 +323,8 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
       case 'one-for-all': {
         // Stop all other running children (reverse order).
         for (let i = this.children.length - 1; i >= 0; i--) {
-          // Note: during dynamic reconfiguration / hot-swap operations,
-          //       external supervisor logic may remove children by leaving
-          //       holes in `this.children` (e.g. via delete/undefined writes),
-          //       so we intentionally guard against sparse/undefined entries.
           const child = this.children[i];
-          if (!child) continue;
+          if (!this.isValidChildEntry(child)) continue;
           if (child !== crashedState && child.status === 'running') {
             await this.stopChild(child);
           }
@@ -340,7 +332,7 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
 
         // Restart all children in original order.
         for (const child of this.children) {
-          if (!child) continue;
+          if (!this.isValidChildEntry(child)) continue;
           if (this.stopping) break;
           if (child === crashedState) {
             await this.restartWithBackoff(child, policy);
@@ -351,6 +343,18 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
         break;
       }
     }
+  }
+
+  /**
+   * Helper to guard against sparse/undefined entries in
+   * `this.children`.
+   *
+   * Dynamic reconfiguration / hot-swap operations may temporarily create
+   * holes, so all iteration over `this.children` should use this helper
+   * when a valid ChildState is required.
+   */
+  private isValidChildEntry(child: ChildState | undefined | null): child is ChildState {
+    return child != null;
   }
 
   // ── Backoff + restart ────────────────────────────────────────────────
