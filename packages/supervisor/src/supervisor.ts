@@ -49,6 +49,9 @@ export interface SupervisorEvents {
   'supervisor:started': [];
   'supervisor:stopped': [];
   'supervisor:max_restarts_exceeded': [childId: string, count: number, windowMs: number];
+  // Additional events likely declared elsewhere in this file; this one
+  // ensures that emitting ``error'' is represented in the type system.
+  'error': [error: Error];
 }
 
 // ── Supervisor ───────────────────────────────────────────────────────────
@@ -185,7 +188,8 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
 
     // Stop children in reverse order (mirrors OTP shutdown semantics).
     for (let i = this.children.length - 1; i >= 0; i--) {
-      const child = this.children[i]!;
+      const child = this.children[i];
+      if (!child) continue;
       if (child.status === 'running' || child.status === 'restarting') {
         await this.stopChild(child);
       }
@@ -253,7 +257,10 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
           return;
         }
         // Truly unexpected — re-emit as an error on the supervisor.
-        this.emit('error' as keyof SupervisorEvents, strategyError as never);
+        const err = strategyError instanceof Error
+          ? strategyError
+          : new Error(String(strategyError));
+        this.emit('error', err);
       })
       .finally(() => {
         this.pendingRestarts.delete(childId);
@@ -283,7 +290,8 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
         // Stop all children that were started AFTER the crashed one (reverse).
         const toRestart: ChildState[] = [];
         for (let i = this.children.length - 1; i > idx; i--) {
-          const sibling = this.children[i]!;
+          const sibling = this.children[i];
+          if (!sibling) continue;
           if (sibling.status === 'running') {
             await this.stopChild(sibling);
           }
@@ -304,7 +312,8 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
       case 'one-for-all': {
         // Stop all other running children (reverse order).
         for (let i = this.children.length - 1; i >= 0; i--) {
-          const child = this.children[i]!;
+          const child = this.children[i];
+          if (!child) continue;
           if (child !== crashedState && child.status === 'running') {
             await this.stopChild(child);
           }
