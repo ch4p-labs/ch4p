@@ -950,7 +950,7 @@ export async function gateway(args: string[]): Promise<void> {
   })();
 
   // Periodic eviction of stale entries from unbounded maps (every 5 minutes).
-  const CONTEXT_IDLE_MS = 60 * 60_000; // 1 hour
+  const DEFAULT_CONTEXT_IDLE_MS = 60 * 60_000; // 1 hour
   const evictionTimer = setInterval(() => {
     gatewayRateLimiter.evictStale();
 
@@ -960,7 +960,7 @@ export async function gateway(args: string[]): Promise<void> {
     // Under memory pressure shrink the idle window so contexts evict much sooner
     // rather than waiting a full hour.  This frees V8 strings / closures held by
     // ContextManager entries and lets the GC reclaim pages.
-    const contextIdleMs = heapMB > 500 ? 5 * 60_000 : CONTEXT_IDLE_MS;
+    const contextIdleMs = heapMB > 500 ? 5 * 60_000 : DEFAULT_CONTEXT_IDLE_MS;
 
     // Evict conversation contexts that have been inactive too long.
     const now = Date.now();
@@ -1002,6 +1002,8 @@ export async function gateway(args: string[]): Promise<void> {
     // process that is already under pressure.  Use the Node flag
     // --heapsnapshot-near-heap-limit=1 at startup instead; it writes a snapshot
     // via a separate OOM handler that does not allocate on the main heap.
+    // Example:
+    //   NODE_OPTIONS="--heapsnapshot-near-heap-limit=1 --max-old-space-size=4096" ch4p gateway
     if (postHeapMB > 1500) {
       console.log(
         `  ${YELLOW}[OOM warning]${RESET} Heap at ${postHeapMB}MB — restart the gateway or set NODE_OPTIONS=--max-old-space-size=512`,
