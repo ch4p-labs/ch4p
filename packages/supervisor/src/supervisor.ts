@@ -418,6 +418,13 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
     }
   }
 
+  /**
+   * Normalize an unknown thrown value into an Error instance.
+   */
+  private ensureError(err: unknown): Error {
+    return err instanceof Error ? err : new Error(String(err));
+  }
+
   // ── Child start / stop primitives ────────────────────────────────────
 
   protected async startChild(state: ChildState): Promise<void> {
@@ -429,8 +436,7 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
       state.status = 'running';
       this.emit('child:started', state.spec.id, handle);
     } catch (err) {
-      const error =
-        err instanceof Error ? err : new Error(String(err));
+      const error = this.ensureError(err);
       // Starting failed — treat as an immediate crash.
       state.status = 'crashed';
       state.lastError = error;
