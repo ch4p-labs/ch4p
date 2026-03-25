@@ -76,7 +76,7 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
 
   // ── Queries ──────────────────────────────────────────────────────────
 
-  get isRunning(): boolean {
+  isRunning(): boolean {
     return this.running;
   }
 

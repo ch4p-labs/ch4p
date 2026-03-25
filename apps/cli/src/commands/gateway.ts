@@ -1025,7 +1025,7 @@ export async function gateway(args: string[]): Promise<void> {
       }
 
       // Stop channels: no new inbound messages will arrive after this.
-      if (channelSupervisor.isRunning) {
+      if (channelSupervisor.isRunning()) {
         try {
           await channelSupervisor.stop();
         } catch {

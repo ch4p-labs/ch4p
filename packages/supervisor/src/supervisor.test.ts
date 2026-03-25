@@ -32,7 +32,7 @@ describe('Supervisor', () => {
   });
 
   afterEach(async () => {
-    if (supervisor.isRunning) {
+    if (supervisor.isRunning()) {
       await supervisor.stop();
     }
     supervisor.getHealthMonitor().dispose();
@@ -109,7 +109,7 @@ describe('Supervisor', () => {
       await supervisor.start();
 
       expect(callOrder).toEqual(['child-1', 'child-2']);
-      expect(supervisor.isRunning).toBe(true);
+      expect(supervisor.isRunning()).toBe(true);
     });
 
     it('is idempotent when already running', async () => {
@@ -148,7 +148,7 @@ describe('Supervisor', () => {
       await supervisor.stop();
 
       expect(stopOrder).toEqual(['child-2', 'child-1']);
-      expect(supervisor.isRunning).toBe(false);
+      expect(supervisor.isRunning()).toBe(false);
     });
 
     it('emits supervisor:stopped event', async () => {

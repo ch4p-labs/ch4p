@@ -243,19 +243,26 @@ export class SecurityAuditor {
 
     try {
       const stats = statSync(storePath);
-      const mode = stats.mode & 0o777;
 
-      // Check file permissions (Unix). Must be exactly owner read/write (0o600).
-      // Using exact equality rather than a bitmask ensures modes like 0o700
-      // (owner execute) or 0o400 (read-only) are also rejected.
-      if (mode !== 0o600) {
-        add(
-          'secrets_file',
-          'fail',
-          `Secrets file has overly permissive permissions: 0o${mode.toString(8)} (expected 0o600)`,
-        );
+      if (process.platform !== 'win32') {
+        const mode = stats.mode & 0o777;
+
+        // Check file permissions (Unix). Must be exactly owner read/write (0o600).
+        // Using exact equality rather than a bitmask ensures modes like 0o700
+        // (owner execute) or 0o400 (read-only) are also rejected.
+        if (mode !== 0o600) {
+          add(
+            'secrets_file',
+            'fail',
+            `Secrets file has overly permissive permissions: 0o${mode.toString(8)} (expected 0o600)`,
+          );
+        } else {
+          add('secrets_file', 'pass', 'Secrets file has correct permissions (0o600)');
+        }
       } else {
-        add('secrets_file', 'pass', 'Secrets file has correct permissions (0o600)');
+        // On Windows, fs.Stats.mode does not expose Unix-style permission bits
+        // in a meaningful way, so we cannot reliably validate file permissions.
+        add('secrets_file', 'pass', 'Secrets file exists (permission check skipped on Windows)');
       }
     } catch {
       add('secrets_file', 'warn', `Cannot stat secrets file: ${storePath}`);
