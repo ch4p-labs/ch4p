@@ -202,7 +202,8 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
 
     // Stop children in reverse order (mirrors OTP shutdown semantics).
     for (let i = this.children.length - 1; i >= 0; i--) {
-      const child = this.children[i]!;
+      const child = this.children[i];
+      if (!child) continue;
       if (child.status === 'running' || child.status === 'restarting') {
         await this.stopChild(child);
       }
@@ -300,7 +301,10 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
         // Stop all children that were started AFTER the crashed one (reverse).
         const toRestart: ChildState[] = [];
         for (let i = this.children.length - 1; i > idx; i--) {
-          const sibling = this.children[i]!;
+          const sibling = this.children[i];
+          if (!sibling) {
+            continue;
+          }
           if (sibling.status === 'running') {
             await this.stopChild(sibling);
           }
@@ -321,7 +325,8 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
       case 'one-for-all': {
         // Stop all other running children (reverse order).
         for (let i = this.children.length - 1; i >= 0; i--) {
-          const child = this.children[i]!;
+          const child = this.children[i];
+          if (!child) continue;
           if (child !== crashedState && child.status === 'running') {
             await this.stopChild(child);
           }
