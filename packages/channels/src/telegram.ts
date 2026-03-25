@@ -354,7 +354,7 @@ export class TelegramChannel implements IChannel {
   // -----------------------------------------------------------------------
 
   private startPolling(): void {
-    if (!this.running && !this.abortController) return;
+    if (!this.running || !this.abortController) return;
 
     // Server-side long-poll timeout in seconds (sent to Telegram).
     const POLL_SERVER_TIMEOUT_S = 30;

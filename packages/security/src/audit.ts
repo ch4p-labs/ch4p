@@ -39,7 +39,30 @@ export interface SecurityAuditorConfig {
 // Implementation
 // ---------------------------------------------------------------------------
 
+const DANGEROUS_COMMANDS: ReadonlyArray<string> = [
+  'rm',
+  'chmod',
+  'chown',
+  'kill',
+  'sudo',
+  'su',
+  'dd',
+  'mkfs',
+  'fdisk',
+  'reboot',
+  'shutdown',
+];
+
 export class SecurityAuditor {
+  // Exact-match only: directories where the root itself is dangerous but
+  // subdirectories may be legitimate workspaces.
+  private static readonly EXACT_ONLY_WORKSPACES = new Set(['/', '/usr', '/var']);
+
+  // Prefix-match: directories where any subdirectory is also dangerous
+  // (e.g. /etc/passwd, /root/.ssh, /proc/1/maps, /tmp/my-project).
+  // /tmp is world-writable and included here to flag privilege-escalation risk.
+  private static readonly PREFIX_DANGEROUS_WORKSPACES = ['/etc', '/root', '/sys', '/proc', '/dev', '/tmp'];
+
   private readonly config: SecurityAuditorConfig;
 
   constructor(config: SecurityAuditorConfig) {
@@ -115,16 +138,14 @@ export class SecurityAuditor {
   private checkWorkspaceNotSystem(
     add: (name: string, severity: AuditSeverity, message: string) => void,
   ): void {
-    // Exact-match only: directories where the root itself is dangerous but
-    // subdirectories may be legitimate workspaces.
-    const exactOnly = new Set(['/', '/usr', '/var']);
-    // Prefix-match: directories where any subdirectory is also dangerous
-    // (e.g. /etc/passwd, /root/.ssh, /proc/1/maps, /tmp/my-project).
-    // /tmp is world-writable and included here to flag privilege-escalation risk.
-    const prefixDangerous = ['/etc', '/root', '/sys', '/proc', '/dev', '/tmp'];
     const ws = resolve(this.config.workspace);
 
-    if (exactOnly.has(ws) || prefixDangerous.some(d => ws === d || ws.startsWith(d + '/'))) {
+    if (
+      SecurityAuditor.EXACT_ONLY_WORKSPACES.has(ws) ||
+      SecurityAuditor.PREFIX_DANGEROUS_WORKSPACES.some(
+        d => ws === d || ws.startsWith(d + '/'),
+      )
+    ) {
       add(
         'workspace_safe_location',
         'fail',
@@ -244,10 +265,9 @@ export class SecurityAuditor {
   private checkDangerousCommands(
     add: (name: string, severity: AuditSeverity, message: string) => void,
   ): void {
-    const dangerous = ['rm', 'chmod', 'chown', 'kill', 'sudo', 'su', 'dd', 'mkfs', 'fdisk', 'reboot', 'shutdown'];
     const present: string[] = [];
 
-    for (const cmd of dangerous) {
+    for (const cmd of DANGEROUS_COMMANDS) {
       if (this.config.allowedCommands.has(cmd)) {
         present.push(cmd);
       }
