@@ -301,7 +301,8 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
         // Stop all children that were started AFTER the crashed one (reverse).
         const toRestart: ChildState[] = [];
         for (let i = this.children.length - 1; i > idx; i--) {
-          const sibling = this.children[i]!;
+          const sibling = this.children[i];
+          if (!sibling) continue;
           if (sibling.status === 'running') {
             await this.stopChild(sibling);
           }
