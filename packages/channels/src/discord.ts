@@ -86,6 +86,11 @@ const DEFAULT_INTENTS =
 const API_BASE = 'https://discord.com/api/v10';
 const GATEWAY_URL = 'wss://gateway.discord.gg/?v=10&encoding=json';
 
+/** Heartbeat interval bounds (ms). Values outside this range use the default. */
+const HB_MIN = 1_000;
+const HB_MAX = 300_000;
+const HB_DEFAULT = 41_250; // Discord's standard HELLO interval
+
 /** Minimal Discord message payload. */
 interface DiscordMessage {
   id: string;
@@ -391,12 +396,16 @@ export class DiscordChannel implements IChannel {
                   resume_gateway_url: string;
                 };
                 this.sessionId = ready.session_id;
-                // Validate resume URL — must be wss:// to discord.gg to prevent SSRF.
-                const resumeUrl = ready.resume_gateway_url;
-                this.resumeGatewayUrl =
-                  typeof resumeUrl === 'string' && /^wss:\/\/[^/]*\.discord\.gg(\/|$|\?)/.test(resumeUrl)
-                    ? resumeUrl
-                    : null;
+                // Validate & rebuild resume URL to break taint chain (SSRF prevention).
+                // Only allow wss:// to *.discord.gg — reconstruct from parsed parts
+                // so the WebSocket never receives the raw untrusted string.
+                this.resumeGatewayUrl = null;
+                try {
+                  const parsed = new URL(String(ready.resume_gateway_url ?? ''));
+                  if (parsed.protocol === 'wss:' && parsed.hostname.endsWith('.discord.gg')) {
+                    this.resumeGatewayUrl = `wss://${parsed.hostname}${parsed.pathname}${parsed.search}`;
+                  }
+                } catch { /* invalid URL — fall back to default gateway */ }
                 this.reconnectAttempts = 0;
                 if (!identified) {
                   identified = true;
@@ -443,12 +452,15 @@ export class DiscordChannel implements IChannel {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
     }
-    // Clamp interval to sane range (1 s – 5 min) to prevent resource exhaustion
-    // from a malicious or buggy gateway payload.
-    const clamped = Math.max(1_000, Math.min(intervalMs, 300_000));
+    // Use a validated constant — if the gateway sends a value outside the
+    // safe range, fall back to default rather than trusting the payload.
+    const safe = (typeof intervalMs === 'number' && Number.isFinite(intervalMs)
+      && intervalMs >= HB_MIN && intervalMs <= HB_MAX)
+      ? intervalMs
+      : HB_DEFAULT;
     // Send first heartbeat after a random jitter.
-    setTimeout(() => this.sendHeartbeat(), Math.random() * clamped);
-    this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), clamped);
+    setTimeout(() => this.sendHeartbeat(), Math.random() * safe);
+    this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), safe);
   }
 
   private sendHeartbeat(): void {

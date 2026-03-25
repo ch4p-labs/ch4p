@@ -597,12 +597,27 @@ export class TelegramChannel implements IChannel {
     };
 
     // 1. Fenced code blocks: ```lang\ncode\n```
-    text = text.replace(/```(\w*)\n?((?:[^`]|`(?!``))*?)```/g, (_m, lang: string, code: string) => {
-      const safe = esc(code.replace(/\n$/, ''));
-      return protect(lang
-        ? `<pre><code class="language-${lang}">${safe}</code></pre>`
-        : `<pre>${safe}</pre>`);
-    });
+    // Uses split to avoid ReDoS — no regex on untrusted code content.
+    {
+      const fence = '```';
+      const segments = text.split(fence);
+      if (segments.length >= 3) {
+        const rebuilt: string[] = [segments[0]!];
+        for (let idx = 1; idx < segments.length - 1; idx += 2) {
+          const inner = segments[idx]!;
+          const nl = inner.indexOf('\n');
+          const lang = nl === -1 ? '' : inner.slice(0, nl).replace(/[^\w]/g, '');
+          const code = nl === -1 ? inner : inner.slice(nl + 1);
+          const safe = esc(code.replace(/\n$/, ''));
+          rebuilt.push(protect(lang
+            ? `<pre><code class="language-${lang}">${safe}</code></pre>`
+            : `<pre>${safe}</pre>`));
+          if (idx + 1 < segments.length) rebuilt.push(segments[idx + 1]!);
+        }
+        if (segments.length % 2 === 0) rebuilt.push(segments[segments.length - 1]!);
+        text = rebuilt.join('');
+      }
+    }
 
     // 2. Inline code: `code`
     text = text.replace(/`([^`\n]+)`/g, (_m, c: string) => protect(`<code>${esc(c)}</code>`));
