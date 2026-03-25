@@ -301,8 +301,10 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
         // Stop all children that were started AFTER the crashed one (reverse).
         const toRestart: ChildState[] = [];
         for (let i = this.children.length - 1; i > idx; i--) {
-          // Note: this.children can be sparse during dynamic reconfiguration,
-          //       so entries may be temporarily undefined; guard against holes.
+          // Note: this.children can be made sparse during external dynamic
+          //       reconfiguration / hot-swap operations (e.g. delete/undefined
+          //       writes), so entries may be temporarily undefined; guard against
+          //       such holes.
           const sibling = this.children[i];
           if (!sibling) continue;
           if (sibling.status === 'running') {
@@ -338,6 +340,7 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
 
         // Restart all children in original order.
         for (const child of this.children) {
+          if (!child) continue;
           if (this.stopping) break;
           if (child === crashedState) {
             await this.restartWithBackoff(child, policy);
