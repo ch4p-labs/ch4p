@@ -328,6 +328,7 @@ describe('SecurityAuditor', () => {
       expect(check).toBeDefined();
       expect(check!.severity).toBe('pass');
       expect(check!.message).toContain('correct permissions');
+      expect(check!.message).toContain('0o600');
     });
 
     it('fails when secrets file has overly permissive permissions', () => {

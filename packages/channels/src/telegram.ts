@@ -131,6 +131,9 @@ export class TelegramChannel implements IChannel {
     this.abortController = new AbortController();
 
     // Validate and warn about non-numeric allowedUsers entries.
+    // NOTE: allowedUsers expects Telegram user IDs as decimal strings,
+    //       not usernames. Telegram identifies users by numeric ID, and we
+    //       compare these string IDs directly against incoming update.from.id.
     const userEntries = cfg.allowedUsers ?? [];
     for (const entry of userEntries) {
       if (!/^\d+$/.test(entry)) {
