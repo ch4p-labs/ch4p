@@ -17,6 +17,21 @@ import { HealthMonitor } from './health.js';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
+/**
+ * Error thrown when a restart strategy has exceeded the maximum
+ * allowed number of restarts for a child.
+ *
+ * Using a dedicated error type allows callers to reliably distinguish
+ * this condition via `instanceof` without depending on error message
+ * strings.
+ */
+export class MaxRestartsExceededError extends Error {
+  constructor(message = 'Max restarts exceeded') {
+    super(message);
+    this.name = 'MaxRestartsExceededError';
+  }
+}
+
 export interface ChildSpec {
   id: string;
   start: () => Promise<ChildHandle>;
@@ -249,10 +264,7 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
       .catch((strategyError: unknown) => {
         // Strategy-level errors (e.g. max restarts) are already emitted
         // inside applyStrategy. Swallow here to avoid unhandled rejection.
-        if (
-          strategyError instanceof Error &&
-          strategyError.message.startsWith('Max restarts')
-        ) {
+        if (strategyError instanceof MaxRestartsExceededError) {
           return;
         }
         // Truly unexpected — re-emit as an error on the supervisor.
@@ -355,7 +367,7 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
         state.restartTimestamps.length,
         policy.windowMs,
       );
-      throw new Error(
+      throw new MaxRestartsExceededError(
         `Max restarts (${policy.maxRestarts}) exceeded for "${state.spec.id}" within ${policy.windowMs}ms window`,
       );
     }
@@ -458,14 +470,14 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
         resolve();
       }, ms);
 
-      const cleanup = () => {
-        controller.signal.removeEventListener('abort', onAbort);
-      };
-
       const onAbort = () => {
         clearTimeout(timer);
         cleanup();
         reject(new Error('Supervisor is shutting down'));
+      };
+
+      const cleanup = () => {
+        controller.signal.removeEventListener('abort', onAbort);
       };
 
       controller.signal.addEventListener('abort', onAbort);
