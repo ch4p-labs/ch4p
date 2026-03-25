@@ -49,8 +49,7 @@ export interface SupervisorEvents {
   'supervisor:started': [];
   'supervisor:stopped': [];
   'supervisor:max_restarts_exceeded': [childId: string, count: number, windowMs: number];
-  // Additional events likely declared elsewhere in this file; this one
-  // ensures that emitting ``error'' is represented in the type system.
+  // Include the standard Node.js "error" event so it is represented in the typed event map.
   'error': [error: Error];
 }
 
@@ -459,14 +458,14 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
         resolve();
       }, ms);
 
+      const cleanup = () => {
+        controller.signal.removeEventListener('abort', onAbort);
+      };
+
       const onAbort = () => {
         clearTimeout(timer);
         cleanup();
         reject(new Error('Supervisor is shutting down'));
-      };
-
-      const cleanup = () => {
-        controller.signal.removeEventListener('abort', onAbort);
       };
 
       controller.signal.addEventListener('abort', onAbort);
