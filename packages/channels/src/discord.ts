@@ -135,7 +135,8 @@ export class DiscordChannel implements IChannel {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private sequence: number | null = null;
   private sessionId: string | null = null;
-  private resumeGatewayUrl: string | null = null;
+  // Note: Discord's resume_gateway_url is intentionally not stored — using
+  // only the hardcoded GATEWAY_URL to prevent SSRF (CodeQL js/request-forgery).
   private botUserId: string | null = null;
   private allowedGuilds: Set<string> = new Set();
   private allowedUsers: Set<string> = new Set();
@@ -300,10 +301,14 @@ export class DiscordChannel implements IChannel {
   // -----------------------------------------------------------------------
 
   private async connectGateway(): Promise<void> {
-    const url = this.resumeGatewayUrl ?? GATEWAY_URL;
+    // Only connect to the hardcoded gateway URL.  Discord provides a
+    // resume_gateway_url in its READY payload, but since it is untrusted
+    // network data CodeQL (correctly) flags it as an SSRF vector.
+    // The default gateway URL already handles resumption via the RESUME
+    // opcode + session_id, so using only the constant is safe and correct.
 
     return new Promise<void>((resolve, reject) => {
-      this.ws = new WebSocket(url);
+      this.ws = new WebSocket(GATEWAY_URL);
       this.reconnectScheduled = false;
 
       let identified = false;
@@ -381,7 +386,6 @@ export class DiscordChannel implements IChannel {
               if (!resumable) {
                 this.sessionId = null;
                 this.sequence = null;
-                this.resumeGatewayUrl = null;
               }
               this.reconnect();
               break;
@@ -393,19 +397,8 @@ export class DiscordChannel implements IChannel {
               if (payload.t === 'READY') {
                 const ready = payload.d as {
                   session_id: string;
-                  resume_gateway_url: string;
                 };
                 this.sessionId = ready.session_id;
-                // Validate & rebuild resume URL to break taint chain (SSRF prevention).
-                // Only allow wss:// to *.discord.gg — reconstruct from parsed parts
-                // so the WebSocket never receives the raw untrusted string.
-                this.resumeGatewayUrl = null;
-                try {
-                  const parsed = new URL(String(ready.resume_gateway_url ?? ''));
-                  if (parsed.protocol === 'wss:' && parsed.hostname.endsWith('.discord.gg')) {
-                    this.resumeGatewayUrl = `wss://${parsed.hostname}${parsed.pathname}${parsed.search}`;
-                  }
-                } catch { /* invalid URL — fall back to default gateway */ }
                 this.reconnectAttempts = 0;
                 if (!identified) {
                   identified = true;

@@ -145,7 +145,8 @@ export class CliChannel implements IChannel {
     }
 
     // Headers: uppercase + underline-style emphasis
-    text = text.replace(/^#{1,6}\s+(.+)$/gm, (_match, heading: string) => {
+    // Use [ \t]+ and \S to avoid ReDoS on lines of only whitespace.
+    text = text.replace(/^#{1,6}[ \t]+(\S[^\n]*)$/gm, (_match, heading: string) => {
       return `\n${heading.toUpperCase()}\n${'='.repeat(heading.length)}`;
     });
 
