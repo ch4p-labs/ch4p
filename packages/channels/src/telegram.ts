@@ -205,7 +205,7 @@ export class TelegramChannel implements IChannel {
         : (message.text ?? '');
 
       // Split long messages into chunks that fit within Telegram's 4096-char limit.
-      const chunks = splitMessage(rawText ?? '', TELEGRAM_MAX_MESSAGE_LEN);
+      const chunks = splitMessage(rawText, TELEGRAM_MAX_MESSAGE_LEN);
       let lastMessageId: string | undefined;
       for (const chunk of chunks) {
         const params: Record<string, unknown> = {
@@ -263,7 +263,7 @@ export class TelegramChannel implements IChannel {
         : (message.text ?? '');
 
       // Truncate to Telegram's limit; full content will be delivered via send() chunks.
-      const text = truncateMessage(rawEditText ?? '', TELEGRAM_MAX_MESSAGE_LEN);
+      const text = truncateMessage(rawEditText, TELEGRAM_MAX_MESSAGE_LEN);
 
       await this.apiCall('editMessageText', {
         chat_id: chatId,

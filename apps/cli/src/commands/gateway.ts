@@ -1451,20 +1451,35 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
       // Per-run timeout — abort the loop if it exceeds the configured duration.
       // Prevents stuck subprocess/engine calls from locking out users indefinitely.
       const DEFAULT_RUN_TIMEOUT_MS = 300_000; // 5 minutes
+      const MIN_RUN_TIMEOUT_MS = 1_000; // 1 second — guard against impractically small values
       /**
        * Per-session run timeout in milliseconds.
        * If `config.agent.runTimeout` is provided it must be a finite, positive
        * number representing milliseconds. Typical values: 10_000–900_000
        * (10 s to 15 min). Invalid or missing values fall back to the default
-       * of 300_000 ms (5 minutes).
+       * of 300_000 ms (5 minutes). Values lower than MIN_RUN_TIMEOUT_MS are
+       * clamped to MIN_RUN_TIMEOUT_MS with a warning, to avoid misconfiguration
+       * causing immediate timeouts.
        */
       const configuredRunTimeout = config.agent.runTimeout;
-      const runTimeoutMs =
+      let runTimeoutMs: number;
+      if (
         typeof configuredRunTimeout === 'number' &&
         Number.isFinite(configuredRunTimeout) &&
         configuredRunTimeout > 0
-          ? configuredRunTimeout
-          : DEFAULT_RUN_TIMEOUT_MS;
+      ) {
+        if (configuredRunTimeout < MIN_RUN_TIMEOUT_MS) {
+          console.warn(
+            `Configured agent.runTimeout (${configuredRunTimeout} ms) is below the minimum recommended ` +
+            `${MIN_RUN_TIMEOUT_MS} ms — clamping to ${MIN_RUN_TIMEOUT_MS} ms.`,
+          );
+          runTimeoutMs = MIN_RUN_TIMEOUT_MS;
+        } else {
+          runTimeoutMs = configuredRunTimeout;
+        }
+      } else {
+        runTimeoutMs = DEFAULT_RUN_TIMEOUT_MS;
+      }
       runTimer = setTimeout(() => {
         loop.abort('Gateway run timeout exceeded');
       }, runTimeoutMs);

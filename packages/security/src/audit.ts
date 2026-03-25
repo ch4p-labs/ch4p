@@ -116,11 +116,12 @@ export class SecurityAuditor {
     add: (name: string, severity: AuditSeverity, message: string) => void,
   ): void {
     // Exact-match only: directories where the root itself is dangerous but
-    // subdirectories may be legitimate workspaces (e.g. /tmp/my-project).
-    const exactOnly = new Set(['/', '/usr', '/var', '/tmp']);
+    // subdirectories may be legitimate workspaces.
+    const exactOnly = new Set(['/', '/usr', '/var']);
     // Prefix-match: directories where any subdirectory is also dangerous
-    // (e.g. /etc/passwd, /root/.ssh, /proc/1/maps).
-    const prefixDangerous = ['/etc', '/root', '/sys', '/proc', '/dev'];
+    // (e.g. /etc/passwd, /root/.ssh, /proc/1/maps, /tmp/my-project).
+    // /tmp is world-writable and included here to flag privilege-escalation risk.
+    const prefixDangerous = ['/etc', '/root', '/sys', '/proc', '/dev', '/tmp'];
     const ws = resolve(this.config.workspace);
 
     if (exactOnly.has(ws) || prefixDangerous.some(d => ws === d || ws.startsWith(d + '/'))) {
@@ -223,8 +224,10 @@ export class SecurityAuditor {
       const stats = statSync(storePath);
       const mode = stats.mode & 0o777;
 
-      // Check file permissions (Unix). Owner read/write only (0o600).
-      if ((mode & 0o077) !== 0) {
+      // Check file permissions (Unix). Must be exactly owner read/write (0o600).
+      // Using exact equality rather than a bitmask ensures modes like 0o700
+      // (owner execute) or 0o400 (read-only) are also rejected.
+      if (mode !== 0o600) {
         add(
           'secrets_file',
           'fail',
