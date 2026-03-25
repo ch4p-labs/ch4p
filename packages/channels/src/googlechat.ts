@@ -413,8 +413,5 @@ export class GoogleChatChannel implements IChannel {
 /** Encode a string as base64url (no padding). */
 function base64urlEncode(str: string): string {
   return Buffer.from(str, 'utf8')
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+    .toString('base64url'); // Node built-in — no padding, URL-safe alphabet
 }

@@ -487,19 +487,24 @@ export class WebFetchTool implements ITool {
 function htmlToText(html: string): string {
   let text = html;
 
-  // Remove script and style blocks entirely
-  text = text.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
-  text = text.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
-  text = text.replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, '');
-
-  // Remove HTML comments
-  text = text.replace(/<!--[\s\S]*?-->/g, '');
+  // Remove script, style and noscript blocks entirely.
+  // Loop to handle nested/malformed cases like <script<script>> that survive
+  // a single pass (CodeQL js/incomplete-multi-character-sanitization).
+  // The \s* before > handles </script > variants (js/bad-tag-filter).
+  let prev: string;
+  do {
+    prev = text;
+    text = text.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '');
+    text = text.replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '');
+    text = text.replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript\s*>/gi, '');
+    text = text.replace(/<!--[\s\S]*?-->/g, '');
+  } while (text !== prev);
 
   // Replace block-level elements with newlines
   text = text.replace(/<\/?(p|div|br|hr|h[1-6]|ul|ol|li|table|tr|td|th|blockquote|pre|section|article|header|footer|nav|main|aside|figure|figcaption)\b[^>]*\/?>/gi, '\n');
 
-  // Remove remaining tags
-  text = text.replace(/<[^>]+>/g, '');
+  // Remove remaining tags (use [^<>]+ to prevent backtracking on nested <)
+  text = text.replace(/<[^<>]+>/g, '');
 
   // Decode HTML entities
   text = decodeHtmlEntities(text);

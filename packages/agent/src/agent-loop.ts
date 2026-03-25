@@ -80,8 +80,8 @@ import { ToolWorkerPool } from './worker-pool.js';
 export function stripToolXml(text: string): string {
   if (!text) return text;
   return text
-    .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '')
-    .replace(/<tool_result>[\s\S]*?<\/tool_result>/g, '')
+    .replace(/<tool_call>(?:[^<]|<(?!\/tool_call>))*<\/tool_call>/g, '')
+    .replace(/<tool_result>(?:[^<]|<(?!\/tool_result>))*<\/tool_result>/g, '')
     .replace(/\n{3,}/g, '\n\n') // collapse excessive blank lines left behind
     .trim();
 }

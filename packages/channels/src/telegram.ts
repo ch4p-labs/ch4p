@@ -584,6 +584,9 @@ export class TelegramChannel implements IChannel {
   private gfmToHtml(text: string): string {
     const esc = (s: string): string =>
       s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    /** Escape for use inside HTML attribute values (also escapes quotes). */
+    const escAttr = (s: string): string =>
+      esc(s).replace(/"/g, '&quot;');
 
     // Fragments that are already valid HTML — protected from further processing.
     const frags: string[] = [];
@@ -594,7 +597,7 @@ export class TelegramChannel implements IChannel {
     };
 
     // 1. Fenced code blocks: ```lang\ncode\n```
-    text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_m, lang: string, code: string) => {
+    text = text.replace(/```(\w*)\n?((?:[^`]|`(?!``))*?)```/g, (_m, lang: string, code: string) => {
       const safe = esc(code.replace(/\n$/, ''));
       return protect(lang
         ? `<pre><code class="language-${lang}">${safe}</code></pre>`
@@ -633,7 +636,7 @@ export class TelegramChannel implements IChannel {
 
     // 9. Links: [text](url)
     text = text.replace(/\[([^\]\n]+)\]\(([^)\n]+)\)/g, (_m, t: string, url: string) =>
-      protect(`<a href="${esc(url)}">${esc(t)}</a>`)
+      protect(`<a href="${escAttr(url)}">${esc(t)}</a>`)
     );
 
     // 10. Horizontal rules

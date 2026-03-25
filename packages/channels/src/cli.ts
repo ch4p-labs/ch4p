@@ -126,7 +126,7 @@ export class CliChannel implements IChannel {
     let text = md;
 
     // Code blocks: remove fences, indent content
-    text = text.replace(/```[\s\S]*?\n([\s\S]*?)```/g, (_match, code: string) => {
+    text = text.replace(/```[^\n]*\n((?:[^`]|`(?!``))*?)```/g, (_match, code: string) => {
       return code
         .split('\n')
         .map((line: string) => `  ${line}`)
@@ -163,6 +163,6 @@ export class CliChannel implements IChannel {
 
   /** Strip HTML tags, returning plain text. */
   private stripHtml(html: string): string {
-    return html.replace(/<[^>]*>/g, '').trim();
+    return html.replace(/<[^<>]*>/g, '').trim();
   }
 }

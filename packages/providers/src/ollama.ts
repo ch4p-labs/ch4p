@@ -133,7 +133,9 @@ export class OllamaProvider implements IProvider {
   private readonly baseUrl: string;
 
   constructor(config?: OllamaProviderConfig) {
-    this.baseUrl = (config?.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+    let base = config?.baseUrl ?? DEFAULT_BASE_URL;
+    while (base.endsWith('/')) base = base.slice(0, -1);
+    this.baseUrl = base;
   }
 
   // -----------------------------------------------------------------------

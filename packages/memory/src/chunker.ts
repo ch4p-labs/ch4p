@@ -52,7 +52,7 @@ export function chunkMarkdown(text: string, opts: ChunkOpts = {}): ChunkResult[]
     const trimmed = para.trim();
 
     // Check if this paragraph is a heading
-    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/m);
+    const headingMatch = trimmed.match(/^(#{1,6})[ \t]+(\S[^\n]*)$/m);
     if (headingMatch) {
       const level = headingMatch[1]!.length;
       const headingText = headingMatch[2]!.trim();

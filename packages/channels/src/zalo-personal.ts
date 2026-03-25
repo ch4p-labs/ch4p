@@ -81,7 +81,8 @@ export class ZaloPersonalChannel implements IChannel {
     }
 
     // Normalize: strip trailing slash.
-    cfg.bridgeUrl = cfg.bridgeUrl.replace(/\/+$/, '');
+    // Strip trailing slashes without regex (avoids ReDoS on pathological input).
+    while (cfg.bridgeUrl.endsWith('/')) cfg.bridgeUrl = cfg.bridgeUrl.slice(0, -1);
     this.config = cfg;
 
     // Log TOS warning.

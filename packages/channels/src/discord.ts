@@ -391,7 +391,12 @@ export class DiscordChannel implements IChannel {
                   resume_gateway_url: string;
                 };
                 this.sessionId = ready.session_id;
-                this.resumeGatewayUrl = ready.resume_gateway_url;
+                // Validate resume URL — must be wss:// to discord.gg to prevent SSRF.
+                const resumeUrl = ready.resume_gateway_url;
+                this.resumeGatewayUrl =
+                  typeof resumeUrl === 'string' && /^wss:\/\/[^/]*\.discord\.gg(\/|$|\?)/.test(resumeUrl)
+                    ? resumeUrl
+                    : null;
                 this.reconnectAttempts = 0;
                 if (!identified) {
                   identified = true;
@@ -438,9 +443,12 @@ export class DiscordChannel implements IChannel {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
     }
+    // Clamp interval to sane range (1 s – 5 min) to prevent resource exhaustion
+    // from a malicious or buggy gateway payload.
+    const clamped = Math.max(1_000, Math.min(intervalMs, 300_000));
     // Send first heartbeat after a random jitter.
-    setTimeout(() => this.sendHeartbeat(), Math.random() * intervalMs);
-    this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), intervalMs);
+    setTimeout(() => this.sendHeartbeat(), Math.random() * clamped);
+    this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), clamped);
   }
 
   private sendHeartbeat(): void {
