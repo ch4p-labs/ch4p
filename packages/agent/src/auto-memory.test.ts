@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { IMemoryBackend, MemoryResult, MemoryEntry } from '@ch4p/core';
 import { ContextManager } from './context.js';
 import { createAutoRecallHook, createAutoSummarizeHook } from './auto-memory.js';
