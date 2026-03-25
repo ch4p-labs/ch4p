@@ -478,6 +478,10 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
     }
 
     return new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        controller.signal.removeEventListener('abort', onAbort);
+      };
+
       const timer = setTimeout(() => {
         cleanup();
         resolve();
@@ -487,10 +491,6 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
         clearTimeout(timer);
         cleanup();
         reject(new Error('Supervisor is shutting down'));
-      };
-
-      const cleanup = () => {
-        controller.signal.removeEventListener('abort', onAbort);
       };
 
       controller.signal.addEventListener('abort', onAbort);
