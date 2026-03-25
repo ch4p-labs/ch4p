@@ -950,7 +950,7 @@ export async function gateway(args: string[]): Promise<void> {
   })();
 
   // Periodic eviction of stale entries from unbounded maps (every 5 minutes).
-  const DEFAULT_CONTEXT_IDLE_MS = 60 * 60_000; // 1 hour
+  const DEFAULT_CONTEXT_IDLE_MS = 60 * 60 * 1000; // 1 hour
   const evictionTimer = setInterval(() => {
     gatewayRateLimiter.evictStale();
 
@@ -1006,7 +1006,7 @@ export async function gateway(args: string[]): Promise<void> {
     //   NODE_OPTIONS="--heapsnapshot-near-heap-limit=1 --max-old-space-size=4096" ch4p gateway
     if (postHeapMB > 1500) {
       console.log(
-        `  ${YELLOW}[OOM warning]${RESET} Heap at ${postHeapMB}MB — restart the gateway or set NODE_OPTIONS=--max-old-space-size=512`,
+        `  ${YELLOW}[OOM warning]${RESET} Heap at ${postHeapMB}MB — restart the gateway or increase NODE_OPTIONS=--max-old-space-size (e.g. 4096)`,
       );
     } else if (postHeapMB > 500) {
       console.log(`  ${DIM}[mem pressure]${RESET} Heap at ${postHeapMB}MB — evicting with 5 min idle window${RESET}`);
@@ -1451,7 +1451,20 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
       // Per-run timeout — abort the loop if it exceeds the configured duration.
       // Prevents stuck subprocess/engine calls from locking out users indefinitely.
       const DEFAULT_RUN_TIMEOUT_MS = 300_000; // 5 minutes
-      const runTimeoutMs = config.agent.runTimeout ?? DEFAULT_RUN_TIMEOUT_MS;
+      /**
+       * Per-session run timeout in milliseconds.
+       * If `config.agent.runTimeout` is provided it must be a finite, positive
+       * number representing milliseconds. Typical values: 10_000–900_000
+       * (10 s to 15 min). Invalid or missing values fall back to the default
+       * of 300_000 ms (5 minutes).
+       */
+      const configuredRunTimeout = config.agent.runTimeout;
+      const runTimeoutMs =
+        typeof configuredRunTimeout === 'number' &&
+        Number.isFinite(configuredRunTimeout) &&
+        configuredRunTimeout > 0
+          ? configuredRunTimeout
+          : DEFAULT_RUN_TIMEOUT_MS;
       runTimer = setTimeout(() => {
         loop.abort('Gateway run timeout exceeded');
       }, runTimeoutMs);

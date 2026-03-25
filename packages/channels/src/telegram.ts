@@ -139,7 +139,10 @@ export class TelegramChannel implements IChannel {
       if (!/^\d+$/.test(entry)) {
         console.warn(
           `[Telegram] allowedUsers entry "${entry}" is not a numeric Telegram user ID. ` +
-          'Telegram identifies users by numeric ID, not username. This entry may never match.',
+          'Telegram identifies users by numeric ID, not username. This entry may never match ' +
+          'and the user may never be recognized as allowed. To fix this, use a tool such as ' +
+          '@userinfobot or consult the Telegram Bot API documentation to obtain the correct ' +
+          'numeric user ID and configure that value instead.',
         );
       }
     }
@@ -353,10 +356,12 @@ export class TelegramChannel implements IChannel {
   private startPolling(): void {
     if (!this.running && !this.abortController) return;
 
-    // Client-side deadline: 5 s longer than the server-side timeout (30 s).
+    // Server-side long-poll timeout in seconds (sent to Telegram).
+    const POLL_SERVER_TIMEOUT_S = 30;
+    // Client-side deadline: 5 s longer than the server-side timeout.
     // Without this, a stalled or slow TLS connection hangs the polling loop
     // indefinitely and prevents the old connection from being cleaned up.
-    const POLL_CLIENT_TIMEOUT_MS = 35_000;
+    const POLL_CLIENT_TIMEOUT_MS = (POLL_SERVER_TIMEOUT_S + 5) * 1000;
 
     const poll = async () => {
       if (!this.running) return;
@@ -371,7 +376,7 @@ export class TelegramChannel implements IChannel {
 
         const updates = await this.apiCall<TelegramUpdate[]>('getUpdates', {
           offset: this.pollOffset,
-          timeout: 30,
+          timeout: POLL_SERVER_TIMEOUT_S,
           limit: 100,
         }, signal);
 

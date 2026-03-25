@@ -115,10 +115,15 @@ export class SecurityAuditor {
   private checkWorkspaceNotSystem(
     add: (name: string, severity: AuditSeverity, message: string) => void,
   ): void {
-    const dangerous = ['/', '/etc', '/root', '/usr', '/var', '/tmp', '/sys', '/proc', '/dev'];
+    // Exact-match only: directories where the root itself is dangerous but
+    // subdirectories may be legitimate workspaces (e.g. /tmp/my-project).
+    const exactOnly = new Set(['/', '/usr', '/var', '/tmp']);
+    // Prefix-match: directories where any subdirectory is also dangerous
+    // (e.g. /etc/passwd, /root/.ssh, /proc/1/maps).
+    const prefixDangerous = ['/etc', '/root', '/sys', '/proc', '/dev'];
     const ws = resolve(this.config.workspace);
 
-    if (dangerous.includes(ws)) {
+    if (exactOnly.has(ws) || prefixDangerous.some(d => ws === d || ws.startsWith(d + '/'))) {
       add(
         'workspace_safe_location',
         'fail',

@@ -159,6 +159,21 @@ describe('SecurityAuditor', () => {
         expect(check!.message).toContain('system directory');
       });
     }
+
+    const dangerousSubpaths = ['/etc/passwd', '/root/.ssh', '/proc/1/maps'];
+
+    for (const subpath of dangerousSubpaths) {
+      it(`fails when workspace is dangerous subpath "${subpath}"`, () => {
+        const config = makeConfig({ workspace: subpath });
+        const auditor = new SecurityAuditor(config);
+        const results = auditor.audit();
+
+        const check = results.find(r => r.name === 'workspace_safe_location');
+        expect(check).toBeDefined();
+        expect(check!.severity).toBe('fail');
+        expect(check!.message).toContain('system directory');
+      });
+    }
   });
 
   // -----------------------------------------------------------------------
