@@ -6,8 +6,7 @@
  * channel C2S → InboundMessage translation, and AWM snapshots.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { generateId } from '@ch4p/core';
+import { describe, it, expect, beforeEach } from 'vitest';
 import type { ToolContext } from '@ch4p/core';
 
 // Components

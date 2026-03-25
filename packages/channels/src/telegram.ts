@@ -625,7 +625,7 @@ export class TelegramChannel implements IChannel {
     // 3. Tables: convert each row to plain text, drop separator rows (|---|---|).
     text = text.replace(/^\|.+\|[ \t]*$/gm, (row) => {
       const inner = row.replace(/^\||\|$/g, '');
-      if (/^[\s:|–\-|]+$/.test(inner)) return ''; // separator row
+      if (/^[\s:|\u2013\-]+$/.test(inner)) return ''; // separator row
       return inner.split('|').map((c) => c.trim()).join(' │ ');
     });
     text = text.replace(/\n{3,}/g, '\n\n'); // collapse extra blank lines

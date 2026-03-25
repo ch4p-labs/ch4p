@@ -148,8 +148,22 @@ export class WebFetchTool implements ITool {
 
     const { url, prompt } = args as WebFetchArgs;
 
-    // Upgrade http to https
-    let fetchUrl = url.replace(/^http:\/\//, 'https://');
+    // Reject plain HTTP — upgrading to HTTPS silently can bypass SSRF checks
+    // if the target only serves HTTP (e.g. internal services).
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { success: false, output: '', error: 'Invalid URL.', metadata: { url } };
+    }
+    if (parsed.protocol === 'http:') {
+      return {
+        success: false, output: '',
+        error: 'Plain HTTP URLs are not allowed. Please use an HTTPS URL.',
+        metadata: { url },
+      };
+    }
+    let fetchUrl = parsed.toString();
 
     if (context.abortSignal.aborted) {
       return {
@@ -161,7 +175,6 @@ export class WebFetchTool implements ITool {
 
     // Async SSRF check: resolve DNS and verify the resolved IPs are not private.
     try {
-      const parsed = new URL(fetchUrl);
       const dnsCheck = await resolveAndCheckPrivate(parsed.hostname);
       if (dnsCheck.blocked) {
         return {
@@ -362,8 +375,9 @@ export class WebFetchTool implements ITool {
         textContent = body;
       }
 
-      // Truncate output if necessary
-      if (textContent.length > MAX_OUTPUT_LENGTH) {
+      // Truncate output if necessary — capture flag before slicing.
+      const wasTruncated = textContent.length > MAX_OUTPUT_LENGTH;
+      if (wasTruncated) {
         textContent =
           textContent.slice(0, MAX_OUTPUT_LENGTH) +
           '\n\n... [content truncated] ...';
@@ -382,7 +396,7 @@ export class WebFetchTool implements ITool {
           status: response.status,
           contentType,
           size: body.length,
-          truncated: textContent.length > MAX_OUTPUT_LENGTH,
+          truncated: wasTruncated,
         },
       };
     } catch (err) {

@@ -5,7 +5,7 @@
  */
 
 import { join } from 'node:path';
-import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { SecurityAuditor } from './audit.js';
 import type { SecurityAuditorConfig } from './audit.js';

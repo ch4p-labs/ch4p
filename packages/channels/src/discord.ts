@@ -32,6 +32,7 @@ import type {
   Attachment,
 } from '@ch4p/core';
 import WebSocket from 'ws';
+import { splitMessage, truncateMessage, evictOldTimestamps } from './message-utils.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,7 +48,6 @@ export interface DiscordConfig extends ChannelConfig {
 }
 
 /** Minimum interval between message edits for streaming (Discord rate limit). */
-import { splitMessage, truncateMessage, evictOldTimestamps } from './message-utils.js';
 
 const DISCORD_MAX_MESSAGE_LEN = 2_000;
 const DISCORD_EDIT_RATE_LIMIT_MS = 1_000;

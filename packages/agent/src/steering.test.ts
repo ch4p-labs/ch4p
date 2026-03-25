@@ -1,4 +1,3 @@
-import { vi } from 'vitest';
 import { SteeringQueue } from './steering.js';
 import type { SteeringMessage } from './steering.js';
 

@@ -138,7 +138,6 @@ describe('renderMarkdown', () => {
   it('renders code blocks without language', () => {
     const md = '```\nhello\n```';
     const result = renderMarkdown(md);
-    const codes = findByType(result, 'code');
     // Filter to codes inside <pre> (not inline codes)
     const preCodes = findByType(result, 'pre').flatMap((pre) => findByType(pre, 'code'));
     expect(preCodes).toHaveLength(1);
