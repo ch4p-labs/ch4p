@@ -10,7 +10,7 @@ ch4p separates concerns into six layers. Each layer has a single job, talks only
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Channels (CLI, Telegram, Discord, …)   Canvas (tldraw, A2UI)  │  ← Surface
+│  Channels (CLI, Telegram, Discord, …)   GUI app   Canvas (A2UI) │  ← Surface
 ├─────────────────────────────────────────────────────────────────┤
 │  Gateway (HTTP server, WS upgrade, session routing)             │  ← Routing
 ├─────────────────────────────────────────────────────────────────┤
@@ -26,7 +26,9 @@ ch4p separates concerns into six layers. Each layer has a single job, talks only
 
 ### Channels (Surface)
 
-Channels are the user-facing endpoints. Each channel implements the IChannel interface: receive messages from a platform, normalize them into a common InboundMessage format, and send responses back. The CLI terminal, Telegram, Discord, Slack, Matrix, and 12 other adapters all sit here. So does the Canvas, which translates spatial interactions (button clicks, form submissions) into the same message format.
+Channels are the user-facing endpoints. Each channel implements the IChannel interface: receive messages from a platform, normalize them into a common InboundMessage format, and send responses back. The CLI terminal, Telegram, Discord, Slack, Matrix, and 11 other adapters all sit here. So does the Canvas, which translates spatial interactions (button clicks, form submissions) into the same message format.
+
+The GUI app (`apps/gui`, launched with `ch4p gui`) is a separate surface that lives alongside the channels rather than inside them. It is a desktop application: a React client built by Vite, a small Node server built by tsup, and a shared protocol layer between them. When the user runs `ch4p gui`, the CLI loads the GUI server bundle, which boots the gateway in-process, auto-pairs against it, and then opens a browser to the local UI on port 4810. The chat in the GUI talks to the agent through the same gateway routes the messaging channels use, so anything you can do over Telegram you can also do in the GUI without a separate code path.
 
 Channels know nothing about LLMs, tools, or memory. They convert platform-specific I/O into a common shape and hand it to the gateway.
 

@@ -2,9 +2,12 @@
 
 ## Supported versions
 
+Only the latest minor release receives security fixes. Older versions are not patched — upgrade if you are running anything below the row marked **Yes**.
+
 | Version | Supported |
 |---------|-----------|
-| 0.1.x   | Yes       |
+| 0.5.x   | Yes       |
+| < 0.5   | No        |
 
 ## Reporting a vulnerability
 

@@ -66,12 +66,13 @@ Engine ─── native LLM · echo · CLI subprocess
 Provider ─── Anthropic · OpenAI · Google · OpenRouter · Ollama · Bedrock
 ```
 
-Three modes:
+Four modes:
 
 | Mode | Command | Description |
 |------|---------|-------------|
 | **REPL** | `ch4p agent` | Interactive chat with teal-branded UI and optional `--voice` wake |
 | **Gateway** | `ch4p gateway` | Multi-channel server on port 18789 |
+| **GUI** | `ch4p gui` | Desktop graphical interface — auto-starts the gateway, native chat, live terminal, themed config UI (port 4810) |
 | **Canvas** | `ch4p canvas` | Spatial browser workspace with infinite tldraw canvas |
 
 Every subsystem is a trait interface — swap any component via config, zero code changes.
@@ -191,7 +192,7 @@ corepack pnpm --filter @ch4p/core build   # Build single package
 - TypeScript strict mode, ES2023 target, NodeNext module resolution
 - ESM-only (all imports use `.js` extension)
 - Zero required external runtime dependencies for core, security, and CLI
-- 91 test files, 2642 tests, 0 vulnerabilities
+- 102 test files, 2711 tests, 0 vulnerabilities
 
 ## Configuration
 

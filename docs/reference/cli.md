@@ -60,7 +60,7 @@ The wizard adapts to your environment. If CLI engines (Claude Code, Codex, Ollam
 4. **Autonomy level** — read-only, supervised, or full
 5. **Additional features** — ~20 individually skippable categories in 4 groups:
    - **Providers** — Google/Gemini, OpenRouter, AWS Bedrock
-   - **Channels** — multi-select from 14 messaging channels with per-channel config
+   - **Channels** — multi-select from 16 messaging channels with per-channel config
    - **Services** — web search, browser, voice STT/TTS, MCP servers, cron jobs
    - **System** — memory, verification, gateway, security, commands, tunnel, canvas, observability, skills
 6. **Save** — writes config and runs a security audit
@@ -222,7 +222,7 @@ ch4p status --memory
   ch4p Status
   ────────────────────────────────────────────────────
 
-  Version        0.1.0
+  Version        0.5.0
   Config         ~/.ch4p/config.json
   Data dir       ~/.ch4p
   Provider       anthropic

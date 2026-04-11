@@ -10,6 +10,8 @@ Built in TypeScript on Node.js, ch4p combines BEAM-inspired concurrency, a zero-
 
 **New to ch4p?** Begin with the [Getting Started tutorial](tutorials/getting-started.md). You will install ch4p, run the onboard wizard, send your first message, and watch a tool execute — all in about ten minutes.
 
+**Prefer a desktop app?** Run `ch4p gui` to launch the graphical interface — a native chat window with live terminal, themed configuration UI, and an auto-started gateway underneath. It bundles every CLI capability in a desktop surface and runs on port 4810.
+
 **Want a visual workspace?** Run `ch4p canvas` to launch the interactive canvas — a browser-based spatial workspace where the agent renders cards, charts, forms, and more on an infinite tldraw canvas. See the [Use Canvas](how-to/use-canvas.md) guide.
 
 **Want to connect a channel?** The [First Channel tutorial](tutorials/first-channel.md) walks you through wiring up Telegram.
