@@ -62,10 +62,10 @@ function renderBlock(lines: string[], blockKey: string): ReactNode[] {
       continue;
     }
 
-    if (/^[\-*]\s/.test(line)) {
+    if (/^[-*]\s/.test(line)) {
       const items: string[] = [];
-      while (i < lines.length && /^[\-*]\s/.test(lines[i]!)) {
-        items.push(lines[i]!.replace(/^[\-*]\s+/, ''));
+      while (i < lines.length && /^[-*]\s/.test(lines[i]!)) {
+        items.push(lines[i]!.replace(/^[-*]\s+/, ''));
         i++;
       }
       elements.push(

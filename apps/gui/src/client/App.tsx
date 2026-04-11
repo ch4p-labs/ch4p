@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import { ThemeProvider } from './theme/ThemeProvider';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './pages/Dashboard';

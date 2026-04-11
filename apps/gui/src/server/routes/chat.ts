@@ -77,7 +77,6 @@ function extractReply(raw: string): string {
 
   // Collect reply lines, filtering out thinking/tool/footer noise
   const replyLines: string[] = [];
-  let inThinking = false;
 
   for (let i = startIdx; i < lines.length; i++) {
     const t = lines[i]!.trim();
@@ -175,7 +174,13 @@ export async function handleChat(payload: ChatRequest): Promise<ChatResponse> {
         responseTimer = setTimeout(() => {
           if (resolved) return;
           resolved = true;
-          child.kill('SIGKILL');
+          // Try graceful shutdown first; force-kill only if still alive after grace period.
+          child.kill('SIGTERM');
+          setTimeout(() => {
+            if (child.exitCode === null && child.signalCode === null) {
+              child.kill('SIGKILL');
+            }
+          }, 2000);
           resolve({
             reply: extractReply(stdout),
             sessionId: payload.sessionId ?? 'cli',
@@ -223,7 +228,12 @@ export async function handleChat(payload: ChatRequest): Promise<ChatResponse> {
       if (resolved) return;
       resolved = true;
       if (responseTimer) clearTimeout(responseTimer);
-      child.kill('SIGKILL');
+      child.kill('SIGTERM');
+      setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null) {
+          child.kill('SIGKILL');
+        }
+      }, 2000);
 
       if (stdout.trim()) {
         resolve({

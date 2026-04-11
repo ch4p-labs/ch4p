@@ -39,7 +39,7 @@ export function Dashboard() {
 
             <Card title="Autonomy">
               <div className="autonomy-display">
-                <Badge status={
+                <Badge variant={
                   status.data.autonomy === 'readonly' ? 'ok' :
                   status.data.autonomy === 'supervised' ? 'warn' : 'fail'
                 }>
@@ -105,7 +105,7 @@ export function Dashboard() {
             <div className="doctor-checks">
               {doctor.data.checks.map((check, i) => (
                 <div key={i} className="doctor-check-row">
-                  <Badge status={check.status}>{check.status}</Badge>
+                  <Badge variant={check.status}>{check.status}</Badge>
                   <span className="doctor-check-name">{check.name}</span>
                   <span className="doctor-check-message">{check.message}</span>
                 </div>
@@ -113,9 +113,9 @@ export function Dashboard() {
             </div>
 
             <div className="doctor-summary">
-              <Badge status="ok">{doctor.data.summary.ok} OK</Badge>
-              <Badge status="warn">{doctor.data.summary.warn} WARN</Badge>
-              <Badge status="fail">{doctor.data.summary.fail} FAIL</Badge>
+              <Badge variant="ok">{doctor.data.summary.ok} OK</Badge>
+              <Badge variant="warn">{doctor.data.summary.warn} WARN</Badge>
+              <Badge variant="fail">{doctor.data.summary.fail} FAIL</Badge>
               <span className="text-muted">({doctor.data.summary.total} checks)</span>
             </div>
           </>

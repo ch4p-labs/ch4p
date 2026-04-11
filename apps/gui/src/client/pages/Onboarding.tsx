@@ -38,20 +38,6 @@ const ENGINE_PROVIDER: Record<string, string> = {
   'ollama': 'ollama',
 };
 
-const STEP_LABELS: Record<StepId, string> = {
-  welcome: 'Welcome',
-  engine: 'Engine',
-  provider: 'Provider',
-  apikey: 'API Key',
-  model: 'Model',
-  autonomy: 'Autonomy',
-  channels: 'Channels',
-  'channel-config': 'Config',
-  features: 'Features',
-  review: 'Review',
-  complete: 'Done',
-};
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -118,6 +104,17 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
     }
     setSelectedModel(''); // reset model when engine changes
   }, [selectedEngine]);
+
+  // Auto-select first available model when models load for the active provider.
+  // Must live in an effect, not in render — calling setState from render causes
+  // an infinite re-render loop.
+  useEffect(() => {
+    if (selectedModel) return;
+    const models = (engines.data?.models ?? []).filter(m => m.provider === effectiveProvider);
+    if (models.length > 0) {
+      setSelectedModel(models[0]!.id);
+    }
+  }, [engines.data, effectiveProvider, selectedModel]);
 
   // Channel config helper — get channels that need fields
   const channelsNeedingConfig = Array.from(selectedChannels)
@@ -309,9 +306,6 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
 
   const renderModel = () => {
     const models = (engines.data?.models ?? []).filter(m => m.provider === effectiveProvider);
-    if (!selectedModel && models.length > 0) {
-      setSelectedModel(models[0]!.id);
-    }
 
     const providerLabel = effectiveProvider === 'anthropic' ? 'Anthropic'
       : effectiveProvider === 'openai' ? 'OpenAI'

@@ -165,6 +165,12 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
 // Public API
 // ---------------------------------------------------------------------------
 
+let lastConfigParseError: string | null = null;
+
+export function getConfigParseError(): string | null {
+  return lastConfigParseError;
+}
+
 export function loadConfig(): GuiConfig {
   loadEnvFile();
   const defaults = getDefaultConfig();
@@ -173,8 +179,15 @@ export function loadConfig(): GuiConfig {
   const configPath = getConfigPath();
   if (existsSync(configPath)) {
     const raw = readFileSync(configPath, 'utf8');
-    const userConfig = JSON.parse(raw) as Record<string, unknown>;
-    merged = deepMerge(defaults as unknown as Record<string, unknown>, userConfig) as unknown as GuiConfig;
+    try {
+      const userConfig = JSON.parse(raw) as Record<string, unknown>;
+      merged = deepMerge(defaults as unknown as Record<string, unknown>, userConfig) as unknown as GuiConfig;
+      lastConfigParseError = null;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      lastConfigParseError = `Failed to parse ${configPath}: ${msg}`;
+      console.warn(`[ch4p-gui] ${lastConfigParseError} — falling back to defaults`);
+    }
   }
 
   return resolveEnvVars(merged) as GuiConfig;
