@@ -2,7 +2,7 @@
  * GET /api/status — system status (mirrors `ch4p status` CLI command).
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, getConfigPath, getCh4pDir, configExists } from '../config.js';

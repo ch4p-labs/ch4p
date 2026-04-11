@@ -4,7 +4,7 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { loadConfig, configExists, getCh4pDir } from '../config.js';
+import { loadConfig, configExists } from '../config.js';
 
 export interface ToolInfo {
   name: string;
