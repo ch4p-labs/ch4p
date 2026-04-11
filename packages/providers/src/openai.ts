@@ -64,7 +64,10 @@ const OPENAI_MODELS: ModelInfo[] = [
     inputCostPer1k: 0.0001,
     outputCostPer1k: 0.0004,
   },
-  // Reasoning models
+  // Reasoning models — both o3 and o4-mini support function calling on the
+  // Responses and Chat Completions APIs (verified against OpenAI docs 2026-04).
+  // Source: https://platform.openai.com/docs/guides/reasoning (function calling
+  // listed as supported for o3 and o4-mini families).
   {
     id: 'o3',
     name: 'o3',

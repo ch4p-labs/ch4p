@@ -125,7 +125,14 @@ describe('OpenAIProvider', () => {
       expect(provider.supportsTools('gpt-4-custom')).toBe(true);
     });
 
-    it('returns false for models without tool support', () => {
+    it('returns true for reasoning models that support function calling', () => {
+      // o3 and o4-mini both support tools per OpenAI docs (verified 2026-04).
+      expect(provider.supportsTools('o3')).toBe(true);
+      expect(provider.supportsTools('o4-mini')).toBe(true);
+    });
+
+    it('returns false for unknown reasoning-style models without an entry', () => {
+      // Models not in the catalog and without the gpt-4 prefix fall through to false.
       expect(provider.supportsTools('o1')).toBe(false);
       expect(provider.supportsTools('o3-mini')).toBe(false);
     });
