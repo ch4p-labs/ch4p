@@ -23,8 +23,19 @@ export async function gui(args: string[]): Promise<void> {
   // Parse args
   for (let i = 0; i < args.length; i++) {
     if ((args[i] === '--port' || args[i] === '-p') && args[i + 1]) {
-      const p = parseInt(args[i + 1]!, 10);
-      if (!isNaN(p) && p > 0 && p <= 65535) port = p;
+      const raw = args[i + 1]!;
+      const p = parseInt(raw, 10);
+      if (Number.isNaN(p) || String(p) !== raw.trim()) {
+        console.error(`\n  ${RED}Invalid --port value:${RESET} ${DIM}${raw}${RESET} is not a number.\n`);
+        process.exitCode = 1;
+        return;
+      }
+      if (p < 1 || p > 65535) {
+        console.error(`\n  ${RED}Invalid --port value:${RESET} ${DIM}${raw}${RESET} must be between 1 and 65535.\n`);
+        process.exitCode = 1;
+        return;
+      }
+      port = p;
       i++;
     }
     if (args[i] === '--no-open') {

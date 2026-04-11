@@ -20,6 +20,8 @@ export interface LogsResponse {
   logsDir: string;
   entries: LogEntry[];
   available: string[];
+  /** State of the logs directory: ok (readable), missing (ENOENT), forbidden (EACCES). */
+  state: 'ok' | 'missing' | 'forbidden';
 }
 
 /** Gateway startup marker (ANSI-stripped). */
@@ -77,15 +79,19 @@ export function getLogs(maxLines = 200): LogsResponse {
   const logsDir = getLogsDir();
 
   if (!existsSync(logsDir)) {
-    return { logsDir, entries: [], available: [] };
+    return { logsDir, entries: [], available: [], state: 'missing' };
   }
 
   // List all log files
   let files: string[];
   try {
     files = readdirSync(logsDir).filter(f => f.endsWith('.log')).sort();
-  } catch {
-    return { logsDir, entries: [], available: [] };
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    const state: LogsResponse['state'] = code === 'EACCES' || code === 'EPERM'
+      ? 'forbidden'
+      : code === 'ENOENT' ? 'missing' : 'forbidden';
+    return { logsDir, entries: [], available: [], state };
   }
 
   const entries: LogEntry[] = [];
@@ -129,5 +135,5 @@ export function getLogs(maxLines = 200): LogsResponse {
     });
   }
 
-  return { logsDir, entries, available: files };
+  return { logsDir, entries, available: files, state: 'ok' };
 }

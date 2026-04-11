@@ -24,6 +24,7 @@
     "test:coverage": "vitest --coverage",
     "lint": "eslint .",
     "typecheck": "pnpm -r exec tsc --noEmit",
+    "check": "pnpm -r build && pnpm typecheck && pnpm lint && pnpm vitest run && pnpm audit",
     "bundle": "pnpm -r build && cd apps/cli && bun run build.ts",
     "clean": "pnpm -r clean && rm -rf node_modules"
   },

@@ -109,10 +109,10 @@ export interface OnboardPayload {
     providers?: Record<string, Record<string, unknown>>;
     search?: { enabled: boolean; apiKey?: string };
     voice?: { enabled: boolean };
-    mcp?: boolean;
-    cron?: boolean;
-    x402?: boolean;
-    mesh?: boolean;
+    mcp?: { enabled: boolean };
+    cron?: { enabled: boolean };
+    x402?: { enabled: boolean };
+    mesh?: { enabled: boolean };
   };
 }
 

@@ -6,7 +6,21 @@ import { loadConfig, saveConfig, ensureConfigDir, getConfigPath } from '../confi
 import { getAuditResults } from './audit.js';
 import type { OnboardPayload, OnboardResponse } from '../../shared/types.js';
 
+/** Minimum API key length — short keys are almost certainly user typos. */
+const MIN_API_KEY_LENGTH = 8;
+
 export function applyOnboard(payload: OnboardPayload): OnboardResponse {
+  // Validate before touching disk so a bad request leaves config untouched.
+  if (payload.apiKey !== undefined && payload.apiKey !== '') {
+    const trimmed = payload.apiKey.trim();
+    if (trimmed.length < MIN_API_KEY_LENGTH) {
+      throw new Error(
+        `API key is too short (minimum ${MIN_API_KEY_LENGTH} characters). ` +
+        `Got ${trimmed.length} characters.`,
+      );
+    }
+  }
+
   ensureConfigDir();
   const config = loadConfig();
 

@@ -9,6 +9,15 @@ interface Message {
   timestamp: number;
 }
 
+/** Stable, collision-free message ID. Falls back to a counter in non-browser test envs. */
+let _msgIdCounter = 0;
+function newMsgId(suffix?: string): string {
+  const base = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `local-${++_msgIdCounter}-${Date.now()}`;
+  return suffix ? `msg-${base}-${suffix}` : `msg-${base}`;
+}
+
 /** Exposed handle for parent components (currently unused but available for future needs). */
 export interface ChatHandle {
   clearChat: () => void;
@@ -43,7 +52,7 @@ export const Chat = forwardRef<ChatHandle>(function Chat(_props, ref) {
     if (!text || sending) return;
 
     const userMsg: Message = {
-      id: `msg-${Date.now()}`,
+      id: newMsgId(),
       role: 'user',
       content: text,
       timestamp: Date.now(),
@@ -77,7 +86,7 @@ export const Chat = forwardRef<ChatHandle>(function Chat(_props, ref) {
         setMessages(prev => [
           ...prev,
           {
-            id: `msg-${Date.now()}-err`,
+            id: newMsgId('err'),
             role: 'system',
             content: errMsg,
             timestamp: Date.now(),
@@ -89,7 +98,7 @@ export const Chat = forwardRef<ChatHandle>(function Chat(_props, ref) {
       if (data.sessionId) setSessionId(data.sessionId);
 
       const assistantMsg: Message = {
-        id: `msg-${Date.now()}-reply`,
+        id: newMsgId('reply'),
         role: data.error ? 'system' : 'assistant',
         content: data.reply ?? '(no response from agent)',
         timestamp: Date.now(),
@@ -100,7 +109,7 @@ export const Chat = forwardRef<ChatHandle>(function Chat(_props, ref) {
       setMessages(prev => [
         ...prev,
         {
-          id: `msg-${Date.now()}-err`,
+          id: newMsgId('err'),
           role: 'system',
           content: 'Failed to reach the GUI server. Check if it is running.',
           timestamp: Date.now(),

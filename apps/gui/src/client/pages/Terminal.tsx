@@ -30,9 +30,17 @@ export function Terminal() {
   const [lines, setLines] = useState(200);
   const logEndRef = useRef<HTMLDivElement>(null);
 
+  // Refs hold latest filter/lines so the polling interval doesn't need to be
+  // torn down and re-created every time the user toggles the filter — that
+  // recreation pattern can briefly stack intervals during rapid changes.
+  const filterRef = useRef(filter);
+  const linesRef = useRef(lines);
+  useEffect(() => { filterRef.current = filter; }, [filter]);
+  useEffect(() => { linesRef.current = lines; }, [lines]);
+
   const fetchOutput = useCallback(async () => {
     try {
-      const res = await fetch(`/api/gateway-output?lines=${lines}&filter=${filter}`);
+      const res = await fetch(`/api/gateway-output?lines=${linesRef.current}&filter=${filterRef.current}`);
       const data = await res.json() as GatewayOutputResponse;
       setOutput(data);
       setError('');
@@ -41,14 +49,21 @@ export function Terminal() {
     } finally {
       setLoading(false);
     }
-  }, [lines, filter]);
+  }, []);
 
-  // Poll every 2 seconds for live output
+  // Poll every 2 seconds for live output. Interval is created once and reads
+  // the current filter/lines from refs on each tick.
   useEffect(() => {
     fetchOutput();
     const interval = setInterval(fetchOutput, 2000);
     return () => clearInterval(interval);
   }, [fetchOutput]);
+
+  // Refetch immediately when filter or lines changes so the user sees the
+  // change without waiting up to 2 seconds for the next interval tick.
+  useEffect(() => {
+    fetchOutput();
+  }, [filter, lines, fetchOutput]);
 
   useEffect(() => {
     if (autoScroll) {

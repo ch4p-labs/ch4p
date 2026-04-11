@@ -68,16 +68,19 @@ function SettingField({ label, value, type = 'text', options, onChange, mono }: 
 export function Settings() {
   const config = useApi<SafeConfig>('/api/config');
   const [draft, setDraft] = useState<SafeConfig | null>(null);
+  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
 
-  // Sync draft when config loads
+  // Re-sync draft from server data whenever config.data identity changes,
+  // unless the user has unsaved edits (then we keep their draft).
   useEffect(() => {
-    if (config.data && !draft) {
+    if (!config.data) return;
+    if (!draft || !dirty) {
       setDraft(config.data);
     }
-  }, [config.data, draft]);
+  }, [config.data, draft, dirty]);
 
   const update = <S extends keyof SafeConfig>(
     section: S,
@@ -89,6 +92,7 @@ export function Settings() {
       ...draft,
       [section]: { ...draft[section], [key]: value },
     });
+    setDirty(true);
     setSaved(false);
   };
 
@@ -105,6 +109,7 @@ export function Settings() {
       if (!res.ok) throw new Error('Failed to save');
       const data = await res.json() as SafeConfig;
       setDraft(data);
+      setDirty(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {

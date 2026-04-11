@@ -139,17 +139,19 @@ async function handleRequest(
 
   if (method === 'GET' && (url === '/api/logs' || url?.startsWith('/api/logs?'))) {
     const params = new URL(url, 'http://localhost').searchParams;
-    const lines = parseInt(params.get('lines') ?? '200', 10);
-    sendJson(res, 200, getLogs(Math.min(lines, 1000)));
+    const parsed = parseInt(params.get('lines') ?? '200', 10);
+    const lines = Math.max(1, Math.min(Number.isFinite(parsed) ? parsed : 200, 1000));
+    sendJson(res, 200, getLogs(lines));
     return;
   }
 
   if (method === 'GET' && (url === '/api/gateway-output' || url?.startsWith('/api/gateway-output?'))) {
     const params = new URL(url, 'http://localhost').searchParams;
-    const lines = parseInt(params.get('lines') ?? '200', 10);
+    const parsed = parseInt(params.get('lines') ?? '200', 10);
+    const lines = Math.max(1, Math.min(Number.isFinite(parsed) ? parsed : 200, 1000));
     const filter = (params.get('filter') ?? 'all') as 'all' | 'stdout' | 'stderr';
     sendJson(res, 200, {
-      lines: getLiveGatewayOutput(Math.min(lines, 1000), filter),
+      lines: getLiveGatewayOutput(lines, filter),
       total: liveGatewayLines.length,
     });
     return;
@@ -297,10 +299,24 @@ export function getLiveGatewayOutput(maxLines = 200, filter: 'all' | 'stdout' | 
 }
 
 /**
+ * In-flight ensureGateway promise. Two concurrent callers must observe the
+ * same spawn attempt instead of both spawning a child that races for the port.
+ */
+let ensureGatewayInFlight: Promise<ChildProcess | null> | null = null;
+
+export function ensureGateway(): Promise<ChildProcess | null> {
+  if (ensureGatewayInFlight) return ensureGatewayInFlight;
+  ensureGatewayInFlight = ensureGatewayImpl().finally(() => {
+    ensureGatewayInFlight = null;
+  });
+  return ensureGatewayInFlight;
+}
+
+/**
  * Try to start the gateway if it's not already running.
  * Captures the pairing code from stdout and auto-pairs.
  */
-async function ensureGateway(): Promise<ChildProcess | null> {
+async function ensureGatewayImpl(): Promise<ChildProcess | null> {
   let gatewayPort = 18789;
   try {
     if (configExists()) {

@@ -146,8 +146,8 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
           features: {
             search: features.has('search') ? { enabled: true } : undefined,
             voice: features.has('voice') ? { enabled: true } : undefined,
-            mcp: features.has('mcp') || undefined,
-            cron: features.has('cron') || undefined,
+            mcp: features.has('mcp') ? { enabled: true } : undefined,
+            cron: features.has('cron') ? { enabled: true } : undefined,
           },
         }),
       });
