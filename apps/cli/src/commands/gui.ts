@@ -88,14 +88,19 @@ export async function gui(args: string[]): Promise<void> {
       }
     }
 
-    // Keep process alive until Ctrl+C
+    // Keep process alive until Ctrl+C. Use process.once so repeated invocations
+    // (e.g. tests, programmatic re-import) don't accumulate handlers, and guard
+    // shutdown so the second signal can't double-stop the server.
     await new Promise<void>((resolve) => {
+      let stopping = false;
       const shutdown = () => {
+        if (stopping) return;
+        stopping = true;
         console.log(`\n  ${DIM}Stopping...${RESET}`);
         server.stop().then(resolve).catch(resolve);
       };
-      process.on('SIGINT', shutdown);
-      process.on('SIGTERM', shutdown);
+      process.once('SIGINT', shutdown);
+      process.once('SIGTERM', shutdown);
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

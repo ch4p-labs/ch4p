@@ -21,11 +21,12 @@ export function useApi<T>(url: string): UseApiResult<T> {
   const refetch = useCallback(() => setTrigger((t) => t + 1), []);
 
   useEffect(() => {
+    const controller = new AbortController();
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    fetch(url)
+    fetch(url, { signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) {
           const body = await res.text();
@@ -41,13 +42,16 @@ export function useApi<T>(url: string): UseApiResult<T> {
         }
       })
       .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
-          setLoading(false);
-        }
+        // Aborted requests are expected during cleanup/refetch — silently ignore.
+        if (cancelled || (err instanceof Error && err.name === 'AbortError')) return;
+        setError(err instanceof Error ? err.message : String(err));
+        setLoading(false);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [url, trigger]);
 
   return {

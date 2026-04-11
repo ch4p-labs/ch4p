@@ -82,8 +82,22 @@ export function serveStatic(
   }
 
   res.writeHead(200);
-  createReadStream(absoluteFile).pipe(res);
+  pipeFile(absoluteFile, res);
   return true;
+}
+
+function pipeFile(absoluteFile: string, res: ServerResponse): void {
+  const stream = createReadStream(absoluteFile);
+  stream.on('error', (err) => {
+    console.warn(`[ch4p-gui] static stream error: ${err.message}`);
+    if (!res.headersSent) {
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Internal Server Error');
+    } else {
+      res.destroy();
+    }
+  });
+  stream.pipe(res);
 }
 
 function serveFallback(res: ServerResponse, staticDir: string): boolean {
@@ -97,6 +111,6 @@ function serveFallback(res: ServerResponse, staticDir: string): boolean {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
   res.writeHead(200);
-  createReadStream(indexPath).pipe(res);
+  pipeFile(indexPath, res);
   return true;
 }

@@ -155,8 +155,30 @@ export async function handleChat(payload: ChatRequest): Promise<ChatResponse> {
     // session context for auto-recall and auto-save.
     const sessionId = payload.sessionId || 'gui-chat';
 
+    // Least-privilege subprocess env: only forward what the agent CLI actually
+    // needs. Spreading process.env would leak unrelated parent secrets (AWS,
+    // GitHub tokens, npm tokens, etc.) into a process that may log them.
+    // Whitelist:
+    //   - PATH/HOME/USER/SHELL/LANG/TERM   — required for child to exec at all
+    //   - CH4P_*                            — agent runtime knobs (incl. session id)
+    //   - ANTHROPIC_API_KEY / OPENAI_API_KEY — provider credentials the agent reads
+    const childEnv: NodeJS.ProcessEnv = {
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      USER: process.env.USER,
+      SHELL: process.env.SHELL,
+      LANG: process.env.LANG,
+      TERM: process.env.TERM,
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+      CH4P_SESSION_ID: sessionId,
+    };
+    for (const [k, v] of Object.entries(process.env)) {
+      if (k.startsWith('CH4P_') && childEnv[k] === undefined) childEnv[k] = v;
+    }
+
     const child = spawn(process.execPath, [cliEntry, 'agent', '-m', payload.message], {
-      env: { ...process.env, CH4P_SESSION_ID: sessionId },
+      env: childEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 

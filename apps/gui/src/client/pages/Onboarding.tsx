@@ -58,6 +58,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [configChannelIdx, setConfigChannelIdx] = useState(0);
   const [features, setFeatures] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [result, setResult] = useState<OnboardResponse | null>(null);
 
   // Compute visible steps based on engine selection
@@ -124,6 +125,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   // Save handler
   const handleSave = async () => {
     setSaving(true);
+    setSaveError(null);
     try {
       const engine = selectedEngine === 'api-key' ? 'api' : selectedEngine;
       const channels: Record<string, Record<string, unknown>> = {};
@@ -149,11 +151,25 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
           },
         }),
       });
+
+      if (!res.ok) {
+        let msg = `Server returned ${res.status}`;
+        try {
+          const errBody = await res.json() as { error?: string };
+          if (errBody.error) msg = errBody.error;
+        } catch { /* keep default */ }
+        console.error('[onboard] save failed:', msg);
+        setSaveError(msg);
+        return;
+      }
+
       const data = await res.json() as OnboardResponse;
       setResult(data);
       setStep('complete');
-    } catch {
-      // TODO: show error toast
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to reach the GUI server';
+      console.error('[onboard] save error:', err);
+      setSaveError(msg);
     } finally {
       setSaving(false);
     }
@@ -657,6 +673,21 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
     <div className="onboard">
       {step !== 'welcome' && step !== 'complete' && renderProgress()}
       {stepRenderers[step]?.()}
+      {step === 'review' && saveError && (
+        <div
+          role="alert"
+          style={{
+            margin: '16px 0',
+            padding: '12px 16px',
+            background: 'var(--bg-error, #2a1515)',
+            color: 'var(--text-error, #ff6b6b)',
+            border: '1px solid var(--border-error, #5a2020)',
+            borderRadius: 6,
+          }}
+        >
+          <strong>Save failed:</strong> {saveError}
+        </div>
+      )}
       {showNav && (
         <div className="onboard-nav">
           {currentIdx > 0 ? (

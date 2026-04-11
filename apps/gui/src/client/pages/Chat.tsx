@@ -65,14 +65,33 @@ export const Chat = forwardRef<ChatHandle>(function Chat(_props, ref) {
         body: JSON.stringify({ message: text, sessionId: sessionId || undefined }),
       });
 
-      const data = await res.json() as { reply: string; sessionId: string; error?: string };
+      let data: { reply?: string; sessionId?: string; error?: string } = {};
+      try {
+        data = await res.json() as typeof data;
+      } catch {
+        // Body wasn't JSON — fall through with empty data and let the !res.ok branch handle it.
+      }
+
+      if (!res.ok) {
+        const errMsg = data.error || data.reply || `Server error ${res.status}`;
+        setMessages(prev => [
+          ...prev,
+          {
+            id: `msg-${Date.now()}-err`,
+            role: 'system',
+            content: errMsg,
+            timestamp: Date.now(),
+          },
+        ]);
+        return;
+      }
 
       if (data.sessionId) setSessionId(data.sessionId);
 
       const assistantMsg: Message = {
         id: `msg-${Date.now()}-reply`,
         role: data.error ? 'system' : 'assistant',
-        content: data.reply,
+        content: data.reply ?? '(no response from agent)',
         timestamp: Date.now(),
       };
 

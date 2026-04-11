@@ -39,22 +39,42 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(json);
 }
 
+/** Marker error so callers can return a 413 instead of a generic 400. */
+export class PayloadTooLargeError extends Error {
+  constructor() { super('Request body too large'); this.name = 'PayloadTooLargeError'; }
+}
+
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
+    let oversized = false;
     req.on('data', (chunk: Buffer) => {
+      if (oversized) return;
       size += chunk.length;
       if (size > 1_048_576) { // 1 MB limit
-        reject(new Error('Request body too large'));
-        req.destroy();
+        oversized = true;
         return;
       }
       chunks.push(chunk);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('end', () => {
+      if (oversized) reject(new PayloadTooLargeError());
+      else resolve(Buffer.concat(chunks).toString('utf8'));
+    });
     req.on('error', reject);
   });
+}
+
+/** Echo Origin only when it's a localhost dev origin. */
+function isLocalhostOrigin(origin: string | undefined): boolean {
+  if (!origin) return false;
+  try {
+    const u = new URL(origin);
+    return u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '[::1]';
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -69,10 +89,15 @@ async function handleRequest(
   const method = req.method ?? 'GET';
   const url = req.url ?? '/';
 
-  // CORS headers for dev proxy
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // CORS — only echo Origin for localhost dev proxies. Wildcard would let
+  // any web page the user visits hit our localhost API.
+  const origin = req.headers.origin;
+  res.setHeader('Vary', 'Origin');
+  if (isLocalhostOrigin(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin!);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  }
 
   if (method === 'OPTIONS') {
     res.writeHead(204);
@@ -137,7 +162,12 @@ async function handleRequest(
       const result = applyOnboard(payload);
       sendJson(res, 200, result);
     } catch (err) {
-      sendJson(res, 400, { error: err instanceof Error ? err.message : 'Invalid request' });
+      if (err instanceof PayloadTooLargeError) {
+        res.setHeader('Connection', 'close');
+        sendJson(res, 413, { error: err.message });
+      } else {
+        sendJson(res, 400, { error: err instanceof Error ? err.message : 'Invalid request' });
+      }
     }
     return;
   }
@@ -149,7 +179,12 @@ async function handleRequest(
       const result = await handleChat(payload);
       sendJson(res, 200, result);
     } catch (err) {
-      sendJson(res, 400, { error: err instanceof Error ? err.message : 'Invalid request' });
+      if (err instanceof PayloadTooLargeError) {
+        res.setHeader('Connection', 'close');
+        sendJson(res, 413, { error: err.message });
+      } else {
+        sendJson(res, 400, { error: err instanceof Error ? err.message : 'Invalid request' });
+      }
     }
     return;
   }
@@ -175,7 +210,12 @@ async function handleRequest(
       }
       sendJson(res, 200, result);
     } catch (err) {
-      sendJson(res, 400, { error: err instanceof Error ? err.message : 'Invalid request' });
+      if (err instanceof PayloadTooLargeError) {
+        res.setHeader('Connection', 'close');
+        sendJson(res, 413, { error: err.message });
+      } else {
+        sendJson(res, 400, { error: err instanceof Error ? err.message : 'Invalid request' });
+      }
     }
     return;
   }
