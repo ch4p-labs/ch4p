@@ -1,5 +1,4 @@
 import { Session } from './session.js';
-import type { SessionState } from './session.js';
 import type { SessionConfig } from '@ch4p/core';
 
 function makeConfig(overrides: Partial<SessionConfig> = {}): SessionConfig {

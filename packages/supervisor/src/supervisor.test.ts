@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import { Supervisor } from './supervisor.js';
-import type { ChildSpec, ChildHandle, SupervisorEvents } from './supervisor.js';
+import type { ChildSpec, ChildHandle } from './supervisor.js';
 
 function makeHandle(id: string, overrides: Partial<ChildHandle> = {}): ChildHandle {
   return {

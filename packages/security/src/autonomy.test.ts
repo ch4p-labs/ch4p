@@ -4,7 +4,7 @@
  */
 
 import { AutonomyGuard } from './autonomy.js';
-import type { ActionDescriptor, AutonomyLevel } from '@ch4p/core';
+import type { ActionDescriptor } from '@ch4p/core';
 
 // ---------------------------------------------------------------------------
 // Helpers

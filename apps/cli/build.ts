@@ -13,7 +13,6 @@
  * Output: dist-bundle/ch4p (executable binary)
  */
 
-import { $ } from 'bun';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';

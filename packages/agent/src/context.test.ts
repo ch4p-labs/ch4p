@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import { ContextManager, NAMED_STRATEGIES } from './context.js';
-import type { CompactionStrategy, NamedStrategy } from './context.js';
+import type { NamedStrategy } from './context.js';
 import type { Message } from '@ch4p/core';
 
 describe('ContextManager', () => {

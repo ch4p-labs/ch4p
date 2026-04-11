@@ -30,12 +30,8 @@ import type {
   ToolResult,
   StateSnapshot,
   VerificationResult,
-  Job,
   EngineEvent,
   RunHandle,
-  RunOpts,
-  ResumeToken,
-  VerificationContext,
   FormatCheckResult,
 } from '@ch4p/core';
 

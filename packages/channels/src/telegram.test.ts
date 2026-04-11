@@ -171,7 +171,7 @@ describe('TelegramChannel — topic/forum support', () => {
       return ch;
     }
 
-    function mockFetch(ch: TelegramChannel) {
+    function mockFetch(_ch: TelegramChannel) {
       return vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         json: async () => ({ ok: true, result: { message_id: 1 } }),
