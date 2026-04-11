@@ -11,7 +11,6 @@ import { CloudflareTunnel } from './cloudflare.js';
 import { TailscaleTunnel } from './tailscale.js';
 import { NgrokTunnel } from './ngrok.js';
 import { createTunnelProvider } from './index.js';
-import type { TunnelConfig } from '@ch4p/core';
 
 // ---------------------------------------------------------------------------
 // CloudflareTunnel

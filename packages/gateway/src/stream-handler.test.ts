@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { IChannel, Recipient, OutboundMessage, SendResult, ChannelConfig, PresenceEvent } from '@ch4p/core';
+import type { IChannel, Recipient, OutboundMessage, SendResult, ChannelConfig } from '@ch4p/core';
 import { StreamHandler } from './stream-handler.js';
 import type { StreamableEvent } from './stream-handler.js';
 

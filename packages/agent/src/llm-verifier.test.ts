@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { LLMVerifier } from './llm-verifier.js';
-import type { IProvider, VerificationContext, CompletionResult, Message, TokenUsage } from '@ch4p/core';
+import type { IProvider, VerificationContext, CompletionResult, Message } from '@ch4p/core';
 
 // ---------------------------------------------------------------------------
 // Mock provider

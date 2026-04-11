@@ -16,13 +16,7 @@ import { WhatsAppChannel } from './whatsapp.js';
 import { SignalChannel } from './signal.js';
 import { IMessageChannel } from './imessage.js';
 import { ChannelRegistry } from './index.js';
-import type {
-  IChannel,
-  InboundMessage,
-  OutboundMessage,
-  Recipient,
-  PresenceEvent,
-} from '@ch4p/core';
+import type { InboundMessage } from '@ch4p/core';
 
 // ---------------------------------------------------------------------------
 // Module mocks (hoisted by vitest)

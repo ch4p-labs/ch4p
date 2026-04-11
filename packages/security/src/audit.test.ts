@@ -8,7 +8,6 @@ import { join } from 'node:path';
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync, rmSync } from 'node:fs';
 import { SecurityAuditor } from './audit.js';
 import type { SecurityAuditorConfig } from './audit.js';
-import type { AutonomyLevel } from '@ch4p/core';
 
 // ---------------------------------------------------------------------------
 // Helpers

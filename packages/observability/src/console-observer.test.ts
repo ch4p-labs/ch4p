@@ -1,6 +1,5 @@
 import { vi } from 'vitest';
 import { ConsoleObserver } from './console-observer.js';
-import type { LogLevel } from './console-observer.js';
 import type {
   SessionMeta,
   SessionStats,

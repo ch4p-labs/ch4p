@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import { McpClientTool } from './mcp-client.js';
-import type { McpServerConfig, McpTransport } from './mcp-client.js';
+import type { McpServerConfig } from './mcp-client.js';
 import type { ToolContext, ISecurityPolicy } from '@ch4p/core';
 
 // ---------------------------------------------------------------------------

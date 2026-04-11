@@ -10,7 +10,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CanvasState, CanvasChannel } from '@ch4p/canvas';
 import type { S2CMessage, C2SMessage } from '@ch4p/canvas';
 import { WebSocketBridge } from './ws-bridge.js';
-import type { BridgeAgentEvent } from './ws-bridge.js';
 import { CanvasSessionManager } from './canvas-session.js';
 import type { CardComponent, ComponentPosition } from '@ch4p/canvas';
 import { EventEmitter } from 'node:events';

@@ -33,7 +33,7 @@ function createMockEngine(opts: MockEngineOpts = {}): IEngine {
     id: 'mock',
     name: 'Mock Engine',
 
-    async startRun(job, runOpts) {
+    async startRun(_job, _runOpts) {
       callCount++;
       const currentCall = callCount;
       const ref = generateId(12);
@@ -398,7 +398,7 @@ describe('Agent E2E Pipeline', () => {
       const loopEngine: IEngine = {
         id: 'loop',
         name: 'Loop Engine',
-        async startRun(job) {
+        async startRun(_job) {
           calls++;
           const ref = generateId(12);
           async function* events(): AsyncIterable<EngineEvent> {
@@ -547,7 +547,7 @@ describe('Agent E2E Pipeline', () => {
         id: 'memory-test',
         name: 'Memory Test Engine',
 
-        async startRun(job) {
+        async startRun(_job) {
           callCount++;
           const turn = callCount;
           const ref = generateId(12);

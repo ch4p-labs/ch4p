@@ -32,9 +32,13 @@ export default tseslint.config(
   {
     files: ['**/*.ts', '**/*.tsx'],
     rules: {
-      // TypeScript compiler enforces unused vars/params via noUnusedLocals
-      // and noUnusedParameters in tsconfig.json — no need to duplicate.
-      '@typescript-eslint/no-unused-vars': 'off',
+      // tsc's noUnusedLocals/noUnusedParameters covers src files but each
+      // package's tsconfig excludes **/*.test.ts, so eslint backstops tests
+      // (and ad-hoc build scripts) where tsc would otherwise be blind.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
 
       // All `as any` casts eliminated — enforce to prevent regression.
       '@typescript-eslint/no-explicit-any': 'error',

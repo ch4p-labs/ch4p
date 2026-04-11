@@ -10,7 +10,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import type { Ch4pConfig } from '@ch4p/core';
 
 // We need to mock homedir() before importing config functions, but vitest
 // hoists vi.mock calls. We use a dynamic import approach instead.
