@@ -1,6 +1,6 @@
 {
   "name": "@ch4p/gui",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Graphical interface for ch4p — all CLI functionality in a visual app",
   "license": "Apache-2.0",
   "private": true,

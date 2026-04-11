@@ -157,7 +157,7 @@ class StdioConnection {
     await this.request('initialize', {
       protocolVersion: '2024-11-05',
       capabilities: {},
-      clientInfo: { name: 'ch4p', version: '0.4.0' },
+      clientInfo: { name: 'ch4p', version: '0.5.0' },
     });
 
     // Confirm initialization
@@ -287,7 +287,7 @@ class SseConnection {
     const result = await this.request('initialize', {
       protocolVersion: '2024-11-05',
       capabilities: {},
-      clientInfo: { name: 'ch4p', version: '0.4.0' },
+      clientInfo: { name: 'ch4p', version: '0.5.0' },
     });
 
     // If the server returned a session endpoint, use it for future requests
