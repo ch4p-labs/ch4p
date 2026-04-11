@@ -107,9 +107,9 @@ describe('GoogleProvider', () => {
       const provider = validProvider();
       const models = await provider.listModels();
       const ids = models.map((m) => m.id);
+      expect(ids).toContain('gemini-2.5-pro');
+      expect(ids).toContain('gemini-2.5-flash');
       expect(ids).toContain('gemini-2.0-flash');
-      expect(ids).toContain('gemini-1.5-pro');
-      expect(ids).toContain('gemini-1.5-flash');
     });
   });
 
@@ -121,8 +121,8 @@ describe('GoogleProvider', () => {
     const provider = validProvider();
 
     it('returns true for known Gemini models', () => {
-      expect(provider.supportsTools('gemini-2.0-flash')).toBe(true);
-      expect(provider.supportsTools('gemini-1.5-pro')).toBe(true);
+      expect(provider.supportsTools('gemini-2.5-pro')).toBe(true);
+      expect(provider.supportsTools('gemini-2.5-flash')).toBe(true);
     });
 
     it('returns true for gemini- prefix fallback', () => {

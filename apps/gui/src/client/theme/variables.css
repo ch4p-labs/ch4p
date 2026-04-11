@@ -1,0 +1,44 @@
+/* ── ch4p GUI: Design tokens ──────────────────────────── */
+
+:root {
+  /* Dark mode (default) */
+  --bg: #050505;
+  --surface: #0e0e0e;
+  --raised: #161616;
+  --border: #1e1e1e;
+  --border-hover: #2a2a2a;
+  --text: #ececec;
+  --text-muted: #8a8a8a;
+  --accent: #34d399;
+  --accent-hover: #2ebb87;
+  --accent-dim: rgba(52, 211, 153, 0.08);
+  --accent-glow: rgba(52, 211, 153, 0.12);
+  --danger: #ff5f57;
+  --warning: #ffbd2e;
+  --success: #28c840;
+
+  /* Layout */
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-sm: 8px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed: 64px;
+  --transition: 0.2s ease;
+
+  /* Typography */
+  --font-display: 'Michroma', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-body: 'Inconsolata', monospace;
+}
+
+[data-theme="light"] {
+  --bg: #f8f8f8;
+  --surface: #ffffff;
+  --raised: #f0f0f0;
+  --border: #e0e0e0;
+  --border-hover: #d0d0d0;
+  --text: #1a1a1a;
+  --text-muted: #666666;
+  --accent-dim: rgba(52, 211, 153, 0.1);
+  --accent-glow: rgba(52, 211, 153, 0.15);
+}

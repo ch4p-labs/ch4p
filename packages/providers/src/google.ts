@@ -33,6 +33,38 @@ const PROVIDER_NAME = 'Google AI';
 // ---------------------------------------------------------------------------
 
 const GOOGLE_MODELS: ModelInfo[] = [
+  // Gemini 2.5 family (current)
+  {
+    id: 'gemini-2.5-pro',
+    name: 'Gemini 2.5 Pro',
+    contextWindow: 1_048_576,
+    maxOutputTokens: 65_536,
+    supportsTools: true,
+    supportsVision: true,
+    inputCostPer1k: 0.00125,
+    outputCostPer1k: 0.01,
+  },
+  {
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    contextWindow: 1_048_576,
+    maxOutputTokens: 65_536,
+    supportsTools: true,
+    supportsVision: true,
+    inputCostPer1k: 0.00015,
+    outputCostPer1k: 0.0006,
+  },
+  {
+    id: 'gemini-2.5-flash-lite',
+    name: 'Gemini 2.5 Flash Lite',
+    contextWindow: 1_048_576,
+    maxOutputTokens: 65_536,
+    supportsTools: true,
+    supportsVision: true,
+    inputCostPer1k: 0.000075,
+    outputCostPer1k: 0.0003,
+  },
+  // Legacy (still available)
   {
     id: 'gemini-2.0-flash',
     name: 'Gemini 2.0 Flash',
@@ -42,36 +74,6 @@ const GOOGLE_MODELS: ModelInfo[] = [
     supportsVision: true,
     inputCostPer1k: 0.0001,
     outputCostPer1k: 0.0004,
-  },
-  {
-    id: 'gemini-2.0-flash-lite',
-    name: 'Gemini 2.0 Flash Lite',
-    contextWindow: 1_048_576,
-    maxOutputTokens: 8_192,
-    supportsTools: true,
-    supportsVision: true,
-    inputCostPer1k: 0.000075,
-    outputCostPer1k: 0.0003,
-  },
-  {
-    id: 'gemini-1.5-pro',
-    name: 'Gemini 1.5 Pro',
-    contextWindow: 2_097_152,
-    maxOutputTokens: 8_192,
-    supportsTools: true,
-    supportsVision: true,
-    inputCostPer1k: 0.00125,
-    outputCostPer1k: 0.005,
-  },
-  {
-    id: 'gemini-1.5-flash',
-    name: 'Gemini 1.5 Flash',
-    contextWindow: 1_048_576,
-    maxOutputTokens: 8_192,
-    supportsTools: true,
-    supportsVision: true,
-    inputCostPer1k: 0.000075,
-    outputCostPer1k: 0.0003,
   },
 ];
 

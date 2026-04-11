@@ -1,0 +1,451 @@
+/* ── Onboarding Wizard ─────────────────────────────────── */
+
+.onboard {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── Progress bar ── */
+
+.onboard-progress {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 2.5rem;
+}
+
+.onboard-step-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+  border: 2px solid var(--border);
+  color: var(--text-muted);
+  background: var(--surface);
+}
+
+.onboard-step-dot.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.onboard-step-dot.completed {
+  border-color: var(--accent);
+  color: var(--bg);
+  background: var(--accent);
+  animation: dotFill 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes dotFill {
+  0% {
+    background: var(--surface);
+    color: var(--accent);
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.2);
+  }
+  100% {
+    background: var(--accent);
+    color: var(--bg);
+    transform: scale(1);
+  }
+}
+
+.onboard-step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  transition: background 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.onboard-step-line.completed {
+  background: var(--accent);
+  animation: lineFill 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes lineFill {
+  0% {
+    background: linear-gradient(90deg, var(--accent) 0%, var(--border) 0%);
+  }
+  100% {
+    background: linear-gradient(90deg, var(--accent) 100%, var(--border) 100%);
+  }
+}
+
+/* ── Step content ── */
+
+.onboard-title {
+  font-family: 'Michroma', sans-serif;
+  font-size: 1.5rem;
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+
+.onboard-subtitle {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 2rem;
+}
+
+/* ── Welcome ── */
+
+.onboard-welcome {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.onboard-welcome .onboard-mascot {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  animation: glowPulse 4s ease-in-out infinite;
+}
+
+.onboard-welcome h2 {
+  font-family: 'Michroma', sans-serif;
+  font-size: 1.8rem;
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+
+.onboard-welcome p {
+  color: var(--text-muted);
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+
+/* ── Option cards ── */
+
+.onboard-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.onboard-option {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.onboard-option:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.onboard-option.selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.onboard-option-radio {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.onboard-option.selected .onboard-option-radio {
+  border-color: var(--accent);
+}
+
+.onboard-option.selected .onboard-option-radio::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.onboard-option-info h4 {
+  color: var(--text);
+  font-size: 0.95rem;
+  margin-bottom: 0.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.onboard-option-info p {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+/* Not-detected engine — slightly dimmed until selected */
+.onboard-option.not-detected {
+  opacity: 0.65;
+}
+
+.onboard-option.not-detected:hover,
+.onboard-option.not-detected.selected {
+  opacity: 1;
+}
+
+.onboard-badge-install {
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--warning);
+  color: var(--bg);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ── Checkbox options (channels, features) ── */
+
+.onboard-checkbox-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.onboard-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.85rem;
+}
+
+.onboard-checkbox:hover {
+  border-color: var(--accent);
+}
+
+.onboard-checkbox.checked {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.onboard-check-box {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  font-size: 0.7rem;
+  color: transparent;
+}
+
+.onboard-checkbox.checked .onboard-check-box {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.onboard-checkbox-label {
+  color: var(--text);
+}
+
+.onboard-checkbox-note {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-top: 0.15rem;
+}
+
+/* ── Form fields ── */
+
+.onboard-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.onboard-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.onboard-field label {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.onboard-field input {
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inconsolata', monospace;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.onboard-field input:focus {
+  border-color: var(--accent);
+}
+
+.onboard-field input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* ── Channel config panel ── */
+
+.onboard-channel-config {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--raised);
+}
+
+.onboard-channel-config h4 {
+  color: var(--accent);
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+  font-family: 'Michroma', sans-serif;
+}
+
+.onboard-channel-note {
+  color: var(--warning);
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+}
+
+/* ── Navigation buttons ── */
+
+.onboard-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.onboard-nav-spacer {
+  flex: 1;
+}
+
+/* ── Review panel ── */
+
+.onboard-review {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.onboard-review-section {
+  padding: 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.onboard-review-section h4 {
+  font-family: 'Michroma', sans-serif;
+  font-size: 0.75rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+}
+
+.onboard-review-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  font-size: 0.85rem;
+}
+
+.onboard-review-row .label {
+  color: var(--text-muted);
+}
+
+.onboard-review-row .value {
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ── Complete / success ── */
+
+.onboard-complete {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.onboard-complete .success-icon {
+  font-size: 3rem;
+  color: var(--success);
+  margin-bottom: 1rem;
+}
+
+.onboard-complete h2 {
+  font-family: 'Michroma', sans-serif;
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+
+.onboard-complete p {
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.onboard-complete .config-path {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--accent);
+  background: var(--surface);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  display: inline-block;
+  margin: 1rem 0;
+}
+
+.onboard-audit-summary {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: inline-flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  .onboard-checkbox-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -33,6 +33,62 @@ const PROVIDER_NAME = 'OpenAI';
 // ---------------------------------------------------------------------------
 
 const OPENAI_MODELS: ModelInfo[] = [
+  // GPT-4.1 family (April 2025+)
+  {
+    id: 'gpt-4.1',
+    name: 'GPT-4.1',
+    contextWindow: 1_000_000,
+    maxOutputTokens: 32_768,
+    supportsTools: true,
+    supportsVision: true,
+    inputCostPer1k: 0.002,
+    outputCostPer1k: 0.008,
+  },
+  {
+    id: 'gpt-4.1-mini',
+    name: 'GPT-4.1 Mini',
+    contextWindow: 1_000_000,
+    maxOutputTokens: 32_768,
+    supportsTools: true,
+    supportsVision: true,
+    inputCostPer1k: 0.0004,
+    outputCostPer1k: 0.0016,
+  },
+  {
+    id: 'gpt-4.1-nano',
+    name: 'GPT-4.1 Nano',
+    contextWindow: 1_000_000,
+    maxOutputTokens: 32_768,
+    supportsTools: true,
+    supportsVision: true,
+    inputCostPer1k: 0.0001,
+    outputCostPer1k: 0.0004,
+  },
+  // Reasoning models — both o3 and o4-mini support function calling on the
+  // Responses and Chat Completions APIs (verified against OpenAI docs 2026-04).
+  // Source: https://platform.openai.com/docs/guides/reasoning (function calling
+  // listed as supported for o3 and o4-mini families).
+  {
+    id: 'o3',
+    name: 'o3',
+    contextWindow: 200_000,
+    maxOutputTokens: 100_000,
+    supportsTools: true,
+    supportsVision: true,
+    inputCostPer1k: 0.002,
+    outputCostPer1k: 0.008,
+  },
+  {
+    id: 'o4-mini',
+    name: 'o4-mini',
+    contextWindow: 200_000,
+    maxOutputTokens: 100_000,
+    supportsTools: true,
+    supportsVision: true,
+    inputCostPer1k: 0.0011,
+    outputCostPer1k: 0.0044,
+  },
+  // Legacy (still available)
   {
     id: 'gpt-4o',
     name: 'GPT-4o',
@@ -52,36 +108,6 @@ const OPENAI_MODELS: ModelInfo[] = [
     supportsVision: true,
     inputCostPer1k: 0.00015,
     outputCostPer1k: 0.0006,
-  },
-  {
-    id: 'gpt-4-turbo',
-    name: 'GPT-4 Turbo',
-    contextWindow: 128_000,
-    maxOutputTokens: 4_096,
-    supportsTools: true,
-    supportsVision: true,
-    inputCostPer1k: 0.01,
-    outputCostPer1k: 0.03,
-  },
-  {
-    id: 'o1',
-    name: 'o1',
-    contextWindow: 200_000,
-    maxOutputTokens: 100_000,
-    supportsTools: false,
-    supportsVision: true,
-    inputCostPer1k: 0.015,
-    outputCostPer1k: 0.06,
-  },
-  {
-    id: 'o3-mini',
-    name: 'o3-mini',
-    contextWindow: 200_000,
-    maxOutputTokens: 100_000,
-    supportsTools: false,
-    supportsVision: false,
-    inputCostPer1k: 0.0011,
-    outputCostPer1k: 0.0044,
   },
 ];
 

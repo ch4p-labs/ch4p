@@ -346,7 +346,7 @@ export function applySafeUpdates(current: Ch4pConfig, updates: Record<string, un
 // ---------------------------------------------------------------------------
 
 export async function gateway(args: string[]): Promise<void> {
-  let config;
+  let config: Ch4pConfig;
   try {
     config = loadConfig();
   } catch (err) {
@@ -1573,7 +1573,7 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
       // Process the next queued message for this user, if any.
       const queue = pendingMessages?.get(userKey);
       const next = queue?.shift();
-      if (queue && queue.length === 0) pendingMessages.delete(userKey);
+      if (queue && queue.length === 0) pendingMessages?.delete(userKey);
       if (next) {
         // Remove the in-flight entry so the recursive call doesn't hit the guard.
         inFlightLoops?.delete(userKey);

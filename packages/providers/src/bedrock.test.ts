@@ -48,8 +48,8 @@ function bedrockConverseResponse(overrides: Record<string, unknown> = {}) {
 function validProvider(overrides: Record<string, unknown> = {}) {
   return new BedrockProvider({
     region: 'us-east-1',
-    accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
-    secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+    accessKeyId: 'test-access-key-id',
+    secretAccessKey: 'test-secret-access-key',
     maxRetries: 0,
     ...overrides,
   });
@@ -137,7 +137,7 @@ describe('BedrockProvider', () => {
       const provider = validProvider();
       const models = await provider.listModels();
       const ids = models.map((m) => m.id);
-      expect(ids).toContain('anthropic.claude-sonnet-4-20250514-v1:0');
+      expect(ids).toContain('anthropic.claude-sonnet-4-6');
       expect(ids).toContain('amazon.nova-pro-v1:0');
     });
   });
@@ -150,7 +150,7 @@ describe('BedrockProvider', () => {
     const provider = validProvider();
 
     it('returns true for known models with tool support', () => {
-      expect(provider.supportsTools('anthropic.claude-sonnet-4-20250514-v1:0')).toBe(true);
+      expect(provider.supportsTools('anthropic.claude-sonnet-4-6')).toBe(true);
       expect(provider.supportsTools('amazon.nova-pro-v1:0')).toBe(true);
     });
 
@@ -171,7 +171,7 @@ describe('BedrockProvider', () => {
       const messages: Message[] = [
         { role: 'user', content: 'Hello world' },
       ];
-      const count = await provider.countTokens('anthropic.claude-sonnet-4-20250514-v1:0', messages);
+      const count = await provider.countTokens('anthropic.claude-sonnet-4-6', messages);
       expect(count).toBe(Math.ceil(11 / 4));
     });
 
@@ -185,7 +185,7 @@ describe('BedrockProvider', () => {
           ],
         },
       ];
-      const count = await provider.countTokens('anthropic.claude-sonnet-4-20250514-v1:0', messages);
+      const count = await provider.countTokens('anthropic.claude-sonnet-4-6', messages);
       expect(count).toBeGreaterThan(0);
     });
   });
@@ -198,7 +198,7 @@ describe('BedrockProvider', () => {
     it('sends request to correct Bedrock Converse endpoint', async () => {
       mockFetch(jsonResponse(bedrockConverseResponse()));
       const provider = validProvider();
-      await provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [
+      await provider.complete('anthropic.claude-sonnet-4-6', [
         { role: 'user', content: 'hi' },
       ]);
 
@@ -214,7 +214,7 @@ describe('BedrockProvider', () => {
     it('includes AWS Signature V4 Authorization header', async () => {
       mockFetch(jsonResponse(bedrockConverseResponse()));
       const provider = validProvider();
-      await provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [
+      await provider.complete('anthropic.claude-sonnet-4-6', [
         { role: 'user', content: 'hi' },
       ]);
 
@@ -230,25 +230,25 @@ describe('BedrockProvider', () => {
       mockFetch(jsonResponse(bedrockConverseResponse()));
       const provider = new BedrockProvider({
         region: 'us-east-1',
-        accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
-        secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
-        sessionToken: 'FwoGZXIvYXdzEBYaDH...',
+        accessKeyId: 'test-access-key-id',
+        secretAccessKey: 'test-secret-access-key',
+        sessionToken: 'test-session-token',
         maxRetries: 0,
       });
-      await provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [
+      await provider.complete('anthropic.claude-sonnet-4-6', [
         { role: 'user', content: 'hi' },
       ]);
 
       const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
       const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
       const headers = init.headers as Record<string, string>;
-      expect(headers['x-amz-security-token']).toBe('FwoGZXIvYXdzEBYaDH...');
+      expect(headers['x-amz-security-token']).toBe('test-session-token');
     });
 
     it('maps response to CompletionResult', async () => {
       mockFetch(jsonResponse(bedrockConverseResponse()));
       const provider = validProvider();
-      const result = await provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [
+      const result = await provider.complete('anthropic.claude-sonnet-4-6', [
         { role: 'user', content: 'hi' },
       ]);
 
@@ -280,7 +280,7 @@ describe('BedrockProvider', () => {
       });
       mockFetch(jsonResponse(response));
       const provider = validProvider();
-      const result = await provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [
+      const result = await provider.complete('anthropic.claude-sonnet-4-6', [
         { role: 'user', content: 'search for weather' },
       ]);
 
@@ -293,7 +293,7 @@ describe('BedrockProvider', () => {
     it('extracts system messages to top-level system field', async () => {
       mockFetch(jsonResponse(bedrockConverseResponse()));
       const provider = validProvider();
-      await provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [
+      await provider.complete('anthropic.claude-sonnet-4-6', [
         { role: 'system', content: 'You are helpful' },
         { role: 'user', content: 'hi' },
       ]);
@@ -322,7 +322,7 @@ describe('BedrockProvider', () => {
       mockFetch(jsonResponse(bedrockConverseResponse()));
       const provider = validProvider();
       await provider.complete(
-        'anthropic.claude-sonnet-4-20250514-v1:0',
+        'anthropic.claude-sonnet-4-6',
         [{ role: 'user', content: 'hi' }],
         {
           tools: [
@@ -358,7 +358,7 @@ describe('BedrockProvider', () => {
         maxRetries: 3,
       });
       await expect(
-        provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [
+        provider.complete('anthropic.claude-sonnet-4-6', [
           { role: 'user', content: 'hi' },
         ]),
       ).rejects.toThrow();
@@ -374,7 +374,7 @@ describe('BedrockProvider', () => {
         maxRetries: 3,
       });
       await expect(
-        provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [
+        provider.complete('anthropic.claude-sonnet-4-6', [
           { role: 'user', content: 'hi' },
         ]),
       ).rejects.toThrow();
@@ -391,12 +391,12 @@ describe('BedrockProvider', () => {
       mockFetch(jsonResponse(bedrockConverseResponse()));
       const provider = new BedrockProvider({
         region: 'us-west-2',
-        accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
-        secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+        accessKeyId: 'test-access-key-id',
+        secretAccessKey: 'test-secret-access-key',
         baseUrl: 'https://proxy.example.com',
         maxRetries: 0,
       });
-      await provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [
+      await provider.complete('anthropic.claude-sonnet-4-6', [
         { role: 'user', content: 'hi' },
       ]);
 
@@ -409,7 +409,7 @@ describe('BedrockProvider', () => {
       // end_turn => stop
       mockFetch(jsonResponse(bedrockConverseResponse({ stopReason: 'end_turn' })));
       let provider = validProvider();
-      let result = await provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [
+      let result = await provider.complete('anthropic.claude-sonnet-4-6', [
         { role: 'user', content: 'hi' },
       ]);
       expect(result.finishReason).toBe('stop');
@@ -417,7 +417,7 @@ describe('BedrockProvider', () => {
       // max_tokens => max_tokens
       mockFetch(jsonResponse(bedrockConverseResponse({ stopReason: 'max_tokens' })));
       provider = validProvider();
-      result = await provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [
+      result = await provider.complete('anthropic.claude-sonnet-4-6', [
         { role: 'user', content: 'hi' },
       ]);
       expect(result.finishReason).toBe('max_tokens');
@@ -425,7 +425,7 @@ describe('BedrockProvider', () => {
       // tool_use => tool_use
       mockFetch(jsonResponse(bedrockConverseResponse({ stopReason: 'tool_use' })));
       provider = validProvider();
-      result = await provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [
+      result = await provider.complete('anthropic.claude-sonnet-4-6', [
         { role: 'user', content: 'hi' },
       ]);
       expect(result.finishReason).toBe('tool_use');
@@ -435,11 +435,11 @@ describe('BedrockProvider', () => {
       mockFetch(jsonResponse(bedrockConverseResponse()));
       const provider = new BedrockProvider({
         region: 'eu-west-1',
-        accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
-        secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+        accessKeyId: 'test-access-key-id',
+        secretAccessKey: 'test-secret-access-key',
         maxRetries: 0,
       });
-      await provider.complete('anthropic.claude-sonnet-4-20250514-v1:0', [
+      await provider.complete('anthropic.claude-sonnet-4-6', [
         { role: 'user', content: 'hi' },
       ]);
 

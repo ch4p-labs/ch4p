@@ -10,7 +10,7 @@
  */
 
 import { existsSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { loadConfig, getConfigPath, getCh4pDir, configExists } from '../config.js';
 import { performAudit } from './audit.js';
 import { TEAL, RESET, BOLD, DIM, GREEN, YELLOW, RED, separator } from '../ui.js';
@@ -49,18 +49,18 @@ function checkNodeVersion(): CheckResult {
   const version = process.version;
   const major = parseInt(version.slice(1).split('.')[0]!, 10);
 
-  if (major >= 22) {
+  if (major >= 20) {
     return {
       name: 'Node.js version',
       status: 'ok',
-      message: `Node.js ${version} (>= 22 required)`,
+      message: `Node.js ${version}`,
     };
   }
 
   return {
     name: 'Node.js version',
     status: 'fail',
-    message: `Node.js ${version} detected. Version >= 22 is required.`,
+    message: `Node.js ${version} detected. Version >= 20 is required.`,
   };
 }
 
@@ -200,7 +200,9 @@ function checkSubprocessEngine(engineId: string): CheckResult {
     : engineId;
 
   try {
-    execSync(`${command} --version`, { timeout: 5000, stdio: 'pipe' });
+    // execFileSync does not invoke a shell, preventing command injection if
+    // engineId ever flows from user/config input.
+    execFileSync(command, ['--version'], { timeout: 5000, stdio: 'ignore' });
     return {
       name: `${engineId} binary`,
       status: 'ok',

@@ -1,0 +1,264 @@
+/* ── Terminal ──────────────────────────────────────────── */
+
+.terminal-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 24px 32px 16px;
+  flex-shrink: 0;
+}
+
+.terminal-header code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.terminal-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Filter tabs ──────────────────────────────────────── */
+
+.terminal-filter {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.terminal-filter-btn {
+  padding: 4px 12px;
+  border: none;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.terminal-filter-btn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.terminal-filter-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.terminal-filter-btn:hover:not(.active) {
+  background: var(--raised);
+}
+
+.terminal-auto-scroll {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.terminal-auto-scroll.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── File info ────────────────────────────────────────── */
+
+.terminal-file-info {
+  display: flex;
+  gap: 12px;
+  padding: 0 32px 12px;
+  flex-shrink: 0;
+}
+
+.terminal-file-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.terminal-source-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.terminal-source-dot.stdout {
+  background: var(--accent);
+}
+
+.terminal-source-dot.stderr {
+  background: var(--danger);
+}
+
+.terminal-file-name {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+.terminal-file-size {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* ── Output ───────────────────────────────────────────── */
+
+.terminal-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 32px;
+  background: var(--bg);
+}
+
+.terminal-empty {
+  text-align: center;
+  padding: 3rem 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.terminal-empty-hint {
+  font-size: 12px;
+  margin-top: 0.5rem;
+  opacity: 0.6;
+}
+
+.terminal-empty-hint code {
+  font-family: var(--font-mono);
+  background: var(--surface);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.terminal-pre {
+  margin: 0;
+  padding: 12px 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.terminal-line {
+  display: flex;
+  gap: 12px;
+  padding: 0 4px;
+  border-radius: 2px;
+}
+
+.terminal-line:hover {
+  background: var(--surface);
+}
+
+.terminal-line.stderr {
+  color: var(--danger);
+}
+
+.terminal-line.stderr .terminal-line-num {
+  color: rgba(239, 68, 68, 0.4);
+}
+
+.terminal-line-num {
+  color: var(--text-muted);
+  opacity: 0.3;
+  min-width: 36px;
+  text-align: right;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.terminal-line-text {
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: inherit;
+}
+
+.terminal-line.stdout .terminal-line-text {
+  color: var(--text);
+}
+
+/* ── Footer ───────────────────────────────────────────── */
+
+.terminal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 32px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.terminal-line-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.terminal-lines-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.terminal-lines-select select {
+  font-size: 11px;
+}
+
+/* ── Scrollbar ────────────────────────────────────────── */
+
+.terminal-output::-webkit-scrollbar {
+  width: 6px;
+}
+
+.terminal-output::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.terminal-output::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.terminal-output::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  .terminal-header,
+  .terminal-file-info,
+  .terminal-output,
+  .terminal-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .terminal-controls {
+    flex-wrap: wrap;
+  }
+}

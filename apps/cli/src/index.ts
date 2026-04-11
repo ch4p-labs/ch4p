@@ -97,6 +97,7 @@ function printHelp(): void {
     ${GREEN}message${RESET}      Send a message via a channel
     ${GREEN}skills${RESET}       Manage agent skills
     ${GREEN}canvas${RESET}       Start the interactive canvas workspace
+    ${GREEN}gui${RESET}          Start the graphical interface (web UI)
     ${GREEN}identity${RESET}     Manage on-chain agent identity (ERC-8004)
     ${GREEN}install${RESET}      Install gateway as a system daemon (systemd / launchd)
 
@@ -120,6 +121,7 @@ function printHelp(): void {
     ${DIM}$${RESET} ch4p status                           ${DIM}# System status${RESET}
     ${DIM}$${RESET} ch4p tools                            ${DIM}# List tools${RESET}
     ${DIM}$${RESET} ch4p canvas                           ${DIM}# Start canvas workspace${RESET}
+    ${DIM}$${RESET} ch4p gui                              ${DIM}# Start graphical interface${RESET}
     ${DIM}$${RESET} ch4p message -c telegram "Hello!"     ${DIM}# Send via channel${RESET}
     ${DIM}$${RESET} ch4p install                          ${DIM}# Install gateway daemon${RESET}
 
@@ -225,6 +227,12 @@ async function main(): Promise<void> {
     case 'canvas': {
       const { canvas } = await import('./commands/canvas.js');
       await canvas(rest);
+      break;
+    }
+
+    case 'gui': {
+      const { gui } = await import('./commands/gui.js');
+      await gui(rest);
       break;
     }
 

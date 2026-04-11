@@ -542,7 +542,7 @@ function stripHtmlTags(html: string): string {
       // Void tags: skip everything until closing tag
       if (!isClosing && VOID_TAGS.has(tagName)) {
         const closePattern = `</${tagName}`;
-        let searchFrom = gt + 1;
+        const searchFrom = gt + 1;
         while (searchFrom < len) {
           const closeIdx = html.indexOf(closePattern, searchFrom);
           if (closeIdx === -1) { i = len; break; }
