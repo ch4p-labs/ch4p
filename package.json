@@ -23,7 +23,7 @@
     "test": "vitest",
     "test:coverage": "vitest --coverage",
     "lint": "eslint .",
-    "typecheck": "pnpm -r exec tsc --noEmit",
+    "typecheck": "pnpm -r exec tsc --noEmit && tsc --noEmit -p apps/gui/tsconfig.server.json",
     "check": "pnpm -r build && pnpm typecheck && pnpm lint && pnpm vitest run && pnpm audit",
     "bundle": "pnpm -r build && cd apps/cli && bun run build.ts",
     "clean": "pnpm -r clean && rm -rf node_modules"

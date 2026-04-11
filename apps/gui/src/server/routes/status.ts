@@ -27,8 +27,8 @@ function getVersion(): string {
 }
 
 function checkApiKey(config: Record<string, unknown>, provider: string): boolean {
-  const providerConfig = (config as Record<string, Record<string, unknown>>).providers?.[provider];
-  const key = providerConfig?.['apiKey'];
+  const providers = (config as { providers?: Record<string, Record<string, unknown>> }).providers;
+  const key = providers?.[provider]?.['apiKey'];
   return typeof key === 'string' && key.length > 0 && !key.includes('${');
 }
 

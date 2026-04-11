@@ -45,7 +45,7 @@ export function ensureConfigDir(): void {
 // ---------------------------------------------------------------------------
 
 export interface GuiConfig {
-  agent: { model: string; provider: string; thinkingLevel?: string; [k: string]: unknown };
+  agent: { engine?: string; model: string; provider: string; thinkingLevel?: string; [k: string]: unknown };
   providers: Record<string, Record<string, unknown>>;
   channels: Record<string, unknown>;
   memory: { backend: string; autoSave: boolean; [k: string]: unknown };
