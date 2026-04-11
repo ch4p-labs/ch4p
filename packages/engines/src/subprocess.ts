@@ -306,6 +306,15 @@ export class SubprocessEngine implements IEngine {
 
       // Write prompt to stdin if using stdin mode.
       if (child.stdin) {
+        // The subprocess can exit before we finish writing — for example if
+        // the CLI rejects the args and dies during launch. Without a listener,
+        // the resulting EPIPE on stdin bubbles as an uncaught exception and
+        // crashes the host process (Vitest, gateway, agent loop, etc.). The
+        // exit code path below is the source of truth for failure reporting,
+        // so swallowing EPIPE here is safe.
+        child.stdin.on('error', (err: NodeJS.ErrnoException) => {
+          if (err.code !== 'EPIPE') emit({ type: 'text_delta', delta: `\n[stdin error: ${err.message}]\n` });
+        });
         if (this.promptMode === 'stdin') {
           child.stdin.write(prompt);
           // Keep stdin open for steer() permission-prompt responses.
