@@ -5,8 +5,7 @@
  */
 
 import { join } from 'node:path';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync, rmSync } from 'node:fs';
 import { SecurityAuditor } from './audit.js';
 import type { SecurityAuditorConfig } from './audit.js';
 import type { AutonomyLevel } from '@ch4p/core';
@@ -15,8 +14,17 @@ import type { AutonomyLevel } from '@ch4p/core';
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Workspace audit flags any path under /tmp as world-writable, so we can't
+// use os.tmpdir() here -- on Linux it returns /tmp directly. Use a parent
+// inside the repo's node_modules/.cache instead.
+const TEST_TMP_PARENT = (() => {
+  const dir = join(process.cwd(), 'node_modules', '.cache', 'ch4p-test-tmp');
+  mkdirSync(dir, { recursive: true });
+  return realpathSync(dir);
+})();
+
 function createTempDir(): string {
-  return mkdtempSync(join(tmpdir(), 'ch4p-audit-test-'));
+  return mkdtempSync(join(TEST_TMP_PARENT, 'audit-'));
 }
 
 function cleanup(dir: string): void {
