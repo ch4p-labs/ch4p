@@ -10,7 +10,7 @@ Most developer tools treat security as opt-in. You install the tool, everything 
 
 This is not a philosophical preference. It is a response to a specific risk profile.
 
-An AI assistant that can read files, execute commands, and broadcast to messaging channels is, by construction, a remote code execution engine with a natural language interface. If the defaults are permissive, a single prompt injection through any of 14+ messaging channels could read your SSH keys, execute arbitrary commands, and exfiltrate the results through the same channel. The attack surface is the union of every connected messaging platform's attack surface.
+An AI assistant that can read files, execute commands, and broadcast to messaging channels is, by construction, a remote code execution engine with a natural language interface. If the defaults are permissive, a single prompt injection through any of 16 messaging channels could read your SSH keys, execute arbitrary commands, and exfiltrate the results through the same channel. The attack surface is the union of every connected messaging platform's attack surface.
 
 Starting locked and opening selectively means the blast radius of any single failure is bounded by what you have explicitly allowed.
 
@@ -92,7 +92,7 @@ No data moves between trust domains without passing through a guard. This is not
 
 A traditional CLI tool has one input surface: the terminal. The user is the only person who can send input. There is inherent trust in a single-user, single-input system.
 
-ch4p is fundamentally different. It has 14+ input surfaces, each accessible by different people, each with different authentication models, each operated by a different platform with its own vulnerabilities. A Telegram bot is accessible to anyone who discovers its username. A Discord bot is accessible to anyone in the server. A Slack bot is accessible to anyone in the workspace.
+ch4p is fundamentally different. It has 16 input surfaces, each accessible by different people, each with different authentication models, each operated by a different platform with its own vulnerabilities. A Telegram bot is accessible to anyone who discovers its username. A Discord bot is accessible to anyone in the server. A Slack bot is accessible to anyone in the workspace.
 
 Each of these surfaces is a potential entry point for:
 

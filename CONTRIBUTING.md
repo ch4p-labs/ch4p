@@ -4,7 +4,7 @@ Thanks for your interest in contributing! This guide covers everything you need 
 
 ## Prerequisites
 
-- **Node.js** ≥ 22
+- **Node.js** ≥ 20
 - **corepack** enabled (`corepack enable`)
 - **pnpm** is managed via corepack — do not install it globally
 
@@ -26,7 +26,7 @@ npx vitest run            # verify all tests pass
 
 ```bash
 corepack pnpm -r build          # build all packages
-npx vitest run                   # run all tests (2 449+)
+npx vitest run                   # run all tests (2711+)
 corepack pnpm lint               # ESLint (0 errors required)
 corepack pnpm -r exec tsc --noEmit   # typecheck
 corepack pnpm audit              # 0 vulnerabilities required

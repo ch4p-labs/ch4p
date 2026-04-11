@@ -6,7 +6,7 @@ This document explains why ch4p uses BEAM-inspired concurrency patterns, what pr
 
 ## The Problem
 
-A personal AI assistant connected to 14+ messaging channels has a concurrency problem that most Node.js applications do not face.
+A personal AI assistant connected to 16 messaging channels has a concurrency problem that most Node.js applications do not face.
 
 Consider what happens when messages arrive from Telegram, Discord, and Slack simultaneously. Each message triggers a conversation with an LLM that may involve multiple tool calls. Each tool call may read files, run commands, or query memory. Some of these operations are fast (memory lookup), some are slow (LLM completion), and some are unpredictable (shell commands).
 

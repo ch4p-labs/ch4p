@@ -29,7 +29,7 @@ node apps/cli/dist/index.js --version
 You should see output like:
 
 ```
-ch4p v0.1.3
+ch4p v0.5.0
 ```
 
 ---
@@ -81,7 +81,7 @@ You'll see the ch4p welcome banner, then the wizard walks you through setup. The
 **If you answer Yes** to "Additional Features," the wizard expands into ~20 individually skippable categories organized into four groups:
 
 - **Providers** — Google/Gemini, OpenRouter, AWS Bedrock API keys
-- **Channels** — multi-select from 14 messaging channels (Telegram, Discord, Slack, Matrix, Teams, WhatsApp, Signal, iMessage, IRC, Zalo OA, BlueBubbles, Google Chat, WebChat, Zalo Personal) with per-channel token prompts
+- **Channels** — multi-select from 16 messaging channels (Telegram, Discord, Slack, Matrix, Teams, WhatsApp, Signal, iMessage, IRC, Zalo OA, Zalo Personal, BlueBubbles, Google Chat, WebChat, macOS Native, plus the local CLI) with per-channel token prompts
 - **Services** — web search (Brave API), browser (Playwright), voice STT/TTS, MCP servers, cron jobs
 - **System** — memory backend, verification, gateway port, security, allowed commands, tunnel, canvas, observability, skills
 
@@ -102,7 +102,7 @@ node apps/cli/dist/index.js agent
 You'll see the ch4p splash followed by the REPL status:
 
 ```
-  ch4p v0.1.3 ready.
+  ch4p v0.5.0 ready.
 
   Interactive mode. Type /help for commands, /exit to quit.
   Engine: Native Engine | Model: claude-sonnet-4-20250514 | Autonomy: supervised
