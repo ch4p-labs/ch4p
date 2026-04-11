@@ -37,7 +37,9 @@ export class OpenAIEmbeddingProvider implements IEmbeddingProvider {
     this.apiKey = opts.apiKey;
     this.model = opts.model ?? 'text-embedding-3-small';
     this.dimensions = opts.dimensions ?? 1536;
-    this.baseUrl = (opts.baseUrl ?? 'https://api.openai.com/v1').replace(/\/+$/, '');
+    let url = opts.baseUrl ?? 'https://api.openai.com/v1';
+    while (url.endsWith('/')) url = url.slice(0, -1);
+    this.baseUrl = url;
     this.maxBatchSize = opts.maxBatchSize ?? 100;
   }
 
@@ -108,7 +110,9 @@ export class OllamaEmbeddingProvider implements IEmbeddingProvider {
 
   constructor(opts: OllamaEmbeddingOpts = {}) {
     this.model = opts.model ?? 'nomic-embed-text';
-    this.baseUrl = (opts.baseUrl ?? 'http://localhost:11434').replace(/\/+$/, '');
+    let ollamaUrl = opts.baseUrl ?? 'http://localhost:11434';
+    while (ollamaUrl.endsWith('/')) ollamaUrl = ollamaUrl.slice(0, -1);
+    this.baseUrl = ollamaUrl;
     this.dimensions = opts.dimensions ?? 768;
   }
 

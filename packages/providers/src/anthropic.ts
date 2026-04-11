@@ -172,7 +172,9 @@ export class AnthropicProvider implements IProvider {
       throw new ProviderError('Anthropic API key is required', PROVIDER_ID);
     }
     this.apiKey = config.apiKey;
-    this.baseUrl = (config.baseUrl ?? API_BASE).replace(/\/+$/, '');
+    let base = config.baseUrl ?? API_BASE;
+    while (base.endsWith('/')) base = base.slice(0, -1);
+    this.baseUrl = base;
     this.maxRetries = config.maxRetries ?? MAX_RETRIES;
   }
 

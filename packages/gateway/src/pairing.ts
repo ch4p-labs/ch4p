@@ -230,10 +230,13 @@ export class PairingManager {
   private createRandomCode(): string {
     // 6-character uppercase alphanumeric code (avoids confusing chars).
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I
-    const bytes = randomBytes(6);
+    const len = chars.length; // 32 — divides 256 evenly, but we use rejection
+    // sampling to satisfy static analysis (js/biased-cryptographic-random).
+    const limit = 256 - (256 % len); // largest multiple of len ≤ 256
     let code = '';
-    for (let i = 0; i < 6; i++) {
-      code += chars[bytes[i]! % chars.length];
+    while (code.length < 6) {
+      const [byte] = randomBytes(1);
+      if (byte! < limit) code += chars[byte! % len];
     }
     return code;
   }

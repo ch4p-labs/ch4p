@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { CanvasState, CanvasChannel, encodeMessage } from '@ch4p/canvas';
+import { CanvasState, CanvasChannel } from '@ch4p/canvas';
 import type { S2CMessage, C2SMessage } from '@ch4p/canvas';
 import { WebSocketBridge } from './ws-bridge.js';
 import type { BridgeAgentEvent } from './ws-bridge.js';

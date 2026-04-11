@@ -231,7 +231,9 @@ export class OpenAIProvider implements IProvider {
       throw new ProviderError('OpenAI API key is required', PROVIDER_ID);
     }
     this.apiKey = config.apiKey;
-    this.baseUrl = (config.baseUrl ?? API_BASE).replace(/\/+$/, '');
+    let base = config.baseUrl ?? API_BASE;
+    while (base.endsWith('/')) base = base.slice(0, -1);
+    this.baseUrl = base;
     this.organization = config.organization;
     this.maxRetries = config.maxRetries ?? MAX_RETRIES;
   }

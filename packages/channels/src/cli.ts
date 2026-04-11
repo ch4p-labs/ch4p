@@ -125,16 +125,28 @@ export class CliChannel implements IChannel {
   private markdownToTerminal(md: string): string {
     let text = md;
 
-    // Code blocks: remove fences, indent content
-    text = text.replace(/```[\s\S]*?\n([\s\S]*?)```/g, (_match, code: string) => {
-      return code
-        .split('\n')
-        .map((line: string) => `  ${line}`)
-        .join('\n');
-    });
+    // Code blocks: remove fences, indent content.
+    // Uses split to avoid ReDoS — no regex on untrusted content.
+    const fence = '```';
+    const parts = text.split(fence);
+    if (parts.length >= 3) {
+      const rebuilt: string[] = [parts[0]!];
+      for (let idx = 1; idx < parts.length - 1; idx += 2) {
+        // Odd segments are inside fences — strip optional lang hint, indent
+        const inner = parts[idx]!;
+        const nl = inner.indexOf('\n');
+        const code = nl === -1 ? inner : inner.slice(nl + 1);
+        rebuilt.push(code.split('\n').map((l: string) => `  ${l}`).join('\n'));
+        if (idx + 1 < parts.length) rebuilt.push(parts[idx + 1]!);
+      }
+      // If odd number of fence markers, append remaining un-fenced text
+      if (parts.length % 2 === 0) rebuilt.push(parts[parts.length - 1]!);
+      text = rebuilt.join('');
+    }
 
     // Headers: uppercase + underline-style emphasis
-    text = text.replace(/^#{1,6}\s+(.+)$/gm, (_match, heading: string) => {
+    // Use [ \t]+ and \S to avoid ReDoS on lines of only whitespace.
+    text = text.replace(/^#{1,6}[ \t]+(\S[^\n]*)$/gm, (_match, heading: string) => {
       return `\n${heading.toUpperCase()}\n${'='.repeat(heading.length)}`;
     });
 
@@ -161,8 +173,19 @@ export class CliChannel implements IChannel {
     return text.trim();
   }
 
-  /** Strip HTML tags, returning plain text. */
+  /** Strip HTML tags, returning plain text. Uses a scanner to avoid regex pitfalls. */
   private stripHtml(html: string): string {
-    return html.replace(/<[^>]*>/g, '').trim();
+    const out: string[] = [];
+    let i = 0;
+    while (i < html.length) {
+      if (html[i] === '<') {
+        const gt = html.indexOf('>', i + 1);
+        i = gt === -1 ? i + 1 : gt + 1;
+      } else {
+        out.push(html[i]!);
+        i++;
+      }
+    }
+    return out.join('').trim();
   }
 }

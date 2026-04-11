@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { EmbeddingCache } from './embedding-cache.js';
-import { embeddingToBlob, blobToEmbedding } from './vector.js';
 
 function createCacheDb(): Database.Database {
   const db = new Database(':memory:');

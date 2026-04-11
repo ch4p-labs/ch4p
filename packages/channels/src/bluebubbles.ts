@@ -105,7 +105,8 @@ export class BlueBubblesChannel implements IChannel {
     }
 
     // Normalize: strip trailing slash.
-    cfg.host = cfg.host.replace(/\/+$/, '');
+    // Strip trailing slashes without regex (avoids ReDoS on pathological input).
+    while (cfg.host.endsWith('/')) cfg.host = cfg.host.slice(0, -1);
     this.config = cfg;
 
     // Verify connection on startup.

@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { IMemoryBackend, MemoryResult, MemoryEntry } from '@ch4p/core';
 import { ContextManager } from './context.js';
 import { createAutoRecallHook, createAutoSummarizeHook } from './auto-memory.js';
@@ -309,11 +309,11 @@ describe('Session with sharedContext', () => {
     expect(messages[1]!.content).toBe('Message from session 1');
   });
 
-  it('clear() preserves system prompt', () => {
+  it('clear() preserves system prompt', async () => {
     const ctx = new ContextManager();
     ctx.setSystemPrompt('System prompt');
-    ctx.addMessage({ role: 'user', content: 'Hello' });
-    ctx.addMessage({ role: 'assistant', content: 'Hi there' });
+    await ctx.addMessage({ role: 'user', content: 'Hello' });
+    await ctx.addMessage({ role: 'assistant', content: 'Hi there' });
 
     ctx.clear();
 

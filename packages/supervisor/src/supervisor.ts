@@ -17,6 +17,21 @@ import { HealthMonitor } from './health.js';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
+/**
+ * Error thrown when a restart strategy has exceeded the maximum
+ * allowed number of restarts for a child.
+ *
+ * Using a dedicated error type allows callers to reliably distinguish
+ * this condition via `instanceof` without depending on error message
+ * strings.
+ */
+export class MaxRestartsExceededError extends Error {
+  constructor(message = 'Max restarts exceeded') {
+    super(message);
+    this.name = 'MaxRestartsExceededError';
+  }
+}
+
 export interface ChildSpec {
   id: string;
   start: () => Promise<ChildHandle>;
@@ -49,6 +64,8 @@ export interface SupervisorEvents {
   'supervisor:started': [];
   'supervisor:stopped': [];
   'supervisor:max_restarts_exceeded': [childId: string, count: number, windowMs: number];
+  // Include the standard Node.js "error" event so it is represented in the typed event map.
+  'error': [error: Error];
 }
 
 // ── Supervisor ───────────────────────────────────────────────────────────
@@ -76,7 +93,7 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
 
   // ── Queries ──────────────────────────────────────────────────────────
 
-  get isRunning(): boolean {
+  isRunning(): boolean {
     return this.running;
   }
 
@@ -185,7 +202,8 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
 
     // Stop children in reverse order (mirrors OTP shutdown semantics).
     for (let i = this.children.length - 1; i >= 0; i--) {
-      const child = this.children[i]!;
+      const child = this.children[i];
+      if (!this.isValidChildEntry(child)) continue;
       if (child.status === 'running' || child.status === 'restarting') {
         await this.stopChild(child);
       }
@@ -246,14 +264,14 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
       .catch((strategyError: unknown) => {
         // Strategy-level errors (e.g. max restarts) are already emitted
         // inside applyStrategy. Swallow here to avoid unhandled rejection.
-        if (
-          strategyError instanceof Error &&
-          strategyError.message.startsWith('Max restarts')
-        ) {
+        if (strategyError instanceof MaxRestartsExceededError) {
           return;
         }
         // Truly unexpected — re-emit as an error on the supervisor.
-        this.emit('error' as keyof SupervisorEvents, strategyError as never);
+        const err = strategyError instanceof Error
+          ? strategyError
+          : new Error(String(strategyError));
+        this.emit('error', err);
       })
       .finally(() => {
         this.pendingRestarts.delete(childId);
@@ -283,7 +301,8 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
         // Stop all children that were started AFTER the crashed one (reverse).
         const toRestart: ChildState[] = [];
         for (let i = this.children.length - 1; i > idx; i--) {
-          const sibling = this.children[i]!;
+          const sibling = this.children[i];
+          if (!this.isValidChildEntry(sibling)) continue;
           if (sibling.status === 'running') {
             await this.stopChild(sibling);
           }
@@ -304,7 +323,8 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
       case 'one-for-all': {
         // Stop all other running children (reverse order).
         for (let i = this.children.length - 1; i >= 0; i--) {
-          const child = this.children[i]!;
+          const child = this.children[i];
+          if (!this.isValidChildEntry(child)) continue;
           if (child !== crashedState && child.status === 'running') {
             await this.stopChild(child);
           }
@@ -312,6 +332,7 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
 
         // Restart all children in original order.
         for (const child of this.children) {
+          if (!this.isValidChildEntry(child)) continue;
           if (this.stopping) break;
           if (child === crashedState) {
             await this.restartWithBackoff(child, policy);
@@ -322,6 +343,18 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
         break;
       }
     }
+  }
+
+  /**
+   * Helper to guard against sparse/undefined entries in
+   * `this.children`.
+   *
+   * Dynamic reconfiguration / hot-swap operations may temporarily create
+   * holes, so all iteration over `this.children` should use this helper
+   * when a valid ChildState is required.
+   */
+  private isValidChildEntry(child: ChildState | undefined | null): child is ChildState {
+    return child != null;
   }
 
   // ── Backoff + restart ────────────────────────────────────────────────
@@ -347,7 +380,7 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
         state.restartTimestamps.length,
         policy.windowMs,
       );
-      throw new Error(
+      throw new MaxRestartsExceededError(
         `Max restarts (${policy.maxRestarts}) exceeded for "${state.spec.id}" within ${policy.windowMs}ms window`,
       );
     }
@@ -445,11 +478,6 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
     }
 
     return new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        cleanup();
-        resolve();
-      }, ms);
-
       const onAbort = () => {
         clearTimeout(timer);
         cleanup();
@@ -459,6 +487,11 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
       const cleanup = () => {
         controller.signal.removeEventListener('abort', onAbort);
       };
+
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve();
+      }, ms);
 
       controller.signal.addEventListener('abort', onAbort);
     });

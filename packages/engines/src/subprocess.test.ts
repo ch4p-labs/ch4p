@@ -5,7 +5,7 @@
  * and the claude-cli / codex-cli factory functions.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { SubprocessEngine, createClaudeCliEngine, createCodexCliEngine, isAuthFailure, isRateLimit, StreamingToolParser, longestPrefixMatchingSuffix } from './subprocess.js';
 import { EngineError } from '@ch4p/core';
 import type { Job, EngineEvent, ToolDefinition, ResumeToken } from '@ch4p/core';

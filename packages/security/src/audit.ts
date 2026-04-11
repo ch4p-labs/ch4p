@@ -39,7 +39,30 @@ export interface SecurityAuditorConfig {
 // Implementation
 // ---------------------------------------------------------------------------
 
+const DANGEROUS_COMMANDS: ReadonlyArray<string> = [
+  'rm',
+  'chmod',
+  'chown',
+  'kill',
+  'sudo',
+  'su',
+  'dd',
+  'mkfs',
+  'fdisk',
+  'reboot',
+  'shutdown',
+];
+
 export class SecurityAuditor {
+  // Exact-match only: directories where the root itself is dangerous but
+  // subdirectories may be legitimate workspaces.
+  private static readonly EXACT_ONLY_WORKSPACES = new Set(['/', '/usr', '/var']);
+
+  // Prefix-match: directories where any subdirectory is also dangerous
+  // (e.g. /etc/passwd, /root/.ssh, /proc/1/maps, /tmp/my-project).
+  // /tmp is world-writable and included here to flag privilege-escalation risk.
+  private static readonly PREFIX_DANGEROUS_WORKSPACES = ['/etc', '/root', '/sys', '/proc', '/dev', '/tmp'];
+
   private readonly config: SecurityAuditorConfig;
 
   constructor(config: SecurityAuditorConfig) {
@@ -115,10 +138,14 @@ export class SecurityAuditor {
   private checkWorkspaceNotSystem(
     add: (name: string, severity: AuditSeverity, message: string) => void,
   ): void {
-    const dangerous = ['/', '/etc', '/root', '/usr', '/var', '/tmp', '/sys', '/proc', '/dev'];
     const ws = resolve(this.config.workspace);
 
-    if (dangerous.includes(ws)) {
+    if (
+      SecurityAuditor.EXACT_ONLY_WORKSPACES.has(ws) ||
+      SecurityAuditor.PREFIX_DANGEROUS_WORKSPACES.some(
+        d => ws === d || ws.startsWith(d + '/'),
+      )
+    ) {
       add(
         'workspace_safe_location',
         'fail',
@@ -216,17 +243,26 @@ export class SecurityAuditor {
 
     try {
       const stats = statSync(storePath);
-      const mode = stats.mode & 0o777;
 
-      // Check file permissions (Unix). Owner read/write only (0o600).
-      if ((mode & 0o077) !== 0) {
-        add(
-          'secrets_file',
-          'fail',
-          `Secrets file has overly permissive permissions: 0o${mode.toString(8)} (expected 0o600)`,
-        );
+      if (process.platform !== 'win32') {
+        const mode = stats.mode & 0o777;
+
+        // Check file permissions (Unix). Must be exactly owner read/write (0o600).
+        // Using exact equality rather than a bitmask ensures modes like 0o700
+        // (owner execute) or 0o400 (read-only) are also rejected.
+        if (mode !== 0o600) {
+          add(
+            'secrets_file',
+            'fail',
+            `Secrets file has overly permissive permissions: 0o${mode.toString(8)} (expected 0o600)`,
+          );
+        } else {
+          add('secrets_file', 'pass', 'Secrets file has correct permissions (0o600)');
+        }
       } else {
-        add('secrets_file', 'pass', 'Secrets file has correct permissions (0o600)');
+        // On Windows, fs.Stats.mode does not expose Unix-style permission bits
+        // in a meaningful way, so we cannot reliably validate file permissions.
+        add('secrets_file', 'pass', 'Secrets file exists (permission check skipped on Windows)');
       }
     } catch {
       add('secrets_file', 'warn', `Cannot stat secrets file: ${storePath}`);
@@ -236,10 +272,9 @@ export class SecurityAuditor {
   private checkDangerousCommands(
     add: (name: string, severity: AuditSeverity, message: string) => void,
   ): void {
-    const dangerous = ['rm', 'chmod', 'chown', 'kill', 'sudo', 'su', 'dd', 'mkfs', 'fdisk', 'reboot', 'shutdown'];
     const present: string[] = [];
 
-    for (const cmd of dangerous) {
+    for (const cmd of DANGEROUS_COMMANDS) {
       if (this.config.allowedCommands.has(cmd)) {
         present.push(cmd);
       }

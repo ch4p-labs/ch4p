@@ -203,9 +203,9 @@ export class BedrockProvider implements IProvider {
     this.accessKeyId = config.accessKeyId;
     this.secretAccessKey = config.secretAccessKey;
     this.sessionToken = config.sessionToken;
-    this.baseUrl = (
-      config.baseUrl ?? `https://bedrock-runtime.${config.region}.amazonaws.com`
-    ).replace(/\/+$/, '');
+    let base = config.baseUrl ?? `https://bedrock-runtime.${config.region}.amazonaws.com`;
+    while (base.endsWith('/')) base = base.slice(0, -1);
+    this.baseUrl = base;
     this.maxRetries = config.maxRetries ?? MAX_RETRIES;
   }
 

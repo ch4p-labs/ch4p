@@ -5,7 +5,7 @@
  */
 
 import { join } from 'node:path';
-import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { SecurityAuditor } from './audit.js';
 import type { SecurityAuditorConfig } from './audit.js';
@@ -150,6 +150,21 @@ describe('SecurityAuditor', () => {
     for (const dir of dangerousDirs) {
       it(`fails when workspace is "${dir}"`, () => {
         const config = makeConfig({ workspace: dir });
+        const auditor = new SecurityAuditor(config);
+        const results = auditor.audit();
+
+        const check = results.find(r => r.name === 'workspace_safe_location');
+        expect(check).toBeDefined();
+        expect(check!.severity).toBe('fail');
+        expect(check!.message).toContain('system directory');
+      });
+    }
+
+    const dangerousSubpaths = ['/etc/passwd', '/root/.ssh', '/proc/1/maps'];
+
+    for (const subpath of dangerousSubpaths) {
+      it(`fails when workspace is dangerous subpath "${subpath}"`, () => {
+        const config = makeConfig({ workspace: subpath });
         const auditor = new SecurityAuditor(config);
         const results = auditor.audit();
 
@@ -328,6 +343,7 @@ describe('SecurityAuditor', () => {
       expect(check).toBeDefined();
       expect(check!.severity).toBe('pass');
       expect(check!.message).toContain('correct permissions');
+      expect(check!.message).toContain('0o600');
     });
 
     it('fails when secrets file has overly permissive permissions', () => {

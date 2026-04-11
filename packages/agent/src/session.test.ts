@@ -1,4 +1,3 @@
-import { vi } from 'vitest';
 import { Session } from './session.js';
 import type { SessionState } from './session.js';
 import type { SessionConfig } from '@ch4p/core';

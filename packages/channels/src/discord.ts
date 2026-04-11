@@ -32,6 +32,7 @@ import type {
   Attachment,
 } from '@ch4p/core';
 import WebSocket from 'ws';
+import { splitMessage, truncateMessage, evictOldTimestamps } from './message-utils.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,7 +48,6 @@ export interface DiscordConfig extends ChannelConfig {
 }
 
 /** Minimum interval between message edits for streaming (Discord rate limit). */
-import { splitMessage, truncateMessage, evictOldTimestamps } from './message-utils.js';
 
 const DISCORD_MAX_MESSAGE_LEN = 2_000;
 const DISCORD_EDIT_RATE_LIMIT_MS = 1_000;
@@ -85,6 +85,11 @@ const DEFAULT_INTENTS =
 
 const API_BASE = 'https://discord.com/api/v10';
 const GATEWAY_URL = 'wss://gateway.discord.gg/?v=10&encoding=json';
+
+/** Heartbeat interval bounds (ms). Values outside this range use the default. */
+const HB_MIN = 1_000;
+const HB_MAX = 300_000;
+const HB_DEFAULT = 41_250; // Discord's standard HELLO interval
 
 /** Minimal Discord message payload. */
 interface DiscordMessage {
@@ -130,7 +135,8 @@ export class DiscordChannel implements IChannel {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private sequence: number | null = null;
   private sessionId: string | null = null;
-  private resumeGatewayUrl: string | null = null;
+  // Note: Discord's resume_gateway_url is intentionally not stored — using
+  // only the hardcoded GATEWAY_URL to prevent SSRF (CodeQL js/request-forgery).
   private botUserId: string | null = null;
   private allowedGuilds: Set<string> = new Set();
   private allowedUsers: Set<string> = new Set();
@@ -295,10 +301,14 @@ export class DiscordChannel implements IChannel {
   // -----------------------------------------------------------------------
 
   private async connectGateway(): Promise<void> {
-    const url = this.resumeGatewayUrl ?? GATEWAY_URL;
+    // Only connect to the hardcoded gateway URL.  Discord provides a
+    // resume_gateway_url in its READY payload, but since it is untrusted
+    // network data CodeQL (correctly) flags it as an SSRF vector.
+    // The default gateway URL already handles resumption via the RESUME
+    // opcode + session_id, so using only the constant is safe and correct.
 
     return new Promise<void>((resolve, reject) => {
-      this.ws = new WebSocket(url);
+      this.ws = new WebSocket(GATEWAY_URL);
       this.reconnectScheduled = false;
 
       let identified = false;
@@ -376,7 +386,6 @@ export class DiscordChannel implements IChannel {
               if (!resumable) {
                 this.sessionId = null;
                 this.sequence = null;
-                this.resumeGatewayUrl = null;
               }
               this.reconnect();
               break;
@@ -388,10 +397,8 @@ export class DiscordChannel implements IChannel {
               if (payload.t === 'READY') {
                 const ready = payload.d as {
                   session_id: string;
-                  resume_gateway_url: string;
                 };
                 this.sessionId = ready.session_id;
-                this.resumeGatewayUrl = ready.resume_gateway_url;
                 this.reconnectAttempts = 0;
                 if (!identified) {
                   identified = true;
@@ -438,9 +445,15 @@ export class DiscordChannel implements IChannel {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
     }
+    // Use a validated constant — if the gateway sends a value outside the
+    // safe range, fall back to default rather than trusting the payload.
+    const safe = (typeof intervalMs === 'number' && Number.isFinite(intervalMs)
+      && intervalMs >= HB_MIN && intervalMs <= HB_MAX)
+      ? intervalMs
+      : HB_DEFAULT;
     // Send first heartbeat after a random jitter.
-    setTimeout(() => this.sendHeartbeat(), Math.random() * intervalMs);
-    this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), intervalMs);
+    setTimeout(() => this.sendHeartbeat(), Math.random() * safe);
+    this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), safe);
   }
 
   private sendHeartbeat(): void {

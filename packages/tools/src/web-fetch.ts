@@ -148,8 +148,22 @@ export class WebFetchTool implements ITool {
 
     const { url, prompt } = args as WebFetchArgs;
 
-    // Upgrade http to https
-    let fetchUrl = url.replace(/^http:\/\//, 'https://');
+    // Reject plain HTTP — upgrading to HTTPS silently can bypass SSRF checks
+    // if the target only serves HTTP (e.g. internal services).
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { success: false, output: '', error: 'Invalid URL.', metadata: { url } };
+    }
+    if (parsed.protocol === 'http:') {
+      return {
+        success: false, output: '',
+        error: 'Plain HTTP URLs are not allowed. Please use an HTTPS URL.',
+        metadata: { url },
+      };
+    }
+    let fetchUrl = parsed.toString();
 
     if (context.abortSignal.aborted) {
       return {
@@ -161,7 +175,6 @@ export class WebFetchTool implements ITool {
 
     // Async SSRF check: resolve DNS and verify the resolved IPs are not private.
     try {
-      const parsed = new URL(fetchUrl);
       const dnsCheck = await resolveAndCheckPrivate(parsed.hostname);
       if (dnsCheck.blocked) {
         return {
@@ -362,8 +375,9 @@ export class WebFetchTool implements ITool {
         textContent = body;
       }
 
-      // Truncate output if necessary
-      if (textContent.length > MAX_OUTPUT_LENGTH) {
+      // Truncate output if necessary — capture flag before slicing.
+      const wasTruncated = textContent.length > MAX_OUTPUT_LENGTH;
+      if (wasTruncated) {
         textContent =
           textContent.slice(0, MAX_OUTPUT_LENGTH) +
           '\n\n... [content truncated] ...';
@@ -382,7 +396,7 @@ export class WebFetchTool implements ITool {
           status: response.status,
           contentType,
           size: body.length,
-          truncated: textContent.length > MAX_OUTPUT_LENGTH,
+          truncated: wasTruncated,
         },
       };
     } catch (err) {
@@ -479,6 +493,83 @@ export class WebFetchTool implements ITool {
   }
 }
 
+/** Block-level elements whose boundaries should insert a newline. */
+const BLOCK_TAGS = new Set([
+  'p', 'div', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'ul', 'ol', 'li', 'table', 'tr', 'td', 'th', 'blockquote', 'pre',
+  'section', 'article', 'header', 'footer', 'nav', 'main', 'aside',
+  'figure', 'figcaption',
+]);
+
+/** Tags whose entire content (open → close) should be dropped. */
+const VOID_TAGS = new Set(['script', 'style', 'noscript']);
+
+/**
+ * Strip HTML tags using a single-pass character scanner.
+ * Drops script/style/noscript blocks entirely, inserts newlines at block
+ * element boundaries, removes comments, and passes through text content.
+ *
+ * No regex is used — this is immune to ReDoS, bad-tag-filter, and
+ * incomplete-multi-character-sanitization issues.
+ */
+function stripHtmlTags(html: string): string {
+  const out: string[] = [];
+  let i = 0;
+  const len = html.length;
+
+  while (i < len) {
+    // HTML comment: <!-- ... -->
+    if (html[i] === '<' && html.startsWith('!--', i + 1)) {
+      const end = html.indexOf('-->', i + 4);
+      i = end === -1 ? len : end + 3;
+      continue;
+    }
+
+    // Start of a tag
+    if (html[i] === '<') {
+      // Find the end of the tag
+      const gt = html.indexOf('>', i + 1);
+      if (gt === -1) { i++; continue; } // malformed — skip the <
+
+      // Extract tag name (skip optional /)
+      let nameStart = i + 1;
+      const isClosing = html[nameStart] === '/';
+      if (isClosing) nameStart++;
+      let nameEnd = nameStart;
+      while (nameEnd < gt && /[a-zA-Z0-9]/.test(html[nameEnd]!)) nameEnd++;
+      const tagName = html.slice(nameStart, nameEnd).toLowerCase();
+
+      // Void tags: skip everything until closing tag
+      if (!isClosing && VOID_TAGS.has(tagName)) {
+        const closePattern = `</${tagName}`;
+        const searchFrom = gt + 1;
+        while (searchFrom < len) {
+          const closeIdx = html.indexOf(closePattern, searchFrom);
+          if (closeIdx === -1) { i = len; break; }
+          const closeGt = html.indexOf('>', closeIdx + closePattern.length);
+          if (closeGt === -1) { i = len; break; }
+          i = closeGt + 1;
+          break;
+        }
+        if (i === searchFrom) i = len; // no closing tag found
+        continue;
+      }
+
+      // Block-level tag: emit newline
+      if (BLOCK_TAGS.has(tagName)) out.push('\n');
+
+      i = gt + 1;
+      continue;
+    }
+
+    // Plain text
+    out.push(html[i]!);
+    i++;
+  }
+
+  return out.join('');
+}
+
 /**
  * Basic HTML-to-text conversion.
  * Strips HTML tags, decodes common entities, collapses whitespace,
@@ -487,19 +578,10 @@ export class WebFetchTool implements ITool {
 function htmlToText(html: string): string {
   let text = html;
 
-  // Remove script and style blocks entirely
-  text = text.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
-  text = text.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
-  text = text.replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, '');
-
-  // Remove HTML comments
-  text = text.replace(/<!--[\s\S]*?-->/g, '');
-
-  // Replace block-level elements with newlines
-  text = text.replace(/<\/?(p|div|br|hr|h[1-6]|ul|ol|li|table|tr|td|th|blockquote|pre|section|article|header|footer|nav|main|aside|figure|figcaption)\b[^>]*\/?>/gi, '\n');
-
-  // Remove remaining tags
-  text = text.replace(/<[^>]+>/g, '');
+  // Strip all HTML tags using a character-by-character scanner.
+  // This avoids regex entirely — immune to ReDoS, bad-tag-filter, and
+  // incomplete-multi-character-sanitization (CodeQL #28-33).
+  text = stripHtmlTags(text);
 
   // Decode HTML entities
   text = decodeHtmlEntities(text);

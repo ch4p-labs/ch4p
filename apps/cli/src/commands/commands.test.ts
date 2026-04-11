@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import type { Ch4pConfig, AuditResult, AuditSeverity } from '@ch4p/core';
+import type { AuditResult, AuditSeverity } from '@ch4p/core';
 
 // ---------------------------------------------------------------------------
 // Mock homedir for config functions
@@ -53,11 +53,6 @@ function writeTestConfig(config: Record<string, unknown>): void {
   const ch4pDir = join(TEST_HOME, '.ch4p');
   mkdirSync(ch4pDir, { recursive: true });
   writeFileSync(join(ch4pDir, 'config.json'), JSON.stringify(config));
-}
-
-function makeConfig(overrides: Record<string, unknown> = {}): Ch4pConfig {
-  const defaults = getDefaultConfig();
-  return { ...defaults, ...overrides } as unknown as Ch4pConfig;
 }
 
 // ---------------------------------------------------------------------------

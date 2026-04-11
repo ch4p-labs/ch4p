@@ -950,18 +950,17 @@ export async function gateway(args: string[]): Promise<void> {
   })();
 
   // Periodic eviction of stale entries from unbounded maps (every 5 minutes).
-  const CONTEXT_IDLE_MS = 60 * 60_000; // 1 hour
+  const DEFAULT_CONTEXT_IDLE_MS = 60 * 60 * 1000; // 1 hour
   const evictionTimer = setInterval(() => {
     gatewayRateLimiter.evictStale();
 
     // Measure heap before eviction so we can apply pressure-sensitive idle windows.
     const heap = process.memoryUsage();
     const heapMB = Math.round(heap.heapUsed / 1024 / 1024);
-
     // Under memory pressure shrink the idle window so contexts evict much sooner
     // rather than waiting a full hour.  This frees V8 strings / closures held by
     // ContextManager entries and lets the GC reclaim pages.
-    const contextIdleMs = heapMB > 500 ? 5 * 60_000 : CONTEXT_IDLE_MS;
+    const contextIdleMs = heapMB > 500 ? 5 * 60_000 : DEFAULT_CONTEXT_IDLE_MS;
 
     // Evict conversation contexts that have been inactive too long.
     const now = Date.now();
@@ -1003,9 +1002,11 @@ export async function gateway(args: string[]): Promise<void> {
     // process that is already under pressure.  Use the Node flag
     // --heapsnapshot-near-heap-limit=1 at startup instead; it writes a snapshot
     // via a separate OOM handler that does not allocate on the main heap.
+    // Example:
+    //   NODE_OPTIONS="--heapsnapshot-near-heap-limit=1 --max-old-space-size=4096" ch4p gateway
     if (postHeapMB > 1500) {
       console.log(
-        `  ${YELLOW}[OOM warning]${RESET} Heap at ${postHeapMB}MB — restart the gateway or set NODE_OPTIONS=--max-old-space-size=512`,
+        `  ${YELLOW}[OOM warning]${RESET} Heap at ${postHeapMB}MB — restart the gateway or increase NODE_OPTIONS=--max-old-space-size (e.g. 4096)`,
       );
     } else if (postHeapMB > 500) {
       console.log(`  ${DIM}[mem pressure]${RESET} Heap at ${postHeapMB}MB — evicting with 5 min idle window${RESET}`);
@@ -1024,7 +1025,7 @@ export async function gateway(args: string[]): Promise<void> {
       }
 
       // Stop channels: no new inbound messages will arrive after this.
-      if (channelSupervisor.isRunning) {
+      if (channelSupervisor.isRunning()) {
         try {
           await channelSupervisor.stop();
         } catch {
@@ -1450,7 +1451,35 @@ function handleInboundMessage(opts: InboundMessageOpts): void {
       // Per-run timeout — abort the loop if it exceeds the configured duration.
       // Prevents stuck subprocess/engine calls from locking out users indefinitely.
       const DEFAULT_RUN_TIMEOUT_MS = 300_000; // 5 minutes
-      const runTimeoutMs = config.agent.runTimeout ?? DEFAULT_RUN_TIMEOUT_MS;
+      const MIN_RUN_TIMEOUT_MS = 1_000; // 1 second — guard against impractically small values
+      /**
+       * Per-session run timeout in milliseconds.
+       * If `config.agent.runTimeout` is provided it must be a finite, positive
+       * number representing milliseconds. Typical values: 10_000–900_000
+       * (10 s to 15 min). Invalid or missing values fall back to the default
+       * of 300_000 ms (5 minutes). Values lower than MIN_RUN_TIMEOUT_MS are
+       * clamped to MIN_RUN_TIMEOUT_MS with a warning, to avoid misconfiguration
+       * causing immediate timeouts.
+       */
+      const configuredRunTimeout = config.agent.runTimeout;
+      let runTimeoutMs: number;
+      if (
+        typeof configuredRunTimeout === 'number' &&
+        Number.isFinite(configuredRunTimeout) &&
+        configuredRunTimeout > 0
+      ) {
+        if (configuredRunTimeout < MIN_RUN_TIMEOUT_MS) {
+          console.warn(
+            `Configured agent.runTimeout (${configuredRunTimeout} ms) is below the minimum recommended ` +
+            `${MIN_RUN_TIMEOUT_MS} ms — clamping to ${MIN_RUN_TIMEOUT_MS} ms.`,
+          );
+          runTimeoutMs = MIN_RUN_TIMEOUT_MS;
+        } else {
+          runTimeoutMs = configuredRunTimeout;
+        }
+      } else {
+        runTimeoutMs = DEFAULT_RUN_TIMEOUT_MS;
+      }
       runTimer = setTimeout(() => {
         loop.abort('Gateway run timeout exceeded');
       }, runTimeoutMs);

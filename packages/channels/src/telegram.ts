@@ -131,12 +131,18 @@ export class TelegramChannel implements IChannel {
     this.abortController = new AbortController();
 
     // Validate and warn about non-numeric allowedUsers entries.
+    // NOTE: allowedUsers expects Telegram user IDs as decimal strings,
+    //       not usernames. Telegram identifies users by numeric ID, and we
+    //       compare these string IDs directly against incoming update.from.id.
     const userEntries = cfg.allowedUsers ?? [];
     for (const entry of userEntries) {
       if (!/^\d+$/.test(entry)) {
         console.warn(
           `[Telegram] allowedUsers entry "${entry}" is not a numeric Telegram user ID. ` +
-          'Telegram identifies users by numeric ID, not username. This entry may never match.',
+          'Telegram identifies users by numeric ID, not username. This entry may never match ' +
+          'and the user may never be recognized as allowed. To fix this, use a tool such as ' +
+          '@userinfobot or consult the Telegram Bot API documentation to obtain the correct ' +
+          'numeric user ID and configure that value instead.',
         );
       }
     }
@@ -199,7 +205,7 @@ export class TelegramChannel implements IChannel {
         : (message.text ?? '');
 
       // Split long messages into chunks that fit within Telegram's 4096-char limit.
-      const chunks = splitMessage(rawText ?? '', TELEGRAM_MAX_MESSAGE_LEN);
+      const chunks = splitMessage(rawText, TELEGRAM_MAX_MESSAGE_LEN);
       let lastMessageId: string | undefined;
       for (const chunk of chunks) {
         const params: Record<string, unknown> = {
@@ -257,7 +263,7 @@ export class TelegramChannel implements IChannel {
         : (message.text ?? '');
 
       // Truncate to Telegram's limit; full content will be delivered via send() chunks.
-      const text = truncateMessage(rawEditText ?? '', TELEGRAM_MAX_MESSAGE_LEN);
+      const text = truncateMessage(rawEditText, TELEGRAM_MAX_MESSAGE_LEN);
 
       await this.apiCall('editMessageText', {
         chat_id: chatId,
@@ -348,12 +354,14 @@ export class TelegramChannel implements IChannel {
   // -----------------------------------------------------------------------
 
   private startPolling(): void {
-    if (!this.running && !this.abortController) return;
+    if (!this.running || !this.abortController) return;
 
-    // Client-side deadline: 5 s longer than the server-side timeout (30 s).
+    // Server-side long-poll timeout in seconds (sent to Telegram).
+    const POLL_SERVER_TIMEOUT_S = 30;
+    // Client-side deadline: 5 s longer than the server-side timeout.
     // Without this, a stalled or slow TLS connection hangs the polling loop
     // indefinitely and prevents the old connection from being cleaned up.
-    const POLL_CLIENT_TIMEOUT_MS = 35_000;
+    const POLL_CLIENT_TIMEOUT_MS = (POLL_SERVER_TIMEOUT_S + 5) * 1000;
 
     const poll = async () => {
       if (!this.running) return;
@@ -368,7 +376,7 @@ export class TelegramChannel implements IChannel {
 
         const updates = await this.apiCall<TelegramUpdate[]>('getUpdates', {
           offset: this.pollOffset,
-          timeout: 30,
+          timeout: POLL_SERVER_TIMEOUT_S,
           limit: 100,
         }, signal);
 
@@ -584,6 +592,9 @@ export class TelegramChannel implements IChannel {
   private gfmToHtml(text: string): string {
     const esc = (s: string): string =>
       s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    /** Escape for use inside HTML attribute values (also escapes quotes). */
+    const escAttr = (s: string): string =>
+      esc(s).replace(/"/g, '&quot;');
 
     // Fragments that are already valid HTML — protected from further processing.
     const frags: string[] = [];
@@ -594,12 +605,27 @@ export class TelegramChannel implements IChannel {
     };
 
     // 1. Fenced code blocks: ```lang\ncode\n```
-    text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_m, lang: string, code: string) => {
-      const safe = esc(code.replace(/\n$/, ''));
-      return protect(lang
-        ? `<pre><code class="language-${lang}">${safe}</code></pre>`
-        : `<pre>${safe}</pre>`);
-    });
+    // Uses split to avoid ReDoS — no regex on untrusted code content.
+    {
+      const fence = '```';
+      const segments = text.split(fence);
+      if (segments.length >= 3) {
+        const rebuilt: string[] = [segments[0]!];
+        for (let idx = 1; idx < segments.length - 1; idx += 2) {
+          const inner = segments[idx]!;
+          const nl = inner.indexOf('\n');
+          const lang = nl === -1 ? '' : inner.slice(0, nl).replace(/[^\w]/g, '');
+          const code = nl === -1 ? inner : inner.slice(nl + 1);
+          const safe = esc(code.replace(/\n$/, ''));
+          rebuilt.push(protect(lang
+            ? `<pre><code class="language-${lang}">${safe}</code></pre>`
+            : `<pre>${safe}</pre>`));
+          if (idx + 1 < segments.length) rebuilt.push(segments[idx + 1]!);
+        }
+        if (segments.length % 2 === 0) rebuilt.push(segments[segments.length - 1]!);
+        text = rebuilt.join('');
+      }
+    }
 
     // 2. Inline code: `code`
     text = text.replace(/`([^`\n]+)`/g, (_m, c: string) => protect(`<code>${esc(c)}</code>`));
@@ -607,7 +633,7 @@ export class TelegramChannel implements IChannel {
     // 3. Tables: convert each row to plain text, drop separator rows (|---|---|).
     text = text.replace(/^\|.+\|[ \t]*$/gm, (row) => {
       const inner = row.replace(/^\||\|$/g, '');
-      if (/^[\s:|–\-|]+$/.test(inner)) return ''; // separator row
+      if (/^[\s:|\u2013-]+$/.test(inner)) return ''; // separator row
       return inner.split('|').map((c) => c.trim()).join(' │ ');
     });
     text = text.replace(/\n{3,}/g, '\n\n'); // collapse extra blank lines
@@ -633,7 +659,7 @@ export class TelegramChannel implements IChannel {
 
     // 9. Links: [text](url)
     text = text.replace(/\[([^\]\n]+)\]\(([^)\n]+)\)/g, (_m, t: string, url: string) =>
-      protect(`<a href="${esc(url)}">${esc(t)}</a>`)
+      protect(`<a href="${escAttr(url)}">${esc(t)}</a>`)
     );
 
     // 10. Horizontal rules
