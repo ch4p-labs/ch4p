@@ -21,7 +21,7 @@
   "dependencies": {
     "@ch4p/canvas": "workspace:*",
     "@ch4p/core": "workspace:*",
-    "ws": "^8.0.0"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/ws": "^8.18.1"
